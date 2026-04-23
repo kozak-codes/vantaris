@@ -79,6 +79,7 @@ if (roomId) {
 async function attemptReconnect(id: string): Promise<void> {
   try {
     const room = await reconnectToGame(id);
+    cameraControls.setEnabled(true);
     handleGameRoom(room);
   } catch {
     clearRoomFromURL();
@@ -89,6 +90,7 @@ async function attemptReconnect(id: string): Promise<void> {
 
 function showLobby(): void {
   const lobbyUI = new LobbyUI();
+  cameraControls.setEnabled(false);
   lobbyUI.setOnGameReady((newRoomId: string) => {
     handleGameJoin(newRoomId);
   });
@@ -98,6 +100,7 @@ async function handleGameJoin(newRoomId: string): Promise<void> {
   try {
     const room = await joinGame(newRoomId, getDisplayName());
     setRoomIdInURL(newRoomId);
+    cameraControls.setEnabled(true);
     handleGameRoom(room);
   } catch {
     // If join fails, clear and show lobby

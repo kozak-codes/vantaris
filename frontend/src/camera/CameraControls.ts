@@ -13,6 +13,7 @@ export class CameraControls {
   private currentDistance: number;
   private pinchStartDistance = 0;
   private keysHeld = new Set<string>();
+  private _enabled = true;
 
   constructor(camera: THREE.PerspectiveCamera, canvas: HTMLCanvasElement, pivot: THREE.Group) {
     this.camera = camera;
@@ -40,6 +41,7 @@ export class CameraControls {
   }
 
   private onPointerDown(e: PointerEvent): void {
+    if (!this._enabled) return;
     if (e.button === 2) {
       this.isRotating = true;
       this.previousPointer = { x: e.clientX, y: e.clientY };
@@ -83,6 +85,8 @@ export class CameraControls {
   }
 
   private onKeyDown(e: KeyboardEvent): void {
+    if (!this._enabled) return;
+    if ((e.target as HTMLElement)?.tagName === 'INPUT' || (e.target as HTMLElement)?.tagName === 'TEXTAREA') return;
     const key = e.key.toLowerCase();
     if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
       e.preventDefault();
@@ -92,6 +96,16 @@ export class CameraControls {
 
   private onKeyUp(e: KeyboardEvent): void {
     this.keysHeld.delete(e.key.toLowerCase());
+  }
+
+  setEnabled(enabled: boolean): void {
+    this._enabled = enabled;
+    if (!enabled) {
+      this.keysHeld.clear();
+      this.isRotating = false;
+      this.velocityX = 0;
+      this.velocityY = 0;
+    }
   }
 
   private applyKeyboardRotation(): void {
@@ -111,6 +125,7 @@ export class CameraControls {
   }
 
   private onWheel(e: WheelEvent): void {
+    if (!this._enabled) return;
     e.preventDefault();
     this.targetZoom += e.deltaY * 0.01 * CAMERA_CONFIG.zoomSpeed;
     this.targetZoom = THREE.MathUtils.clamp(
