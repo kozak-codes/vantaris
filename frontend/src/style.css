@@ -237,3 +237,67 @@ html, body {
   border-color: rgba(200, 100, 100, 0.7);
   color: #ddaaaa;
 }
+
+.name-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.name-label {
+  font-size: 13px;
+  color: #8899aa;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.name-input {
+  width: 100%;
+  max-width: 280px;
+  padding: 12px 16px;
+  background: rgba(20, 30, 50, 0.8);
+  border: 1px solid rgba(100, 140, 200, 0.3);
+  border-radius: 8px;
+  color: #ddeeff;
+  font-size: 16px;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.name-input:focus {
+  border-color: rgba(100, 140, 200, 0.7);
+}
+
+.name-input::placeholder {
+  color: #556677;
+}
+
+.play-btn {
+  width: 100%;
+  max-width: 280px;
+  padding: 14px;
+  background: rgba(68, 136, 255, 0.2);
+  border: 1px solid rgba(68, 136, 255, 0.5);
+  border-radius: 8px;
+  color: #aaccff;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: 1px;
+}
+
+.play-btn:hover {
+  background: rgba(68, 136, 255, 0.35);
+  border-color: rgba(68, 136, 255, 0.8);
+  color: #ccddff;
+}
+
+.lobby-queue-count {
+  font-size: 11px;
+  color: #556677;
+  margin-top: 12px;
+}

@@ -40,7 +40,7 @@ export const QUEUE_CONFIG: { minPlayers: number; maxPlayers: number; subdivideLe
   subdivideLevel: 3,
 };
 
-export const TICK_INTERVAL_MS = 60000;
+export const TICK_INTERVAL_MS = 5000;
 export const RECONNECTION_WINDOW = 60;
 export const STARTING_TERRITORY_SIZE = 7;
 export const VISION_RANGE = 1;

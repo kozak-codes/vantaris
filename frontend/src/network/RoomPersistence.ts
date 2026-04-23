@@ -36,3 +36,13 @@ export function storeSessionId(roomId: string, sessionId: string): void {
 export function getSessionId(roomId: string): string | null {
   return localStorage.getItem(`vantaris_session_${roomId}`);
 }
+
+const DISPLAY_NAME_KEY = 'vantaris_displayName';
+
+export function getDisplayName(): string {
+  return localStorage.getItem(DISPLAY_NAME_KEY) || '';
+}
+
+export function setDisplayName(name: string): void {
+  localStorage.setItem(DISPLAY_NAME_KEY, name);
+}

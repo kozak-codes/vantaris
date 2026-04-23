@@ -3,20 +3,19 @@ import {
   joinQueue,
   leaveQueue,
 } from '../network/ColyseusClient';
-import { setRoomIdInURL } from '../network/RoomPersistence';
+import { setRoomIdInURL, getDisplayName, setDisplayName } from '../network/RoomPersistence';
 import type { Room } from 'colyseus.js';
 
 enum LobbyPhase {
-  SELECT_QUEUE,
+  NAME_ENTRY,
   WAITING,
-  COUNTDOWN,
 }
 
 export class LobbyUI {
   private container: HTMLElement;
   private lobbyRoom: Room | null = null;
   private matchmakingRoom: Room | null = null;
-  private phase: LobbyPhase = LobbyPhase.SELECT_QUEUE;
+  private phase: LobbyPhase = LobbyPhase.NAME_ENTRY;
   private playerCount = 0;
   private onGameReady: ((roomId: string) => void) | null = null;
 
@@ -31,7 +30,14 @@ export class LobbyUI {
 
   show(): void {
     this.container.classList.remove('hidden');
-    this.renderSelectQueue();
+    const savedName = getDisplayName();
+    if (savedName) {
+      this.phase = LobbyPhase.NAME_ENTRY;
+      this.renderNameEntry(savedName);
+      // auto-advance if name already saved
+    } else {
+      this.renderNameEntry('');
+    }
     this.connectLobby();
   }
 
@@ -45,7 +51,9 @@ export class LobbyUI {
       this.lobbyRoom = await joinLobby();
       this.lobbyRoom.onMessage('lobbyUpdate', (data: { playerCount: number }) => {
         this.playerCount = data.playerCount;
-        this.render();
+        if (this.phase === LobbyPhase.NAME_ENTRY) {
+          this.renderNameEntry(getDisplayName());
+        }
       });
     } catch {
       // lobby connection failure is non-critical
@@ -59,35 +67,41 @@ export class LobbyUI {
     }
   }
 
-  private render(): void {
-    if (this.phase === LobbyPhase.SELECT_QUEUE) {
-      this.renderSelectQueue();
-    } else {
-      // WAITING or COUNTDOWN handled by queueUpdate messages
-    }
-  }
-
-  private renderSelectQueue(): void {
+  private renderNameEntry(prefill: string = ''): void {
     this.container.innerHTML = `
       <div class="lobby-panel">
         <h1 class="lobby-title">VANTARIS</h1>
         <p class="lobby-subtitle">Hex-globe strategy</p>
-        <div class="queue-options">
-          <button id="btn-quick" class="queue-btn">
-            <span class="queue-label">Quick Match</span>
-            <span class="queue-info">1–8 players · Globe scales with players</span>
-            <span class="queue-count">${this.playerCount} in queue</span>
-          </button>
+        <div class="name-entry">
+          <label class="name-label" for="name-input">Your name</label>
+          <input type="text" id="name-input" class="name-input" placeholder="Enter your name" maxlength="24" value="${prefill}" autocomplete="off" />
+          <button id="btn-play" class="play-btn">Quick Match</button>
         </div>
+        <p class="lobby-queue-count">${this.playerCount} player${this.playerCount !== 1 ? 's' : ''} in queue</p>
       </div>
     `;
 
-    document.getElementById('btn-quick')?.addEventListener('click', () => this.handleQueueJoin());
+    const input = document.getElementById('name-input') as HTMLInputElement;
+    const btn = document.getElementById('btn-play');
+
+    input?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        btn?.click();
+      }
+    });
+
+    btn?.addEventListener('click', () => {
+      const name = input?.value.trim() || '';
+      setDisplayName(name);
+      this.handleQueueJoin(name);
+    });
+
+    input?.focus();
   }
 
-  private async handleQueueJoin(): Promise<void> {
+  private async handleQueueJoin(displayName: string): Promise<void> {
+    this.phase = LobbyPhase.WAITING;
     try {
-      this.phase = LobbyPhase.WAITING;
       this.matchmakingRoom = await joinQueue();
 
       this.matchmakingRoom.onMessage('queueUpdate', (data: { playerCount: number; countdownSeconds: number; phase: string }) => {
@@ -105,8 +119,8 @@ export class LobbyUI {
 
       this.renderWaiting(this.playerCount, 0);
     } catch {
-      this.phase = LobbyPhase.SELECT_QUEUE;
-      this.renderSelectQueue();
+      this.phase = LobbyPhase.NAME_ENTRY;
+      this.renderNameEntry(displayName);
     }
   }
 
@@ -131,7 +145,7 @@ export class LobbyUI {
   private async handleCancel(): Promise<void> {
     await leaveQueue();
     this.matchmakingRoom = null;
-    this.phase = LobbyPhase.SELECT_QUEUE;
-    this.renderSelectQueue();
+    this.phase = LobbyPhase.NAME_ENTRY;
+    this.renderNameEntry(getDisplayName());
   }
 }

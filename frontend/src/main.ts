@@ -6,12 +6,11 @@ import { CameraControls } from './camera/CameraControls';
 import { HUD } from './ui/HUD';
 import { createDebugAPI } from './debug/DebugAPI';
 import { LobbyUI } from './ui/LobbyUI';
-import { getRoomIdFromURL, setRoomIdInURL, clearRoomFromURL } from './network/RoomPersistence';
+import { getRoomIdFromURL, setRoomIdInURL, clearRoomFromURL, getDisplayName } from './network/RoomPersistence';
 import { joinGame, reconnect, sendExploreCell } from './network/ColyseusClient';
 import { FogVisibility } from './types/index';
 
 const canvas = document.getElementById('globe-canvas') as HTMLCanvasElement;
-const lobbyEl = document.getElementById('lobby-ui')!;
 
 const renderer = new THREE.WebGLRenderer({
   canvas,
@@ -92,7 +91,7 @@ function showLobby(): void {
 
 async function handleGameJoin(newRoomId: string): Promise<void> {
   try {
-    const room = await joinGame(newRoomId);
+    const room = await joinGame(newRoomId, getDisplayName());
     handleGameRoom(room);
   } catch {
     // If join fails, run local mode

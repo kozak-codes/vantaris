@@ -32,9 +32,9 @@ export async function leaveQueue(): Promise<void> {
   }
 }
 
-export async function joinGame(roomId: string): Promise<Room> {
+export async function joinGame(roomId: string, displayName?: string): Promise<Room> {
   const c = getClient();
-  const room = await c.joinById(roomId);
+  const room = await c.joinById(roomId, { displayName: displayName || '' });
   currentRoom = room;
   if (room.reconnectionToken) {
     storeSessionId(roomId, room.reconnectionToken);
