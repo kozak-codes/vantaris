@@ -16,15 +16,7 @@ function getFogColor(cell: HexCell): THREE.Color {
     return new THREE.Color(FOG_CONFIG.unexploredColor);
   }
   if (cell.fog === FogVisibility.REVEALED) {
-    const base = getBiomeColor(cell.biome);
-    const hsl = { h: 0, s: 0, l: 0 };
-    base.getHSL(hsl);
-    const desaturated = new THREE.Color().setHSL(
-      hsl.h,
-      hsl.s * FOG_CONFIG.exploredSaturation,
-      hsl.l * FOG_CONFIG.exploredBrightness,
-    );
-    return desaturated;
+    return new THREE.Color(FOG_CONFIG.unexploredColor).lerp(new THREE.Color('#333344'), 0.3);
   }
   return getBiomeColor(cell.biome);
 }
@@ -100,6 +92,8 @@ export class GlobeRenderer {
     const radius = GLOBE_CONFIG.radius;
 
     for (const cell of this.grid.cells) {
+      if (cell.fog === FogVisibility.UNREVEALED) continue;
+
       const center = new THREE.Vector3(...cell.center);
       const cn = center.clone().normalize();
 
@@ -200,17 +194,22 @@ export class GlobeRenderer {
       const mat = mesh.material as THREE.MeshStandardMaterial;
       mat.color.copy(getFogColor(cell));
     }
+    this.rebuildBorders();
+  }
+
+  private rebuildBorders(): void {
+    this.globe.remove(this.borderLines);
+    this.buildBorders();
   }
 
   updateFogColors(deltaMs: number): void {
-    const now = performance.now();
     for (const cell of this.grid.cells) {
       const mesh = this.cellMeshes.get(cell.id);
       if (!mesh) continue;
 
       const anim = this.revealAnimations.get(cell.id);
       if (anim) {
-        const elapsed = now - anim.startTime;
+        const elapsed = performance.now() - anim.startTime;
         const progress = Math.min(elapsed / FOG_CONFIG.revealAnimationMs, 1);
         const targetColor = getFogColor(cell);
         const mat = mesh.material as THREE.MeshStandardMaterial;

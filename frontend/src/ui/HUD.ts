@@ -33,13 +33,14 @@ export class HUD {
     }
   }
 
-  showTooltip(cellId: number, biome: string, fog: string, isPentagon: boolean): void {
+  showTooltip(cellId: number, biome: string | null, fog: string, isPentagon: boolean): void {
     this.tooltip.classList.remove('hidden');
     const shape = isPentagon ? 'Pentagon' : 'Hexagon';
-    const fogLabel = fog === 'VISIBLE' ? '👁 Visible' : fog === 'REVEALED' ? '🌫 Explored' : '⬛ Unexplored';
+    const fogLabel = fog === 'VISIBLE' ? '👁 Visible' : fog === 'REVEALED' ? '🌫 Revealed' : '⬛ Unexplored';
+    const biomeText = biome ? biome : '???';
     this.tooltip.innerHTML = `
       <div class="tooltip-id">Cell #${cellId}</div>
-      <div class="tooltip-biome">${biome}</div>
+      <div class="tooltip-biome">${biomeText}</div>
       <div class="tooltip-shape">${shape}</div>
       <div class="tooltip-fog">${fogLabel}</div>
     `;

@@ -6,8 +6,8 @@ import { CameraControls } from './camera/CameraControls';
 import { HUD } from './ui/HUD';
 import { createDebugAPI } from './debug/DebugAPI';
 import { LobbyUI } from './ui/LobbyUI';
-import { getRoomIdFromURL, setRoomIdInURL, clearRoomFromURL, getDisplayName } from './network/RoomPersistence';
-import { joinGame, reconnect, sendExploreCell } from './network/ColyseusClient';
+import { getRoomIdFromURL, setRoomIdInURL, clearRoomFromURL, getStoredRoomId, getDisplayName } from './network/RoomPersistence';
+import { joinGame, reconnectToGame, sendExploreCell } from './network/ColyseusClient';
 import { FogVisibility } from './types/index';
 
 const canvas = document.getElementById('globe-canvas') as HTMLCanvasElement;
@@ -65,7 +65,11 @@ console.log('%c[vantaris] Debug API available at window.vantaris', 'color: #4488
 
 let useServerState = false;
 
-const roomId = getRoomIdFromURL();
+// Check if we're reconnecting to an existing game
+const roomIdFromURL = getRoomIdFromURL();
+const roomIdFromStorage = getStoredRoomId();
+const roomId = roomIdFromURL || roomIdFromStorage;
+
 if (roomId) {
   attemptReconnect(roomId);
 } else {
@@ -74,10 +78,11 @@ if (roomId) {
 
 async function attemptReconnect(id: string): Promise<void> {
   try {
-    const room = await reconnect(id);
+    const room = await reconnectToGame(id);
     handleGameRoom(room);
   } catch {
     clearRoomFromURL();
+    localStorage.removeItem('vantaris_currentRoom');
     showLobby();
   }
 }
@@ -92,9 +97,11 @@ function showLobby(): void {
 async function handleGameJoin(newRoomId: string): Promise<void> {
   try {
     const room = await joinGame(newRoomId, getDisplayName());
+    setRoomIdInURL(newRoomId);
     handleGameRoom(room);
   } catch {
-    // If join fails, run local mode
+    // If join fails, clear and show lobby
+    clearRoomFromURL();
     fogOfWar.revealStartingTerritory();
     globeRenderer.forceColorUpdate();
   }
@@ -103,11 +110,17 @@ async function handleGameJoin(newRoomId: string): Promise<void> {
 function handleGameRoom(room: any): void {
   useServerState = true;
 
+  // Reset all fog to unrevealed, server will send visible cells
+  for (const cell of grid.cells) {
+    cell.fog = FogVisibility.UNREVEALED;
+  }
+  globeRenderer.forceColorUpdate();
+
   room.onMessage('stateUpdate', (slice: any) => {
     applyServerState(slice);
   });
 
-  room.onMessage('pong', (data: any) => {
+  room.onMessage('pong', () => {
     // connection confirmed
   });
 
@@ -144,6 +157,8 @@ canvas.addEventListener('pointermove', (e: PointerEvent) => {
 canvas.addEventListener('click', (e: MouseEvent) => {
   if (e.button !== 0) return;
   if (hoveredCellId !== null) {
+    const cell = grid.cells[hoveredCellId];
+    if (!cell || cell.fog !== FogVisibility.VISIBLE) return;
     if (useServerState) {
       sendExploreCell(`cell_${hoveredCellId}`);
     } else {
@@ -188,7 +203,8 @@ function animate(): void {
       hoveredCellId = cellId;
       const info = fogOfWar.getCellInfo(cellId);
       if (info) {
-        hud.showTooltip(cellId, info.biome, info.fog, info.isPentagon);
+        const biome = info.fog === FogVisibility.VISIBLE ? info.biome : null;
+        hud.showTooltip(cellId, biome, info.fog, info.isPentagon);
       }
     }
   } else {

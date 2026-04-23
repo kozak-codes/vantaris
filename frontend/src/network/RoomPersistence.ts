@@ -7,12 +7,18 @@ export function setRoomIdInURL(roomId: string): void {
   const url = new URL(window.location.href);
   url.searchParams.set('room', roomId);
   window.history.replaceState({}, '', url.toString());
+  localStorage.setItem('vantaris_currentRoom', roomId);
 }
 
 export function clearRoomFromURL(): void {
   const url = new URL(window.location.href);
   url.searchParams.delete('room');
   window.history.replaceState({}, '', url.toString());
+  localStorage.removeItem('vantaris_currentRoom');
+}
+
+export function getStoredRoomId(): string | null {
+  return localStorage.getItem('vantaris_currentRoom');
 }
 
 export function getCameraFromURL(): { lat: number; lng: number; zoom: number } | null {
@@ -29,12 +35,12 @@ export function setCameraInURL(lat: number, lng: number, zoom: number): void {
   window.history.replaceState({}, '', `${window.location.pathname}${window.location.search}#cam=${lat},${lng},${zoom}`);
 }
 
-export function storeSessionId(roomId: string, sessionId: string): void {
-  localStorage.setItem(`vantaris_session_${roomId}`, sessionId);
+export function storeReconnectionToken(roomId: string, token: string): void {
+  localStorage.setItem(`vantaris_reconnect_${roomId}`, token);
 }
 
-export function getSessionId(roomId: string): string | null {
-  return localStorage.getItem(`vantaris_session_${roomId}`);
+export function getReconnectionToken(roomId: string): string | null {
+  return localStorage.getItem(`vantaris_reconnect_${roomId}`);
 }
 
 const DISPLAY_NAME_KEY = 'vantaris_displayName';

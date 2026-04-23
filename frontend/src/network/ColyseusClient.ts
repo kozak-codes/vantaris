@@ -1,5 +1,5 @@
 import { Client, Room } from 'colyseus.js';
-import { storeSessionId, getSessionId } from './RoomPersistence';
+import { storeReconnectionToken, getReconnectionToken, getStoredRoomId } from './RoomPersistence';
 
 const SERVER_URL = 'ws://localhost:2567';
 
@@ -37,19 +37,25 @@ export async function joinGame(roomId: string, displayName?: string): Promise<Ro
   const room = await c.joinById(roomId, { displayName: displayName || '' });
   currentRoom = room;
   if (room.reconnectionToken) {
-    storeSessionId(roomId, room.reconnectionToken);
+    storeReconnectionToken(roomId, room.reconnectionToken);
   }
+  // Store room ID for reconnection after reload
+  localStorage.setItem('vantaris_currentRoom', roomId);
   return room;
 }
 
-export async function reconnect(roomId: string): Promise<Room> {
+export async function reconnectToGame(roomId: string): Promise<Room> {
   const c = getClient();
-  const reconnectionToken = getSessionId(roomId);
-  if (!reconnectionToken) {
-    throw new Error('No stored session for this room');
+  const token = getReconnectionToken(roomId);
+  if (!token) {
+    throw new Error('No reconnection token stored for room ' + roomId);
   }
-  const room = await c.reconnect(reconnectionToken);
+  const room = await c.reconnect(token);
   currentRoom = room;
+  // Update token in case it changes
+  if (room.reconnectionToken) {
+    storeReconnectionToken(roomId, room.reconnectionToken);
+  }
   return room;
 }
 
