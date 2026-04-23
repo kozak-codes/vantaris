@@ -50,11 +50,9 @@ export class SelectionRenderer {
     this.currentUnitId = unitId;
     this.currentCityId = cityId;
 
-    if (tileChanged) {
+    if (tileChanged || unitChanged || cityChanged) {
       this.rebuild();
     } else {
-      if (unitChanged) this.updateUnitIndicator();
-      if (cityChanged) this.updateCityIndicator();
       this.updatePathLines();
     }
   }

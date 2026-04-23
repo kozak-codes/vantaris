@@ -1,5 +1,14 @@
 import type { PlayerStateSlice, VisibleCellData, RevealedCellData, UnitData, CityData, PlayerSummary } from '@vantaris/shared';
 
+export type CommandAction = 'move' | 'claim';
+
+export interface CommandableAction {
+  id: CommandAction;
+  label: string;
+  key: string;
+  targetRequired: boolean;
+}
+
 export interface ClientState {
   myPlayerId: string;
   currentTick: number;
@@ -11,6 +20,8 @@ export interface ClientState {
   selectedTileId: string | null;
   selectedUnitId: string | null;
   selectedCityId: string | null;
+  pendingCommand: CommandAction | null;
+  commandQueue: { entityId: string; entityType: 'unit' | 'city'; action: CommandAction; target?: string }[];
 }
 
 export const clientState: ClientState = {
@@ -24,10 +35,20 @@ export const clientState: ClientState = {
   selectedTileId: null,
   selectedUnitId: null,
   selectedCityId: null,
+  pendingCommand: null,
+  commandQueue: [],
 };
 
 type RenderCallback = () => void;
 const renderCallbacks: RenderCallback[] = [];
+
+type FirstSpawnCallback = (playerId: string, cityCellId: string) => void;
+const firstSpawnCallbacks: FirstSpawnCallback[] = [];
+let hasReceivedFirstState = false;
+
+export function onFirstSpawn(cb: FirstSpawnCallback): void {
+  firstSpawnCallbacks.push(cb);
+}
 
 export function onStateUpdate(cb: RenderCallback): void {
   renderCallbacks.push(cb);
@@ -42,6 +63,31 @@ function notifyRenderers(): void {
 export function notifySelectionChanged(): void {
   validateSelections();
   notifyRenderers();
+}
+
+export function getUnitActions(unitId: string): CommandableAction[] {
+  const unit = clientState.units.get(unitId);
+  if (!unit) return [];
+  if (unit.ownerId !== clientState.myPlayerId) return [];
+
+  const actions: CommandableAction[] = [];
+
+  if (unit.status === 'IDLE') {
+    actions.push({ id: 'move', label: 'Move To', key: '1', targetRequired: true });
+    actions.push({ id: 'claim', label: 'Claim', key: '2', targetRequired: false });
+  }
+
+  return actions;
+}
+
+export function getCityActions(cityId: string): CommandableAction[] {
+  const city = clientState.cities.get(cityId);
+  if (!city) return [];
+  if (city.ownerId !== clientState.myPlayerId) return [];
+
+  const actions: CommandableAction[] = [];
+  actions.push({ id: 'move', label: 'Queue Infantry', key: '1', targetRequired: false });
+  return actions;
 }
 
 export function applyStateSlice(slice: PlayerStateSlice): void {
@@ -75,6 +121,18 @@ export function applyStateSlice(slice: PlayerStateSlice): void {
 
   validateSelections();
   notifyRenderers();
+
+  if (!hasReceivedFirstState && clientState.cities.size > 0) {
+    hasReceivedFirstState = true;
+    for (const [, city] of clientState.cities) {
+      if (city.ownerId === clientState.myPlayerId) {
+        for (const cb of firstSpawnCallbacks) {
+          cb(clientState.myPlayerId, city.cellId);
+        }
+        break;
+      }
+    }
+  }
 }
 
 function validateSelections(): void {
@@ -85,20 +143,38 @@ function validateSelections(): void {
       clientState.selectedTileId = null;
       clientState.selectedUnitId = null;
       clientState.selectedCityId = null;
+      clientState.pendingCommand = null;
     }
   }
 
   if (clientState.selectedUnitId) {
     const unit = clientState.units.get(clientState.selectedUnitId);
-    if (!unit || unit.cellId !== clientState.selectedTileId) {
+    if (!unit) {
       clientState.selectedUnitId = null;
+      clientState.pendingCommand = null;
+    } else if (unit.cellId !== clientState.selectedTileId) {
+      clientState.selectedTileId = unit.cellId;
     }
   }
 
   if (clientState.selectedCityId) {
     const city = clientState.cities.get(clientState.selectedCityId);
-    if (!city || city.cellId !== clientState.selectedTileId) {
+    if (!city) {
       clientState.selectedCityId = null;
+    } else if (city.cellId !== clientState.selectedTileId) {
+      clientState.selectedTileId = city.cellId;
+    }
+  }
+
+  if (clientState.pendingCommand) {
+    if (clientState.pendingCommand === 'move') {
+      if (!clientState.selectedUnitId) {
+        clientState.pendingCommand = null;
+      }
+    } else if (clientState.pendingCommand === 'claim') {
+      if (!clientState.selectedUnitId) {
+        clientState.pendingCommand = null;
+      }
     }
   }
 }
@@ -114,4 +190,7 @@ export function clearClientState(): void {
   clientState.selectedTileId = null;
   clientState.selectedUnitId = null;
   clientState.selectedCityId = null;
+  clientState.pendingCommand = null;
+  clientState.commandQueue = [];
+  hasReceivedFirstState = false;
 }

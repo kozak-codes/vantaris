@@ -85,6 +85,12 @@ export function sendSetUnitIdle(unitId: string): void {
   }
 }
 
+export function sendClaimTerritory(unitId: string): void {
+  if (currentRoom) {
+    currentRoom.send('claimTerritory', { unitId });
+  }
+}
+
 export function sendToggleCityProduction(cityId: string, producing: boolean): void {
   if (currentRoom) {
     currentRoom.send('toggleCityProduction', { cityId, producing });

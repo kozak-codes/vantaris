@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { clientState, notifySelectionChanged } from '../state/ClientState';
-import { sendMoveUnit, sendSetUnitIdle } from '../network/ColyseusClient';
+import { sendMoveUnit, sendClaimTerritory } from '../network/ColyseusClient';
 import { TerrainType } from '@vantaris/shared';
 import { PASSABLE_TERRAIN } from '@vantaris/shared/constants';
 
@@ -42,13 +42,14 @@ export class GlobeInput {
 
     if (Math.sqrt(dx * dx + dy * dy) > CLICK_THRESHOLD_PX) return;
 
-    this.handleClick(e);
+    this.handleClick(e.shiftKey, e.clientX, e.clientY);
   }
 
-  private handleClick(e: PointerEvent): void {
+  private handleClick(shiftHeld: boolean, clientX: number, clientY: number): void {
+    const rect = this.canvas.getBoundingClientRect();
     const pointer = new THREE.Vector2(
-      (e.clientX / window.innerWidth) * 2 - 1,
-      -(e.clientY / window.innerHeight) * 2 + 1,
+      (2 * (clientX - rect.left) / rect.width) - 1,
+      -(2 * (clientY - rect.top) / rect.height) + 1,
     );
 
     this.raycaster.setFromCamera(pointer, this.camera);
@@ -62,41 +63,41 @@ export class GlobeInput {
 
     const hexIntersects = this.raycaster.intersectObjects(hexMeshes, false);
     if (hexIntersects.length === 0) {
-      clientState.selectedTileId = null;
-      clientState.selectedUnitId = null;
-      clientState.selectedCityId = null;
-      notifySelectionChanged();
+      this.deselectAll();
       return;
     }
 
     const cellId = this.getCellIdFromIntersection(hexIntersects[0]);
     if (!cellId) {
-      clientState.selectedTileId = null;
-      clientState.selectedUnitId = null;
-      clientState.selectedCityId = null;
-      notifySelectionChanged();
+      this.deselectAll();
       return;
     }
 
     const visibility = clientState.visibleCells.get(cellId);
     if (!visibility && !clientState.revealedCells.has(cellId)) {
-      clientState.selectedTileId = null;
-      clientState.selectedUnitId = null;
-      clientState.selectedCityId = null;
-      notifySelectionChanged();
+      this.deselectAll();
       return;
     }
 
     const prevTileId = clientState.selectedTileId;
     const prevUnitId = clientState.selectedUnitId;
+    const pendingCommand = clientState.pendingCommand;
 
-    if (prevTileId === cellId && prevUnitId) {
-      const myUnitsOnTarget = this.getMyIdleUnitsOnTile(cellId);
-      if (myUnitsOnTarget.length > 0 && visibility) {
+    if (pendingCommand === 'move' && prevUnitId) {
+      const unit = clientState.units.get(prevUnitId);
+      if (unit && unit.status === 'IDLE' && unit.ownerId === clientState.myPlayerId && visibility) {
         if (PASSABLE_TERRAIN.includes(visibility.biome as TerrainType)) {
           sendMoveUnit(prevUnitId, cellId);
-          clientState.selectedTileId = null;
-          clientState.selectedUnitId = null;
+          if (shiftHeld) {
+            clientState.commandQueue.push({
+              entityId: prevUnitId,
+              entityType: 'unit',
+              action: 'claim',
+              target: cellId,
+            });
+          }
+          clientState.pendingCommand = null;
+          clientState.selectedTileId = cellId;
           clientState.selectedCityId = null;
           notifySelectionChanged();
           return;
@@ -104,64 +105,28 @@ export class GlobeInput {
       }
     }
 
-    if (prevTileId && prevTileId !== cellId && prevUnitId) {
-      const myUnitsOnPrev = this.getMyIdleUnitsOnTile(prevTileId);
-      const unitStillOnTile = myUnitsOnPrev.find(uid => uid === prevUnitId);
-      if (unitStillOnTile && visibility) {
-        if (PASSABLE_TERRAIN.includes(visibility.biome as TerrainType)) {
-          sendMoveUnit(prevUnitId, cellId);
-          clientState.selectedTileId = null;
-          clientState.selectedUnitId = null;
-          clientState.selectedCityId = null;
-          notifySelectionChanged();
-          return;
-        }
-      }
+    if (cellId === prevTileId) {
+      clientState.selectedTileId = null;
+      clientState.selectedUnitId = null;
+      clientState.selectedCityId = null;
+      clientState.pendingCommand = null;
+      notifySelectionChanged();
+      return;
     }
 
     clientState.selectedTileId = cellId;
-
-    const unitsOnTile = this.getUnitsOnTile(cellId);
-    if (unitsOnTile.length > 0) {
-      const myUnits = unitsOnTile.filter(uid => {
-        const u = clientState.units.get(uid);
-        return u && u.ownerId === clientState.myPlayerId;
-      });
-      clientState.selectedUnitId = myUnits[0] || unitsOnTile[0];
-    } else {
-      clientState.selectedUnitId = null;
-    }
-
-    const cityOnTile = this.getCityOnTile(cellId);
-    clientState.selectedCityId = cityOnTile;
+    clientState.selectedUnitId = null;
+    clientState.selectedCityId = null;
+    clientState.pendingCommand = null;
     notifySelectionChanged();
   }
 
-  private getUnitsOnTile(tileId: string): string[] {
-    const result: string[] = [];
-    for (const [unitId, unit] of clientState.units) {
-      if (unit.cellId === tileId) {
-        result.push(unitId);
-      }
-    }
-    return result;
-  }
-
-  private getMyIdleUnitsOnTile(tileId: string): string[] {
-    const result: string[] = [];
-    for (const [unitId, unit] of clientState.units) {
-      if (unit.cellId === tileId && unit.ownerId === clientState.myPlayerId && unit.status === 'IDLE') {
-        result.push(unitId);
-      }
-    }
-    return result;
-  }
-
-  private getCityOnTile(tileId: string): string | null {
-    for (const [cityId, city] of clientState.cities) {
-      if (city.cellId === tileId) return cityId;
-    }
-    return null;
+  private deselectAll(): void {
+    clientState.selectedTileId = null;
+    clientState.selectedUnitId = null;
+    clientState.selectedCityId = null;
+    clientState.pendingCommand = null;
+    notifySelectionChanged();
   }
 
   private getCellIdFromIntersection(intersection: THREE.Intersection): string | null {
@@ -172,7 +137,9 @@ export class GlobeInput {
 
   private onKeyDown(e: KeyboardEvent): void {
     if (e.key === 'Escape') {
-      if (clientState.selectedUnitId) {
+      if (clientState.pendingCommand) {
+        clientState.pendingCommand = null;
+      } else if (clientState.selectedUnitId) {
         clientState.selectedUnitId = null;
       } else if (clientState.selectedCityId) {
         clientState.selectedCityId = null;
@@ -180,6 +147,36 @@ export class GlobeInput {
         clientState.selectedTileId = null;
       }
       notifySelectionChanged();
+      return;
     }
+
+    if (e.key === '1' || e.key === 'm' || e.key === 'M') {
+      this.handleMoveKey(e.shiftKey);
+    }
+
+    if (e.key === '2' || e.key === 'c' || e.key === 'C') {
+      this.handleClaimKey();
+    }
+  }
+
+  private handleMoveKey(shiftHeld: boolean): void {
+    const unitId = clientState.selectedUnitId;
+    if (!unitId) return;
+    const unit = clientState.units.get(unitId);
+    if (!unit || unit.status !== 'IDLE' || unit.ownerId !== clientState.myPlayerId) return;
+
+    clientState.pendingCommand = 'move';
+    notifySelectionChanged();
+  }
+
+  private handleClaimKey(): void {
+    const unitId = clientState.selectedUnitId;
+    if (!unitId) return;
+    const unit = clientState.units.get(unitId);
+    if (!unit || unit.status !== 'IDLE' || unit.ownerId !== clientState.myPlayerId) return;
+
+    sendClaimTerritory(unitId);
+    clientState.pendingCommand = null;
+    notifySelectionChanged();
   }
 }

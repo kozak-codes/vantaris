@@ -93,6 +93,10 @@ export class VantarisRoom extends Room<GameState> {
       this.handleToggleCityProduction(client, data);
     });
 
+    this.onMessage('claimTerritory', (client, data: { unitId: string }) => {
+      this.handleClaimTerritory(client, data);
+    });
+
     this.onMessage('ping', (client) => {
       client.send('pong', { serverTick: this.state.tick });
     });
@@ -271,6 +275,14 @@ export class VantarisRoom extends Room<GameState> {
     if (!city || city.ownerId !== playerId) return;
 
     city.producingUnit = data.producing;
+  }
+
+  private handleClaimTerritory(client: Client, data: { unitId: string }): void {
+    const playerId = client.sessionId;
+    const unit = this.state.units.get(data.unitId);
+    if (!unit || unit.ownerId !== playerId || unit.status !== 'IDLE') return;
+
+    startClaiming(this.state, data.unitId);
   }
 
   private findAvailableSpawnCell(): string | null {

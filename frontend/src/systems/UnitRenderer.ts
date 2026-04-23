@@ -3,6 +3,7 @@ import { clientState, onStateUpdate } from '../state/ClientState';
 import { createInfantryIcon, positionOnSurface, offsetOnSurface, orientToSurface, GLOBE_RADIUS } from './IconFactory';
 
 const SURFACE_OFFSET = 1.04;
+const TICK_INTERVAL_MS = 5000;
 
 const UNIT_OFFSETS = [
   [0, 0],
@@ -23,10 +24,11 @@ interface UnitVisual {
 }
 
 interface MovingUnitState {
-  fromPos: THREE.Vector3;
-  toPos: THREE.Vector3;
+  fromCellId: string;
+  toCellId: string;
   totalTicks: number;
   remainingTicks: number;
+  stateTimestamp: number;
 }
 
 export class UnitRenderer {
@@ -84,29 +86,32 @@ export class UnitRenderer {
         const prev = this.prevState.get(unitId);
         const prevCellId = prev ? prev.cellId : unit.cellId;
 
-        if (unit.status === 'MOVING' && unit.path && unit.path.length > 0 && prevCellId !== unit.cellId) {
-          const fromPos = this.cellCenterToWorld(prevCellId);
-          const toPos = this.cellCenterToWorld(unit.cellId);
-          this.movingUnits.set(unitId, {
-            fromPos,
-            toPos,
-            totalTicks: unit.movementTicksTotal || 10,
-            remainingTicks: unit.movementTicksRemaining,
-          });
-          uv.prevCellId = prevCellId;
-          uv.targetCellId = unit.cellId;
-        } else if (unit.status === 'MOVING' && this.movingUnits.has(unitId)) {
-          const mu = this.movingUnits.get(unitId)!;
-          mu.remainingTicks = unit.movementTicksRemaining;
-          mu.totalTicks = unit.movementTicksTotal || 10;
-          mu.toPos = this.cellCenterToWorld(unit.cellId);
+        if (unit.status === 'MOVING' && unit.path && unit.path.length > 0) {
+          const nextCellId = unit.path[0];
+          if (!this.movingUnits.has(unitId)) {
+            this.movingUnits.set(unitId, {
+              fromCellId: unit.cellId,
+              toCellId: nextCellId,
+              totalTicks: unit.movementTicksTotal || 10,
+              remainingTicks: unit.movementTicksRemaining,
+              stateTimestamp: performance.now(),
+            });
+            uv.prevCellId = unit.cellId;
+            uv.targetCellId = nextCellId;
+          } else {
+            const mu = this.movingUnits.get(unitId)!;
+            mu.fromCellId = unit.cellId;
+            mu.toCellId = nextCellId;
+            mu.remainingTicks = unit.movementTicksRemaining;
+            mu.totalTicks = unit.movementTicksTotal || 10;
+            mu.stateTimestamp = performance.now();
+          }
         } else {
           uv.targetCellId = unit.cellId;
           this.movingUnits.delete(unitId);
         }
       } else {
         const icon = createInfantryIcon(color);
-        const worldPos = this.cellCenterToWorld(unit.cellId);
         positionOnSurface(icon, this.getCellCenter(unit.cellId) || [0, GLOBE_RADIUS, 0]);
         icon.userData = { unitId, type: 'unit' };
         this.globe.add(icon);
@@ -168,27 +173,38 @@ export class UnitRenderer {
   }
 
   update(): void {
+    const now = performance.now();
+
     for (const [unitId, mu] of this.movingUnits) {
       const uv = this.units.get(unitId);
       if (!uv) continue;
 
+      const unit = clientState.units.get(unitId);
+      if (!unit) continue;
+
       const total = mu.totalTicks || 10;
       const remaining = mu.remainingTicks;
-      const t = 1 - (remaining / total);
 
-      const fromPos = mu.fromPos.clone();
-      const toPos = mu.toPos.clone();
+      const elapsedSinceState = now - mu.stateTimestamp;
+      const ticksElapsed = elapsedSinceState / TICK_INTERVAL_MS;
+      const estimatedRemaining = Math.max(0, remaining - ticksElapsed);
+      const t = Math.max(0, Math.min(1, 1 - (estimatedRemaining / total)));
 
-      const interpPos = new THREE.Vector3().lerpVectors(fromPos, toPos, Math.max(0, Math.min(1, t)));
+      const fromPos = this.cellCenterToWorld(mu.fromCellId);
+      const toPos = this.cellCenterToWorld(mu.toCellId);
+
+      const interpPos = new THREE.Vector3().lerpVectors(fromPos, toPos, t);
       interpPos.normalize().multiplyScalar(GLOBE_RADIUS * SURFACE_OFFSET);
 
       const cellUnitList: string[] = [];
-      const cellId = uv.targetCellId;
-      for (const [uid, unit] of clientState.units) {
-        if (unit.cellId === cellId) cellUnitList.push(uid);
+      for (const [uid, u] of clientState.units) {
+        if (u.cellId === unit.cellId && !this.movingUnits.has(uid)) {
+          cellUnitList.push(uid);
+        }
       }
       const idx = cellUnitList.indexOf(unitId);
-      const [dx, dy] = this.getUnitOffset(idx >= 0 ? idx : 0, Math.max(1, cellUnitList.length));
+      const finalCount = cellUnitList.length + (this.movingUnits.has(unitId) ? 1 : 0);
+      const [dx, dy] = this.getUnitOffset(idx >= 0 ? idx : 0, Math.max(1, finalCount));
       const offsetPos = offsetOnSurface(interpPos, dx, dy);
       uv.icon.position.copy(offsetPos);
       orientToSurface(uv.icon, offsetPos);

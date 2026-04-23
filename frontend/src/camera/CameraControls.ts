@@ -232,9 +232,19 @@ export class CameraControls {
     return this.currentDistance;
   }
 
-  setZoom(zoom: number): void {
+   setZoom(zoom: number): void {
     this.currentDistance = zoom;
     this.targetZoom = zoom;
+    this.updateCameraPosition();
+  }
+
+  focusCell(center: [number, number, number]): void {
+    const target = new THREE.Vector3(center[0], center[1], center[2]);
+    const defaultForward = new THREE.Vector3(0, 0, 1);
+    const quat = new THREE.Quaternion().setFromUnitVectors(target.clone().normalize(), defaultForward);
+    this.pivot.quaternion.premultiply(quat);
+    this.targetZoom = CAMERA_CONFIG.minDistance + (CAMERA_CONFIG.maxDistance - CAMERA_CONFIG.minDistance) * 0.35;
+    this.currentDistance = this.targetZoom;
     this.updateCameraPosition();
   }
 }

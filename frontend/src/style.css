@@ -522,3 +522,66 @@ html, body {
   color: #4488ff;
   font-weight: 500;
 }
+
+.panel-back-link {
+  margin-top: 8px;
+  padding-top: 0;
+}
+
+.panel-btn-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(100, 140, 200, 0.25);
+  color: #8899aa;
+  font-size: 12px;
+  padding: 4px 12px;
+}
+
+.panel-btn-secondary:hover {
+  background: rgba(100, 140, 200, 0.1);
+  border-color: rgba(100, 140, 200, 0.4);
+  color: #aabbcc;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  margin: 8px 0;
+  overflow: hidden;
+}
+
+.cmd-btn {
+  position: relative;
+  padding-right: 32px;
+}
+
+.cmd-key {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  color: #667788;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-family: monospace;
+}
+
+.cmd-btn.active {
+  background: rgba(68, 136, 255, 0.35);
+  border-color: rgba(68, 136, 255, 0.8);
+}
+
+.cmd-hint {
+  font-size: 11px;
+  color: #88aacc;
+  text-align: center;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+.claim-fill {
+  background: rgba(255, 180, 50, 0.7) !important;
+}

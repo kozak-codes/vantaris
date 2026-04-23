@@ -12,7 +12,7 @@ import { GlobeInput } from './input/GlobeInput';
 import { createDebugAPI } from './debug/DebugAPI';
 import { getRoomIdFromURL, setRoomIdInURL, clearRoomFromURL, getStoredRoomId, getDisplayName } from './network/RoomPersistence';
 import { joinGame, reconnectToGame, leaveGame, sendUpdateCamera } from './network/ColyseusClient';
-import { clientState, clearClientState } from './state/ClientState';
+import { clientState, clearClientState, onFirstSpawn } from './state/ClientState';
 
 const canvas = document.getElementById('globe-canvas') as HTMLCanvasElement;
 
@@ -110,6 +110,13 @@ function handleGameRoom(room: any): void {
   useServerState = true;
   leaveBtn.classList.remove('hidden');
   pivot.quaternion.identity();
+
+  onFirstSpawn((_playerId: string, cityCellId: string) => {
+    const numericId = parseInt(cityCellId.replace('cell_', ''));
+    if (!isNaN(numericId) && numericId >= 0 && numericId < grid.cells.length) {
+      cameraControls.focusCell(grid.cells[numericId].center);
+    }
+  });
 
   room.onLeave(() => {
     useServerState = false;
