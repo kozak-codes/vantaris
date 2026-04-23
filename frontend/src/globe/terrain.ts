@@ -1,5 +1,5 @@
 import { BiomeType } from '../types/index';
-import { BIOME_CONFIGS, GLOBE_CONFIG } from '../constants';
+import { BIOME_CONFIGS, GLOBE_CONFIG } from '@vantaris/shared/constants';
 
 let _seed = 42;
 

@@ -95,14 +95,15 @@ export class CameraControls {
   }
 
   private applyKeyboardRotation(): void {
-    const speed = CAMERA_CONFIG.keyboardRotateSpeed;
+    const zoomScale = this.currentDistance / CAMERA_CONFIG.minDistance;
+    const speed = CAMERA_CONFIG.keyboardRotateSpeed * zoomScale;
     let dx = 0;
     let dy = 0;
 
-    if (this.keysHeld.has('a') || this.keysHeld.has('arrowleft')) dx -= speed;
-    if (this.keysHeld.has('d') || this.keysHeld.has('arrowright')) dx += speed;
-    if (this.keysHeld.has('w') || this.keysHeld.has('arrowup')) dy -= speed;
-    if (this.keysHeld.has('s') || this.keysHeld.has('arrowdown')) dy += speed;
+    if (this.keysHeld.has('d') || this.keysHeld.has('arrowright')) dx -= speed;
+    if (this.keysHeld.has('a') || this.keysHeld.has('arrowleft')) dx += speed;
+    if (this.keysHeld.has('w') || this.keysHeld.has('arrowup')) dy += speed;
+    if (this.keysHeld.has('s') || this.keysHeld.has('arrowdown')) dy -= speed;
 
     if (dx !== 0 || dy !== 0) {
       this.rotateGlobe(dx, dy);

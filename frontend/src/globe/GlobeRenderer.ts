@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { HexGrid as HexGridData, HexCell } from '../types/index';
-import { BiomeType, FogState } from '../types/index';
+import { BiomeType, FogVisibility } from '../types/index';
 import { BIOME_CONFIGS, FOG_CONFIG, GLOBE_CONFIG } from '../constants';
 
 const biomeColorMap = new Map<BiomeType, THREE.Color>(
@@ -12,10 +12,10 @@ function getBiomeColor(biome: BiomeType): THREE.Color {
 }
 
 function getFogColor(cell: HexCell): THREE.Color {
-  if (cell.fog === FogState.Unexplored) {
+  if (cell.fog === FogVisibility.UNREVEALED) {
     return new THREE.Color(FOG_CONFIG.unexploredColor);
   }
-  if (cell.fog === FogState.Explored) {
+  if (cell.fog === FogVisibility.REVEALED) {
     const base = getBiomeColor(cell.biome);
     const hsl = { h: 0, s: 0, l: 0 };
     base.getHSL(hsl);
@@ -36,7 +36,7 @@ export class GlobeRenderer {
   private globe: THREE.Group;
   private glowMesh: THREE.Mesh | null = null;
   private stars: THREE.Points | null = null;
-  private revealAnimations: Map<number, { startTime: number; fromFog: FogState }> = new Map();
+  private revealAnimations: Map<number, { startTime: number; fromFog: FogVisibility }> = new Map();
 
   constructor(parent: THREE.Object3D, grid: HexGridData, scene?: THREE.Scene) {
     this.grid = grid;
@@ -226,7 +226,7 @@ export class GlobeRenderer {
     }
   }
 
-  beginRevealAnimation(cellId: number, fromFog: FogState): void {
+  beginRevealAnimation(cellId: number, fromFog: FogVisibility): void {
     this.revealAnimations.set(cellId, {
       startTime: performance.now(),
       fromFog,

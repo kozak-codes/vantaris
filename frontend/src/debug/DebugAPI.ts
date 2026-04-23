@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { HexGrid as HexGridData } from '../types/index';
-import { FogState } from '../types/index';
+import { FogVisibility } from '../types/index';
 import type { FogOfWar } from '../systems/FogOfWar';
 import type { GlobeRenderer } from '../globe/GlobeRenderer';
 import type { CameraControls } from '../camera/CameraControls';
@@ -64,8 +64,8 @@ export function createDebugAPI(
     fog: {
       revealAll(): void {
         for (const cell of grid.cells) {
-          if (cell.fog !== FogState.Visible) {
-            cell.fog = FogState.Visible;
+          if (cell.fog !== FogVisibility.VISIBLE) {
+            cell.fog = FogVisibility.VISIBLE;
           }
         }
         globeRenderer.forceColorUpdate();
@@ -74,7 +74,7 @@ export function createDebugAPI(
 
       hideAll(): void {
         for (const cell of grid.cells) {
-          cell.fog = FogState.Unexplored;
+          cell.fog = FogVisibility.UNREVEALED;
         }
         globeRenderer.forceColorUpdate();
         console.log('[debug] All cells hidden');
@@ -112,8 +112,8 @@ export function createDebugAPI(
         let explored = 0;
         let unexplored = 0;
         for (const cell of grid.cells) {
-          if (cell.fog === FogState.Visible) visible++;
-          else if (cell.fog === FogState.Explored) explored++;
+        if (cell.fog === FogVisibility.VISIBLE) visible++;
+        else if (cell.fog === FogVisibility.REVEALED) explored++;
           else unexplored++;
         }
         return { visible, explored, unexplored };

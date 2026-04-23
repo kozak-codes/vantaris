@@ -1,0 +1,17 @@
+{
+  "name": "@vantaris/shared",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/types.js",
+  "types": "src/types.ts",
+  "exports": {
+    ".": {
+      "types": "./src/types.ts",
+      "default": "./src/types.ts"
+    },
+    "./constants": {
+      "types": "./src/constants.ts",
+      "default": "./src/constants.ts"
+    }
+  }
+}

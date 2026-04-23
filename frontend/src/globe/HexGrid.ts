@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import type { HexCell, HexGrid as HexGridData } from '../types/index';
-import { FogState } from '../types/index';
+import { FogVisibility } from '../types/index';
 import { GLOBE_CONFIG } from '../constants';
 import { assignBiomes } from './terrain';
 
@@ -146,7 +146,7 @@ function buildDualGrid(
       center,
       vertexIds: orderedFaces,
       biome: assignBiomes(cells.length),
-      fog: FogState.Unexplored,
+      fog: FogVisibility.UNREVEALED,
       isPentagon,
     });
 

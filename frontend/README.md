@@ -1,86 +1,134 @@
 # Vantaris
 
-A browser-based 3D interactive globe with a hexagonal grid overlay and fog of war system. This is the visual foundation for Vantaris, a strategic RTS game.
+A browser-based 3D hex-globe RTS game with multiplayer support via Colyseus.
 
-## Quick Start
+## Monorepo Structure
+
+```
+vantaris/
+├── package.json              ← root workspace config, dev scripts
+├── frontend/                 ← Vite + TypeScript + Three.js client
+├── backend/                  ← Colyseus server (Node.js)
+└── shared/                   ← @vantaris/shared — types & constants
+```
+
+### Quick Start
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open the URL shown in the terminal (default: `http://localhost:5173`). Hot reloading is active — any file save will update the browser automatically.
+This starts both the Vite dev server (frontend on `http://localhost:5173`) and the Colyseus server (backend on `ws://localhost:2567`).
 
-## Controls
+- `npm run dev:frontend` — Vite only
+- `npm run dev:backend` — Colyseus only
 
-- **Click and drag** — Rotate the globe (with momentum/inertia on release)
+### Colyseus Monitor
+
+After starting the backend, the Colyseus monitor is available at `http://localhost:2567/colyseus`.
+
+## Room Types
+
+### lobby_room
+Persistent room that broadcasts player counts per queue type every 2 seconds. No game state.
+
+### matchmaking_room
+Two variants: `matchmaking_quick` (2–4 players, subdivision level 3) and `matchmaking_standard` (4–8 players, subdivision level 4). When enough players join, a 30-second countdown starts. At countdown end, a `vantaris_room` is created and clients are redirected.
+
+### vantaris_room
+The game room. Receives `exploreCell` messages from clients, validates adjacency to owned territory, claims cells, and recomputes fog of war. Sends each player their own `stateUpdate` slice.
+
+## Per-Player State Patching
+
+The server never broadcasts the full `GameState` to all clients. Instead, after any mutation, it computes each player's visible slice:
+
+```typescript
+interface PlayerStateSlice {
+  visibleCells: CellStateSlice[];    // full live data for VISIBLE cells
+  revealedCells: CellSnapshot[];     // stale snapshots for REVEALED cells
+  players: PlayerSlice[];            // all players visible to this client
+}
+```
+
+This ensures players only see cells within their vision range and stale data for previously-seen areas.
+
+## URL Structure
+
+- `?room=<roomId>` — Game room ID for reconnection
+- `#cam=lat,lng,zoom` — Camera state hash for reconnection
+
+## Adding a New Queue Type
+
+1. Add the queue type to `QueueType` enum in `shared/src/types.ts`
+2. Add config in `QUEUE_CONFIGS` in `shared/src/constants.ts`
+3. Register a new matchmaking room variant in `backend/src/index.ts`
+
+## Frontend
+
+### Controls
+- **Right-click drag** — Rotate the globe (with inertia)
+- **WASD / Arrow keys** — Rotate the globe
 - **Scroll wheel** — Zoom in/out
-- **Pinch (mobile)** — Zoom in/out
-- **Click a visible cell** — Expand visibility to adjacent cells
+- **Click a visible cell** — Expand territory (or send explore to server in multiplayer)
+- **Pinch (mobile)** — Zoom
 
-## Project Structure
+### Project Structure
 
 ```
-src/
-├── main.ts              Entry point — wires all systems together
-├── types/
-│   └── index.ts          Shared interfaces (CellState, BiomeType, FogState, configs)
-├── constants.ts          All tunable constants (subdivision level, biome weights, fog opacity, etc.)
+frontend/src/
+├── main.ts              Entry point — room/lobby detection, Three.js setup
+├── types/index.ts        Re-exports from @vantaris/shared
+├── constants.ts          Re-exports from @vantaris/shared/constants
 ├── globe/
-│   ├── GlobeRenderer.ts  Three.js scene construction, cell meshes, borders, atmosphere glow, starfield
+│   ├── GlobeRenderer.ts  Three.js scene, cell meshes, borders, atmosphere glow, starfield
 │   ├── HexGrid.ts        Geodesic grid generation (subdivided icosahedron → dual graph)
-│   └── terrain.ts        Seeded biome assignment with configurable weights
+│   └── terrain.ts        Seeded biome assignment
 ├── systems/
-│   └── FogOfWar.ts       Fog state management (Unexplored → Explored → Visible)
+│   └── FogOfWar.ts       Fog state management (UNREVEALED → REVEALED → VISIBLE)
 ├── camera/
-│   └── CameraControls.ts Pointer/touch drag rotation with inertia, scroll zoom, pinch zoom
+│   └── CameraControls.ts Pointer/touch drag, keyboard, zoom with inertia
+├── network/
+│   ├── ColyseusClient.ts  Client connection, room join/leave, message sending
+│   └── RoomPersistence.ts  URL & localStorage helpers for room reconnection
 ├── debug/
-│   └── DebugAPI.ts       Exposed `window.vantaris` object for live debugging
+│   └── DebugAPI.ts         window.vantaris debug object
 ├── ui/
-│   └── HUD.ts            HTML/CSS overlay — biome legend, cell tooltip, wordmark
-└── style.css             All UI styling
+│   ├── HUD.ts              Biome legend, cell tooltip, wordmark
+│   └── LobbyUI.ts          Queue selection, countdown, game-ready flow
+└── style.css               All UI styling
 ```
 
-## Module Overview
+## Backend
 
-### HexGrid
-Generates a geodesic hexagonal grid by subdividing an icosahedron and computing the dual graph. Produces ~12 pentagons (geometrically correct) and ~630 hexagons at subdivision level 3. Each cell tracks its vertex IDs (face centroids from the primal mesh), center position, and adjacency list.
+```
+backend/src/
+├── index.ts              Express + Colyseus server setup
+├── globe.ts               Server-side globe generation (no Three.js dependency)
+├── rooms/
+│   ├── VantarisRoom.ts    Game room — explore, fog, territory
+│   ├── MatchmakingRoom.ts Queue room — countdown, launch game
+│   └── LobbyRoom.ts       Colyseus built-in lobby
+├── state/
+│   ├── GameState.ts        Root game state (cells, players, phase, turn)
+│   ├── CellState.ts       Cell with biome and owner
+│   ├── PlayerState.ts     Player with territory count and per-player fog
+│   ├── FogState.ts        Per-player fog visibility + snapshots
+│   └── MatchmakingState.ts Queue type, player count, countdown, phase
+└── mutations/
+    ├── fog.ts              revealCellForPlayer, snapshotAndHideCell, computeVisibilityForPlayer
+    ├── territory.ts        claimCell, loseCell
+    └── matchmaking.ts     addPlayerToQueue, removePlayerFromQueue, startCountdown, tickCountdown
+```
 
-### GlobeRenderer
-Creates Three.js meshes for each cell (fan triangulation from cell center to dual vertices), draws cell borders as line segments, and applies fog-of-war colors. Includes stretch goals: atmosphere glow (shader-based fresnel effect) and starfield background.
+## Shared Package
 
-### FogOfWar
-Manages cell fog state transitions. On init, reveals a random cluster of ~7 cells as starting territory and marks their neighbors as Explored. Clicking a Visible cell expands visibility to adjacent cells with animated color transitions.
-
-### CameraControls
-Rotates a pivot group (containing the globe) with pointer drag. Applies velocity damping for weighted inertia feel. Scroll zoom with smooth interpolation between min/max limits. Supports touch pinch-to-zoom.
-
-### HUD
-Pure HTML/CSS overlays — biome color legend (bottom-left), cell info tooltip on hover (top-right), and "VANTARIS" wordmark (top-center).
-
-### DebugAPI
-Exposes `window.vantaris` in the browser console for live debugging. Key commands:
-- `vantaris.fog.revealAll()` — reveal the entire globe
-- `vantaris.fog.hideAll()` — reset all fog
-- `vantaris.fog.revealCell(id)` — expand fog from a cell
-- `vantaris.camera.focusCell(id)` — point camera at a cell
-- `vantaris.camera.zoom(distance)` — set zoom level (7–25)
-- `vantaris.state.cell(id)` — inspect a cell's full state
-- `vantaris.state.gridInfo` — grid summary
-- `vantaris.state.fps()` — current framerate
-
-## Constants
-
-All tunable values are in `src/constants.ts`:
-- **GLOBE_CONFIG** — radius, subdivision level, border width
-- **BIOME_CONFIGS** — biome types, display colors, spawn weights
-- **FOG_CONFIG** — fog colors, opacity, animation timing, starting territory size
-- **CAMERA_CONFIG** — min/max zoom distance, rotation damping, zoom speed
-
-## Future Phases
-
-This Phase 1 delivers the globe, grid, terrain, and fog — no units, combat, diplomacy, resources, or game loop. The module boundaries are designed so future systems can be added without tight coupling to the rendering layer.
+`@vantaris/shared` contains all enums, interfaces, and constants used by both frontend and backend:
+- `BiomeType`, `FogVisibility`, `GamePhase`, `QueueType` enums
+- `CellSnapshot`, `SpawnPoint`, `PlayerStateSlice` interfaces
+- `HexCell`, `HexGrid` interfaces (frontend-local geometry)
+- All constants: biome configs, queue configs, countdown duration, vision range, etc.
 
 ## Documentation
 
-- **[docs/AGENTS.md](docs/AGENTS.md)** — Full architecture guide, development workflow, Chrome DevTools debugging, module API reference, constants reference, and self-improving documentation practices.
+- **[docs/AGENTS.md](docs/AGENTS.md)** — Architecture guide, dev workflow, module API reference

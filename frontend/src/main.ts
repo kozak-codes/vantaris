@@ -5,8 +5,13 @@ import { FogOfWar } from './systems/FogOfWar';
 import { CameraControls } from './camera/CameraControls';
 import { HUD } from './ui/HUD';
 import { createDebugAPI } from './debug/DebugAPI';
+import { LobbyUI } from './ui/LobbyUI';
+import { getRoomIdFromURL, setRoomIdInURL, clearRoomFromURL } from './network/RoomPersistence';
+import { joinGame, reconnect, sendExploreCell } from './network/ColyseusClient';
+import { FogVisibility } from './types/index';
 
 const canvas = document.getElementById('globe-canvas') as HTMLCanvasElement;
+const lobbyEl = document.getElementById('lobby-ui')!;
 
 const renderer = new THREE.WebGLRenderer({
   canvas,
@@ -36,7 +41,6 @@ const ambientLight = new THREE.AmbientLight(0x334466, 0.8);
 scene.add(ambientLight);
 
 const grid = generateHexGrid();
-console.log(`Generated ${grid.cells.length} cells`);
 
 const globeRenderer = new GlobeRenderer(pivot, grid, scene);
 const fogOfWar = new FogOfWar(grid);
@@ -59,12 +63,78 @@ const cameraControls = new CameraControls(camera, canvas, pivot);
 
 (window as any).vantaris = createDebugAPI(grid, fogOfWar, globeRenderer, cameraControls, pivot);
 console.log('%c[vantaris] Debug API available at window.vantaris', 'color: #4488ff; font-weight: bold');
-console.log('  vantaris.fog.revealAll()     — reveal entire globe');
-console.log('  vantaris.fog.hideAll()       — hide entire globe');
-console.log('  vantaris.fog.revealCell(id)   — expand from a cell');
-console.log('  vantaris.camera.focusCell(id) — point camera at cell');
-console.log('  vantaris.camera.zoom(dist)    — zoom to distance');
-console.log('  vantaris.state.cell(id)       — inspect a cell');
+
+let useServerState = false;
+
+const roomId = getRoomIdFromURL();
+if (roomId) {
+  attemptReconnect(roomId);
+} else {
+  showLobby();
+}
+
+async function attemptReconnect(id: string): Promise<void> {
+  try {
+    const room = await reconnect(id);
+    handleGameRoom(room);
+  } catch {
+    clearRoomFromURL();
+    showLobby();
+  }
+}
+
+function showLobby(): void {
+  const lobbyUI = new LobbyUI();
+  lobbyUI.setOnGameReady((newRoomId: string) => {
+    handleGameJoin(newRoomId);
+  });
+  lobbyUI.setOnConnectionFailed(() => {
+    // Offline mode: fall through to local game
+  });
+}
+
+async function handleGameJoin(newRoomId: string): Promise<void> {
+  try {
+    const room = await joinGame(newRoomId);
+    handleGameRoom(room);
+  } catch {
+    // If join fails, run local mode
+    fogOfWar.revealStartingTerritory();
+    globeRenderer.forceColorUpdate();
+  }
+}
+
+function handleGameRoom(room: any): void {
+  useServerState = true;
+
+  room.onMessage('stateUpdate', (slice: any) => {
+    applyServerState(slice);
+  });
+
+  room.onMessage('pong', (data: any) => {
+    // connection confirmed
+  });
+
+  room.onLeave(() => {
+    useServerState = false;
+  });
+}
+
+function applyServerState(slice: { visibleCells: any[]; revealedCells: any[]; players: any[] }): void {
+  for (const cell of slice.visibleCells) {
+    const idx = parseInt(cell.cellId.replace('cell_', ''));
+    if (idx >= 0 && idx < grid.cells.length) {
+      grid.cells[idx].fog = FogVisibility.VISIBLE;
+    }
+  }
+  for (const cell of slice.revealedCells) {
+    const idx = parseInt(cell.cellId.replace('cell_', ''));
+    if (idx >= 0 && idx < grid.cells.length) {
+      grid.cells[idx].fog = FogVisibility.REVEALED;
+    }
+  }
+  globeRenderer.forceColorUpdate();
+}
 
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
@@ -78,9 +148,13 @@ canvas.addEventListener('pointermove', (e: PointerEvent) => {
 canvas.addEventListener('click', (e: MouseEvent) => {
   if (e.button !== 0) return;
   if (hoveredCellId !== null) {
-    const newlyRevealed = fogOfWar.expandFromCell(hoveredCellId);
-    for (const cellId of newlyRevealed) {
-      globeRenderer.beginRevealAnimation(cellId, grid.cells[cellId].fog);
+    if (useServerState) {
+      sendExploreCell(`cell_${hoveredCellId}`);
+    } else {
+      const newlyRevealed = fogOfWar.expandFromCell(hoveredCellId);
+      for (const cellId of newlyRevealed) {
+        globeRenderer.beginRevealAnimation(cellId, grid.cells[cellId].fog);
+      }
     }
   }
 });

@@ -1,5 +1,5 @@
 import type { HexGrid as HexGridData } from '../types/index';
-import { FogState } from '../types/index';
+import { FogVisibility } from '../types/index';
 import { FOG_CONFIG } from '../constants';
 
 export class FogOfWar {
@@ -32,15 +32,15 @@ export class FogOfWar {
     }
 
     for (const ci of visited) {
-      this.grid.cells[ci].fog = FogState.Visible;
+      this.grid.cells[ci].fog = FogVisibility.VISIBLE;
     }
 
     const visibleSet = new Set(visited);
     for (const ci of visibleSet) {
       const neighbors = this.grid.adjacency.get(ci) ?? [];
       for (const n of neighbors) {
-        if (this.grid.cells[n].fog === FogState.Unexplored) {
-          this.grid.cells[n].fog = FogState.Explored;
+        if (this.grid.cells[n].fog === FogVisibility.UNREVEALED) {
+          this.grid.cells[n].fog = FogVisibility.REVEALED;
         }
       }
     }
@@ -60,20 +60,20 @@ export class FogOfWar {
   expandFromCell(cellId: number): number[] {
     const newlyVisible: number[] = [];
     const cell = this.grid.cells[cellId];
-    if (cell.fog !== FogState.Visible) return newlyVisible;
+    if (cell.fog !== FogVisibility.VISIBLE) return newlyVisible;
 
     const neighbors = this.grid.adjacency.get(cellId) ?? [];
     for (const n of neighbors) {
       const neighbor = this.grid.cells[n];
-      if (neighbor.fog === FogState.Explored || neighbor.fog === FogState.Unexplored) {
+      if (neighbor.fog === FogVisibility.REVEALED || neighbor.fog === FogVisibility.UNREVEALED) {
         const prevFog = neighbor.fog;
-        neighbor.fog = FogState.Visible;
+        neighbor.fog = FogVisibility.VISIBLE;
         newlyVisible.push(n);
 
         const nn = this.grid.adjacency.get(n) ?? [];
         for (const nni of nn) {
-          if (this.grid.cells[nni].fog === FogState.Unexplored) {
-            this.grid.cells[nni].fog = FogState.Explored;
+          if (this.grid.cells[nni].fog === FogVisibility.UNREVEALED) {
+            this.grid.cells[nni].fog = FogVisibility.REVEALED;
           }
         }
       }

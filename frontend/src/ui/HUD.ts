@@ -1,4 +1,4 @@
-import { BiomeType } from '../types/index';
+import { BiomeType, FogVisibility } from '../types/index';
 import { BIOME_CONFIGS } from '../constants';
 
 export class HUD {
@@ -36,7 +36,7 @@ export class HUD {
   showTooltip(cellId: number, biome: string, fog: string, isPentagon: boolean): void {
     this.tooltip.classList.remove('hidden');
     const shape = isPentagon ? 'Pentagon' : 'Hexagon';
-    const fogLabel = fog === 'Visible' ? '👁 Visible' : fog === 'Explored' ? '🌫 Explored' : '⬛ Unexplored';
+    const fogLabel = fog === 'VISIBLE' ? '👁 Visible' : fog === 'REVEALED' ? '🌫 Explored' : '⬛ Unexplored';
     this.tooltip.innerHTML = `
       <div class="tooltip-id">Cell #${cellId}</div>
       <div class="tooltip-biome">${biome}</div>

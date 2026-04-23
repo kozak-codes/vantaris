@@ -1,5 +1,5 @@
 {
-  "name": "vantaris",
+  "name": "@vantaris/frontend",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,7 +9,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "three": "^0.170.0"
+    "three": "^0.170.0",
+    "@vantaris/shared": "*",
+    "colyseus.js": "^0.16.0"
   },
   "devDependencies": {
     "@types/three": "^0.170.0",
