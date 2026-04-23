@@ -35,6 +35,7 @@ export const CAMERA_CONFIG: CameraConfig = {
   maxDistance: 25,
   rotationDamping: 0.92,
   zoomSpeed: 1.0,
+  keyboardRotateSpeed: 2.5,
 };
 
 export const CELL_COLOR_LERP = 0.08;

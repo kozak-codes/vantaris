@@ -69,26 +69,14 @@ console.log('  vantaris.state.cell(id)       — inspect a cell');
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 let hoveredCellId: number | null = null;
-let pointerDownPos = { x: 0, y: 0 };
-let didDrag = false;
 
 canvas.addEventListener('pointermove', (e: PointerEvent) => {
   pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
   pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
-  const dx = e.clientX - pointerDownPos.x;
-  const dy = e.clientY - pointerDownPos.y;
-  if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
-    didDrag = true;
-  }
 });
 
-canvas.addEventListener('pointerdown', (e: PointerEvent) => {
-  pointerDownPos = { x: e.clientX, y: e.clientY };
-  didDrag = false;
-});
-
-canvas.addEventListener('click', () => {
-  if (didDrag) return;
+canvas.addEventListener('click', (e: MouseEvent) => {
+  if (e.button !== 0) return;
   if (hoveredCellId !== null) {
     const newlyRevealed = fogOfWar.expandFromCell(hoveredCellId);
     for (const cellId of newlyRevealed) {

@@ -61,4 +61,5 @@ export interface CameraConfig {
   maxDistance: number;
   rotationDamping: number;
   zoomSpeed: number;
+  keyboardRotateSpeed: number;
 }
