@@ -1,4 +1,4 @@
-import { BiomeType, type BiomeConfig, type FogConfig, type GlobeConfig, type CameraConfig, QueueType } from './types';
+import { BiomeType, type BiomeConfig, type FogConfig, type GlobeConfig, type CameraConfig } from './types';
 
 export const BIOME_CONFIGS: BiomeConfig[] = [
   { type: BiomeType.Ocean, color: '#1a6b9a', weight: 0.60 },
@@ -34,12 +34,13 @@ export const CAMERA_CONFIG: CameraConfig = {
 
 export const CELL_COLOR_LERP = 0.08;
 
-export const QUEUE_CONFIGS: Record<QueueType, { minPlayers: number; maxPlayers: number; subdivideLevel: number }> = {
-  [QueueType.QUICK]: { minPlayers: 2, maxPlayers: 4, subdivideLevel: 3 },
-  [QueueType.STANDARD]: { minPlayers: 4, maxPlayers: 8, subdivideLevel: 4 },
+export const QUEUE_CONFIG: { minPlayers: number; maxPlayers: number; subdivideLevel: number } = {
+  minPlayers: 1,
+  maxPlayers: 8,
+  subdivideLevel: 3,
 };
 
-export const COUNTDOWN_DURATION = 30;
+export const TICK_INTERVAL_MS = 60000;
 export const RECONNECTION_WINDOW = 60;
 export const STARTING_TERRITORY_SIZE = 7;
 export const VISION_RANGE = 1;

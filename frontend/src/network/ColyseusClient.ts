@@ -1,5 +1,4 @@
 import { Client, Room } from 'colyseus.js';
-import { QueueType } from '@vantaris/shared';
 import { storeSessionId, getSessionId } from './RoomPersistence';
 
 const SERVER_URL = 'ws://localhost:2567';
@@ -19,10 +18,9 @@ export async function joinLobby(): Promise<Room> {
   return c.joinOrCreate('lobby_room');
 }
 
-export async function joinQueue(queueType: QueueType): Promise<Room> {
+export async function joinQueue(): Promise<Room> {
   const c = getClient();
-  const roomName = queueType === QueueType.QUICK ? 'matchmaking_quick' : 'matchmaking_standard';
-  const room = await c.joinOrCreate(roomName);
+  const room = await c.joinOrCreate('matchmaking');
   currentRoom = room;
   return room;
 }
@@ -38,7 +36,6 @@ export async function joinGame(roomId: string): Promise<Room> {
   const c = getClient();
   const room = await c.joinById(roomId);
   currentRoom = room;
-  // Store reconnection token for this room
   if (room.reconnectionToken) {
     storeSessionId(roomId, room.reconnectionToken);
   }

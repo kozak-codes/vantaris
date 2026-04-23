@@ -22,7 +22,6 @@ export enum GamePhase {
 
 export enum QueueType {
   QUICK = 'QUICK',
-  STANDARD = 'STANDARD',
 }
 
 export interface CellSnapshot {

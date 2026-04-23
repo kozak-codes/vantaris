@@ -88,9 +88,6 @@ function showLobby(): void {
   lobbyUI.setOnGameReady((newRoomId: string) => {
     handleGameJoin(newRoomId);
   });
-  lobbyUI.setOnConnectionFailed(() => {
-    // Offline mode: fall through to local game
-  });
 }
 
 async function handleGameJoin(newRoomId: string): Promise<void> {

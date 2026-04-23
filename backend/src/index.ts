@@ -1,4 +1,4 @@
-import { Server, matchMaker } from '@colyseus/core';
+import { Server } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { createServer } from 'http';
 import express from 'express';
@@ -7,13 +7,12 @@ import { monitor } from '@colyseus/monitor';
 import { VantarisRoom } from './rooms/VantarisRoom';
 import { MatchmakingRoom } from './rooms/MatchmakingRoom';
 import { LobbyRoom } from './rooms/LobbyRoom';
-import { QueueType } from '@vantaris/shared';
 
 const PORT = 2567;
 
 const app = express();
 app.use(cors({
-  origin: ['http://localhost:5173'],
+  origin: ['http://localhost:5173', 'http://localhost:5174'],
   credentials: true,
 }));
 
@@ -27,8 +26,7 @@ const gameServer = new Server({
 });
 
 gameServer.define('lobby_room', LobbyRoom);
-gameServer.define('matchmaking_quick', MatchmakingRoom, { queueType: QueueType.QUICK });
-gameServer.define('matchmaking_standard', MatchmakingRoom, { queueType: QueueType.STANDARD });
+gameServer.define('matchmaking', MatchmakingRoom);
 gameServer.define('vantaris_room', VantarisRoom);
 
 app.use('/colyseus', monitor(gameServer as any));

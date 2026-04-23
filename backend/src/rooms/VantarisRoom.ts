@@ -1,7 +1,7 @@
 import { Room, Client, matchMaker } from '@colyseus/core';
 import { GameState } from '../state/GameState';
-import { GamePhase, BiomeType, FogVisibility, QueueType } from '@vantaris/shared';
-import { QUEUE_CONFIGS, STARTING_TERRITORY_SIZE, VISION_RANGE, RECONNECTION_WINDOW } from '@vantaris/shared/constants';
+import { GamePhase, BiomeType, FogVisibility } from '@vantaris/shared';
+import { QUEUE_CONFIG, STARTING_TERRITORY_SIZE, VISION_RANGE, RECONNECTION_WINDOW } from '@vantaris/shared/constants';
 import { generateGlobe } from '../globe';
 import { revealCellForPlayer, computeVisibilityForPlayer, snapshotAndHideCell } from '../mutations/fog';
 import { claimCell } from '../mutations/territory';
@@ -9,7 +9,6 @@ import { CellState } from '../state/CellState';
 import { PlayerState } from '../state/PlayerState';
 
 interface CreateOptions {
-  queueType: string;
   spawnPoints: { cellId: string }[];
 }
 
@@ -29,11 +28,9 @@ export class VantarisRoom extends Room<GameState> {
   private adjacency: Map<string, string[]> = new Map();
 
   async onCreate(options: CreateOptions): Promise<void> {
-    const queueType = (options.queueType || 'QUICK') as keyof typeof QUEUE_CONFIGS;
-    const config = QUEUE_CONFIGS[queueType] || QUEUE_CONFIGS['QUICK'];
-    this.maxClients = config.maxPlayers;
-
-    const subdivideLevel = config.subdivideLevel;
+    const playerCount = options.spawnPoints?.length || 1;
+    const subdivideLevel = playerCount > 4 ? 4 : 3;
+    this.maxClients = QUEUE_CONFIG.maxPlayers;
     const globe = generateGlobe(subdivideLevel);
 
     this.setState(new GameState());
