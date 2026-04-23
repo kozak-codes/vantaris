@@ -7,7 +7,7 @@ import { HUD } from './ui/HUD';
 import { createDebugAPI } from './debug/DebugAPI';
 import { LobbyUI } from './ui/LobbyUI';
 import { getRoomIdFromURL, setRoomIdInURL, clearRoomFromURL, getStoredRoomId, getDisplayName } from './network/RoomPersistence';
-import { joinGame, reconnectToGame, sendExploreCell } from './network/ColyseusClient';
+import { joinGame, reconnectToGame, sendExploreCell, leaveGame } from './network/ColyseusClient';
 import { FogVisibility } from './types/index';
 
 const canvas = document.getElementById('globe-canvas') as HTMLCanvasElement;
@@ -46,9 +46,12 @@ const fogOfWar = new FogOfWar(grid);
 fogOfWar.revealStartingTerritory();
 globeRenderer.forceColorUpdate();
 
-const startingCenter = fogOfWar.getStartingCenter();
-if (startingCenter) {
-  const target = new THREE.Vector3(startingCenter[0], startingCenter[1], startingCenter[2]);
+let cameraRotated = false;
+
+function rotateToCellCenter(center: [number, number, number]): void {
+  if (cameraRotated) return;
+  cameraRotated = true;
+  const target = new THREE.Vector3(center[0], center[1], center[2]);
   const defaultForward = new THREE.Vector3(0, 0, 1);
   const quaternion = new THREE.Quaternion().setFromUnitVectors(
     target.clone().normalize(),
@@ -57,6 +60,18 @@ if (startingCenter) {
   pivot.quaternion.premultiply(quaternion);
 }
 
+const roomIdFromURL = getRoomIdFromURL();
+const roomIdFromStorage = getStoredRoomId();
+const roomId = roomIdFromURL || roomIdFromStorage;
+
+if (!roomId) {
+  const startingCenter = fogOfWar.getStartingCenter();
+  if (startingCenter) rotateToCellCenter(startingCenter as [number, number, number]);
+}
+
+const leaveBtn = document.getElementById('hud-leave')!;
+leaveBtn.addEventListener('click', handleLeaveGame);
+
 const hud = new HUD();
 const cameraControls = new CameraControls(camera, canvas, pivot);
 
@@ -64,11 +79,6 @@ const cameraControls = new CameraControls(camera, canvas, pivot);
 console.log('%c[vantaris] Debug API available at window.vantaris', 'color: #4488ff; font-weight: bold');
 
 let useServerState = false;
-
-// Check if we're reconnecting to an existing game
-const roomIdFromURL = getRoomIdFromURL();
-const roomIdFromStorage = getStoredRoomId();
-const roomId = roomIdFromURL || roomIdFromStorage;
 
 if (roomId) {
   attemptReconnect(roomId);
@@ -91,6 +101,7 @@ async function attemptReconnect(id: string): Promise<void> {
 function showLobby(): void {
   const lobbyUI = new LobbyUI();
   cameraControls.setEnabled(false);
+  leaveBtn.classList.add('hidden');
   lobbyUI.setOnGameReady((newRoomId: string) => {
     handleGameJoin(newRoomId);
   });
@@ -103,20 +114,39 @@ async function handleGameJoin(newRoomId: string): Promise<void> {
     cameraControls.setEnabled(true);
     handleGameRoom(room);
   } catch {
-    // If join fails, clear and show lobby
     clearRoomFromURL();
     fogOfWar.revealStartingTerritory();
     globeRenderer.forceColorUpdate();
   }
 }
 
+function handleLeaveGame(): void {
+  leaveGame();
+  clearRoomFromURL();
+  localStorage.removeItem('vantaris_currentRoom');
+  useServerState = false;
+  leaveBtn.classList.add('hidden');
+  for (const cell of grid.cells) {
+    cell.fog = FogVisibility.UNREVEALED;
+  }
+  fogOfWar.revealStartingTerritory();
+  globeRenderer.forceColorUpdate();
+  cameraRotated = false;
+  const startingCenter = fogOfWar.getStartingCenter();
+  if (startingCenter) rotateToCellCenter(startingCenter as [number, number, number]);
+  showLobby();
+}
+
 function handleGameRoom(room: any): void {
   useServerState = true;
+  leaveBtn.classList.remove('hidden');
+  cameraRotated = false;
 
   // Reset all fog to unrevealed, server will send visible cells
   for (const cell of grid.cells) {
     cell.fog = FogVisibility.UNREVEALED;
   }
+  pivot.quaternion.identity();
   globeRenderer.forceColorUpdate();
 
   room.onMessage('stateUpdate', (slice: any) => {
@@ -129,6 +159,7 @@ function handleGameRoom(room: any): void {
 
   room.onLeave(() => {
     useServerState = false;
+    leaveBtn.classList.add('hidden');
   });
 }
 
@@ -146,6 +177,14 @@ function applyServerState(slice: { visibleCells: any[]; revealedCells: any[]; pl
     }
   }
   globeRenderer.forceColorUpdate();
+
+  if (!cameraRotated && slice.visibleCells.length > 0) {
+    const firstVisible = slice.visibleCells[0];
+    const firstIdx = parseInt(firstVisible.cellId.replace('cell_', ''));
+    if (firstIdx >= 0 && firstIdx < grid.cells.length) {
+      rotateToCellCenter(grid.cells[firstIdx].center);
+    }
+  }
 }
 
 const raycaster = new THREE.Raycaster();

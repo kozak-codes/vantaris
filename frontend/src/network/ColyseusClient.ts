@@ -74,3 +74,10 @@ export function sendPing(): void {
     currentRoom.send('ping');
   }
 }
+
+export function leaveGame(): void {
+  if (currentRoom) {
+    currentRoom.leave(true);
+    currentRoom = null;
+  }
+}

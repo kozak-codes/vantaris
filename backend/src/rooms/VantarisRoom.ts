@@ -64,7 +64,7 @@ export class VantarisRoom extends Room<GameState> {
     });
   }
 
-  async onJoin(client: Client, options: { spawnPoint?: string; displayName?: string }): Promise<void> {
+  onJoin(client: Client, options: { spawnPoint?: string; displayName?: string }): void {
     const playerId = client.sessionId;
     const player = new PlayerState();
     player.playerId = playerId;
@@ -80,23 +80,26 @@ export class VantarisRoom extends Room<GameState> {
       }
     }
 
-    computeVisibilityForPlayer(this.state, playerId, VISION_RANGE);
-
     this.state.players.set(playerId, player);
 
-    // Send initial fog slice
+    computeVisibilityForPlayer(this.state, playerId, VISION_RANGE);
+
     const slice = this.computePlayerSlice(playerId);
     client.send('stateUpdate', slice);
-
-    try {
-      await this.allowReconnection(client, RECONNECTION_WINDOW);
-    } catch {
-      // reconnection timeout
-    }
   }
 
-  onLeave(client: Client, consented: boolean): void {
-    // keep player state (Phase 3 will handle elimination)
+  async onLeave(client: Client, consented: boolean): Promise<void> {
+    if (consented) return;
+    try {
+      await this.allowReconnection(client, RECONNECTION_WINDOW);
+      const player = this.state.players.get(client.sessionId);
+      if (player) {
+        const slice = this.computePlayerSlice(client.sessionId);
+        client.send('stateUpdate', slice);
+      }
+    } catch {
+      // reconnection timeout — player stays but disconnected
+    }
   }
 
   onDispose(): void {

@@ -4,9 +4,12 @@ import { createServer } from 'http';
 import express from 'express';
 import cors from 'cors';
 import { monitor } from '@colyseus/monitor';
+import { Encoder } from '@colyseus/schema';
 import { VantarisRoom } from './rooms/VantarisRoom';
 import { MatchmakingRoom } from './rooms/MatchmakingRoom';
 import { LobbyRoom } from './rooms/LobbyRoom';
+
+Encoder.BUFFER_SIZE = 128 * 1024;
 
 const PORT = 2567;
 
@@ -35,3 +38,22 @@ gameServer.listen(PORT).then(() => {
   console.log(`[vantaris] Colyseus server running on port ${PORT}`);
   console.log(`[vantaris] Monitor: http://localhost:${PORT}/colyseus`);
 });
+
+const GRACEFUL_SHUTDOWN_MS = 5000;
+
+async function gracefulShutdown(signal: string): Promise<void> {
+  console.log(`[vantaris] Received ${signal}, shutting down gracefully...`);
+  setTimeout(() => {
+    console.log('[vantaris] Force exiting after timeout');
+    process.exit(0);
+  }, GRACEFUL_SHUTDOWN_MS);
+  try {
+    await gameServer.gracefullyShutdown(false);
+  } catch (e) {
+    // ignore
+  }
+  process.exit(0);
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
