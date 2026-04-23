@@ -58,8 +58,7 @@ export class VantarisRoom extends Room<GameState> {
     }
 
     const rawAdjacency = globe.adjacency;
-    const adjacencyWithStringKeys: Record<string, string[]> = {};
-    let cellIdx = 0;
+    const adjacencyWithStringKeys: AdjacencyMap = {};
     for (const [key, neighbors] of rawAdjacency) {
       const cellId = `cell_${String(key)}`;
       const neighborIds: string[] = [];
@@ -67,14 +66,14 @@ export class VantarisRoom extends Room<GameState> {
         neighborIds.push(`cell_${String(n)}`);
       }
       adjacencyWithStringKeys[cellId] = neighborIds;
-      cellIdx++;
     }
 
-    this.adjacencyMap = buildAdjacencyMap(cellIds, this.cellPositions);
+    this.adjacencyMap = adjacencyWithStringKeys;
 
+    const distanceAdjacency = buildAdjacencyMap(cellIds, this.cellPositions);
     for (const cellId of cellIds) {
       if (!this.adjacencyMap[cellId] || this.adjacencyMap[cellId].length === 0) {
-        this.adjacencyMap[cellId] = adjacencyWithStringKeys[cellId] || [];
+        this.adjacencyMap[cellId] = distanceAdjacency[cellId] || [];
       }
     }
 

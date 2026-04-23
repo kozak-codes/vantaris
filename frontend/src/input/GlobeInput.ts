@@ -26,6 +26,7 @@ export class GlobeInput {
     canvas.addEventListener('pointerdown', this.onPointerDown.bind(this));
     canvas.addEventListener('pointerup', this.onPointerUp.bind(this));
     canvas.addEventListener('pointermove', this.onPointerMove.bind(this));
+    canvas.addEventListener('pointerleave', this.onPointerLeave.bind(this));
     window.addEventListener('keydown', this.onKeyDown.bind(this));
   }
 
@@ -92,6 +93,13 @@ export class GlobeInput {
 
     if (clientState.hoveredCellId !== cellId) {
       clientState.hoveredCellId = cellId;
+      notifySelectionChanged();
+    }
+  }
+
+  private onPointerLeave(): void {
+    if (clientState.hoveredCellId !== null) {
+      clientState.hoveredCellId = null;
       notifySelectionChanged();
     }
   }
