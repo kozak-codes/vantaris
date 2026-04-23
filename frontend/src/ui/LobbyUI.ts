@@ -30,14 +30,7 @@ export class LobbyUI {
 
   show(): void {
     this.container.classList.remove('hidden');
-    const savedName = getDisplayName();
-    if (savedName) {
-      this.phase = LobbyPhase.NAME_ENTRY;
-      this.renderNameEntry(savedName);
-      // auto-advance if name already saved
-    } else {
-      this.renderNameEntry('');
-    }
+    this.renderNameEntry(getDisplayName());
     this.connectLobby();
   }
 
@@ -51,9 +44,7 @@ export class LobbyUI {
       this.lobbyRoom = await joinLobby();
       this.lobbyRoom.onMessage('lobbyUpdate', (data: { playerCount: number }) => {
         this.playerCount = data.playerCount;
-        if (this.phase === LobbyPhase.NAME_ENTRY) {
-          this.renderNameEntry(getDisplayName());
-        }
+        this.updateQueueCount();
       });
     } catch {
       // lobby connection failure is non-critical
@@ -67,6 +58,13 @@ export class LobbyUI {
     }
   }
 
+  private updateQueueCount(): void {
+    const el = document.getElementById('queue-count');
+    if (el) {
+      el.textContent = `${this.playerCount} player${this.playerCount !== 1 ? 's' : ''} in queue`;
+    }
+  }
+
   private renderNameEntry(prefill: string = ''): void {
     this.container.innerHTML = `
       <div class="lobby-panel">
@@ -77,7 +75,7 @@ export class LobbyUI {
           <input type="text" id="name-input" class="name-input" placeholder="Enter your name" maxlength="24" value="${prefill}" autocomplete="off" />
           <button id="btn-play" class="play-btn">Quick Match</button>
         </div>
-        <p class="lobby-queue-count">${this.playerCount} player${this.playerCount !== 1 ? 's' : ''} in queue</p>
+        <p id="queue-count" class="lobby-queue-count">${this.playerCount} player${this.playerCount !== 1 ? 's' : ''} in queue</p>
       </div>
     `;
 
