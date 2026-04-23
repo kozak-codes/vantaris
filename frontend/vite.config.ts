@@ -9,7 +9,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@vantaris/shared/constants': path.resolve(__dirname, '../shared/src/constants.ts'),
-      '@vantaris/shared': path.resolve(__dirname, '../shared/src/types.ts'),
+      '@vantaris/shared': path.resolve(__dirname, '../shared/src/index.ts'),
     },
   },
 });

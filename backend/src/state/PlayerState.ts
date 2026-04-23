@@ -12,4 +12,6 @@ export class PlayerState extends Schema {
   @type('number') cameraQuatW: number = 1;
   @type('number') cameraZoom: number = 10;
   @type(FogState) fog: FogState = new FogState();
+  @type('number') energyCredits: number = 0;
+  @type('string') tradingTable: string = '{}';
 }

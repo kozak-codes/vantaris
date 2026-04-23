@@ -1,12 +1,12 @@
-import { BiomeType, type BiomeConfig, type FogConfig, type GlobeConfig, type CameraConfig } from './types';
+import { BiomeType, type BiomeConfig, type FogConfig, type GlobeConfig, type CameraConfig, TerrainType } from './types';
 
 export const BIOME_CONFIGS: BiomeConfig[] = [
-  { type: BiomeType.Ocean, color: '#1a6b9a', weight: 0.60 },
-  { type: BiomeType.Plains, color: '#4a7c3f', weight: 0.15 },
-  { type: BiomeType.Forest, color: '#2d5a1b', weight: 0.10 },
-  { type: BiomeType.Mountain, color: '#7a6a5a', weight: 0.08 },
-  { type: BiomeType.Desert, color: '#c4a35a', weight: 0.05 },
-  { type: BiomeType.Tundra, color: '#a8c4cc', weight: 0.02 },
+  { type: BiomeType.Ocean, color: '#1a6b9a', weight: 0.35 },
+  { type: BiomeType.Plains, color: '#4a7c3f', weight: 0.25 },
+  { type: BiomeType.Forest, color: '#2d5a1b', weight: 0.18 },
+  { type: BiomeType.Mountain, color: '#7a6a5a', weight: 0.10 },
+  { type: BiomeType.Desert, color: '#c4a35a', weight: 0.07 },
+  { type: BiomeType.Tundra, color: '#a8c4cc', weight: 0.05 },
 ];
 
 export const GLOBE_CONFIG: GlobeConfig = {
@@ -40,7 +40,56 @@ export const QUEUE_CONFIG: { minPlayers: number; maxPlayers: number; subdivideLe
   subdivideLevel: 3,
 };
 
+export const TICK_RATE_MS = 1000;
+
 export const TICK_INTERVAL_MS = 5000;
 export const RECONNECTION_WINDOW = 60;
-export const STARTING_TERRITORY_SIZE = 7;
+export const STARTING_TERRITORY_SIZE = 1;
 export const VISION_RANGE = 1;
+export const TROOP_VISION_RANGE = 1;
+
+export const PASSABLE_TERRAIN: TerrainType[] = [
+  TerrainType.PLAINS,
+  TerrainType.FOREST,
+  TerrainType.MOUNTAIN,
+  TerrainType.DESERT,
+  TerrainType.TUNDRA,
+];
+
+export const IMPASSABLE_TERRAIN: TerrainType[] = [
+  TerrainType.OCEAN,
+];
+
+export const MOVEMENT_COST: Record<string, number> = {
+  PLAINS: 10,
+  DESERT: 10,
+  FOREST: 20,
+  MOUNTAIN: 30,
+  TUNDRA: 20,
+  OCEAN: Infinity,
+};
+
+export const CITY_TROOP_PRODUCTION_TICKS = 10;
+export const MAX_UNITS_PER_HEX = 3;
+
+export const CITY_TIER_XP_THRESHOLDS = [0, 500, 1500, 4000, 10000, 25000];
+
+export const CITY_TIER_MANPOWER: Record<number, number> = {
+  1: 2, 2: 6, 3: 15, 4: 35, 5: 90, 6: 250,
+};
+
+export const CITY_FOOD_COST: Record<number, number> = {
+  1: 1, 2: 3, 3: 8, 4: 20, 5: 55, 6: 150,
+};
+
+export const CITY_ENERGY_COST: Record<number, number> = {
+  1: 1, 2: 2, 3: 5, 4: 12, 5: 30, 6: 80,
+};
+
+export const CLAIM_TICKS_UNCLAIMED = 50;
+export const CLAIM_TICKS_ENEMY = 300;
+
+export const VALID_CITY_SPAWN_TERRAIN = [TerrainType.PLAINS];
+
+export const ENERGY_CREDITS_INITIAL = 0;
+export const FACTORY_BASE_XP = 0;

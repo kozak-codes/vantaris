@@ -1,7 +1,8 @@
 import { GameState } from '../state/GameState';
 import { computeVisibilityForPlayer } from './fog';
+import type { AdjacencyMap } from '@vantaris/shared';
 
-export function claimCell(state: GameState, playerId: string, cellId: string): void {
+export function claimCell(state: GameState, playerId: string, cellId: string, adjacencyMap: AdjacencyMap): void {
   const cell = state.cells.get(cellId);
   if (!cell) return;
   cell.ownerId = playerId;
@@ -11,10 +12,10 @@ export function claimCell(state: GameState, playerId: string, cellId: string): v
     player.territoryCellCount++;
   }
 
-  computeVisibilityForPlayer(state, playerId);
+  computeVisibilityForPlayer(state, playerId, adjacencyMap);
 }
 
-export function loseCell(state: GameState, playerId: string, cellId: string): void {
+export function loseCell(state: GameState, playerId: string, cellId: string, adjacencyMap: AdjacencyMap): void {
   const cell = state.cells.get(cellId);
   if (!cell) return;
   cell.ownerId = '';
@@ -24,5 +25,5 @@ export function loseCell(state: GameState, playerId: string, cellId: string): vo
     player.territoryCellCount--;
   }
 
-  computeVisibilityForPlayer(state, playerId);
+  computeVisibilityForPlayer(state, playerId, adjacencyMap);
 }

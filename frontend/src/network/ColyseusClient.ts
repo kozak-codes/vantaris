@@ -1,5 +1,6 @@
 import { Client, Room } from 'colyseus.js';
 import { storeReconnectionToken, getReconnectionToken, getStoredRoomId } from './RoomPersistence';
+import { applyStateSlice, clearClientState } from '../state/ClientState';
 
 const SERVER_URL = 'ws://localhost:2567';
 
@@ -39,8 +40,16 @@ export async function joinGame(roomId: string, displayName?: string): Promise<Ro
   if (room.reconnectionToken) {
     storeReconnectionToken(roomId, room.reconnectionToken);
   }
-  // Store room ID for reconnection after reload
   localStorage.setItem('vantaris_currentRoom', roomId);
+
+  room.onMessage('stateUpdate', (slice: any) => {
+    applyStateSlice(slice);
+  });
+
+  room.onMessage('error', (data: any) => {
+    console.warn('[vantaris] Server error:', data);
+  });
+
   return room;
 }
 
@@ -52,16 +61,33 @@ export async function reconnectToGame(roomId: string): Promise<Room> {
   }
   const room = await c.reconnect(token);
   currentRoom = room;
-  // Update token in case it changes
-  if (room.reconnectionToken) {
-    storeReconnectionToken(roomId, room.reconnectionToken);
-  }
+
+  room.onMessage('stateUpdate', (slice: any) => {
+    applyStateSlice(slice);
+  });
+
+  room.onMessage('error', (data: any) => {
+    console.warn('[vantaris] Server error:', data);
+  });
+
   return room;
 }
 
-export function sendExploreCell(cellId: string): void {
+export function sendMoveUnit(unitId: string, targetCellId: string): void {
   if (currentRoom) {
-    currentRoom.send('exploreCell', { cellId });
+    currentRoom.send('moveUnit', { unitId, targetCellId });
+  }
+}
+
+export function sendSetUnitIdle(unitId: string): void {
+  if (currentRoom) {
+    currentRoom.send('setUnitIdle', { unitId });
+  }
+}
+
+export function sendToggleCityProduction(cityId: string, producing: boolean): void {
+  if (currentRoom) {
+    currentRoom.send('toggleCityProduction', { cityId, producing });
   }
 }
 
@@ -86,4 +112,5 @@ export function leaveGame(): void {
     currentRoom.leave(true);
     currentRoom = null;
   }
+  clearClientState();
 }

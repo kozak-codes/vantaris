@@ -1,12 +1,18 @@
-import { Room, Client, matchMaker } from '@colyseus/core';
+import { Room, Client } from '@colyseus/core';
 import { GameState } from '../state/GameState';
-import { GamePhase, BiomeType, FogVisibility } from '@vantaris/shared';
-import { QUEUE_CONFIG, STARTING_TERRITORY_SIZE, VISION_RANGE, RECONNECTION_WINDOW } from '@vantaris/shared/constants';
+import { GamePhase, BiomeType } from '@vantaris/shared';
+import { QUEUE_CONFIG, RECONNECTION_WINDOW, TROOP_VISION_RANGE, MAX_UNITS_PER_HEX } from '@vantaris/shared/constants';
+import { AdjacencyMap, buildAdjacencyMap } from '@vantaris/shared';
 import { generateGlobe } from '../globe';
-import { revealCellForPlayer, computeVisibilityForPlayer, snapshotAndHideCell } from '../mutations/fog';
-import { claimCell } from '../mutations/territory';
+import { computeVisibilityForPlayer, buildPlayerSlice } from '../mutations/fog';
+import { completeClaim } from '../mutations/units';
+import { createCity, tickCityProduction } from '../mutations/cities';
 import { CellState } from '../state/CellState';
 import { PlayerState } from '../state/PlayerState';
+import { UnitState } from '../state/UnitState';
+import { TickSystem } from '../systems/TickSystem';
+import { findPath, buildUnitsByCellId } from '../systems/Pathfinding';
+import { spawnUnit, assignPath, stepUnit, startClaiming } from '../mutations/units';
 
 interface CreateOptions {
   spawnPoints: { cellId: string }[];
@@ -25,7 +31,9 @@ const PLAYER_COLORS = [
 
 export class VantarisRoom extends Room<GameState> {
   maxClients = 8;
-  private adjacency: Map<string, string[]> = new Map();
+  private adjacencyMap: AdjacencyMap = {};
+  private cellPositions: Record<string, [number, number, number]> = {};
+  private tickSystem = new TickSystem();
 
   async onCreate(options: CreateOptions): Promise<void> {
     const playerCount = options.spawnPoints?.length || 1;
@@ -35,32 +43,58 @@ export class VantarisRoom extends Room<GameState> {
 
     this.setState(new GameState());
 
+    const cellIds: string[] = [];
     for (const cell of globe.cells) {
       const cellState = new CellState();
       cellState.cellId = cell.id;
       cellState.biome = cell.biome;
       cellState.ownerId = '';
+      cellState.hasCity = false;
+      cellState.cityId = '';
       this.state.cells.set(cell.id, cellState);
+      cellIds.push(cell.id);
+      this.cellPositions[cell.id] = cell.center;
     }
 
-    this.adjacency = globe.adjacency;
+    const rawAdjacency = globe.adjacency;
+    const adjacencyWithStringKeys: Record<string, string[]> = {};
+    let cellIdx = 0;
+    for (const [key, neighbors] of rawAdjacency) {
+      const cellId = `cell_${String(key)}`;
+      const neighborIds: string[] = [];
+      for (const n of neighbors) {
+        neighborIds.push(`cell_${String(n)}`);
+      }
+      adjacencyWithStringKeys[cellId] = neighborIds;
+      cellIdx++;
+    }
 
-    // Store neighbor info on each cell for quick lookup
-    for (const cell of globe.cells) {
-      const cs = this.state.cells.get(cell.id);
-      if (cs) {
-        (cs as any)._neighbors = cell.neighborIds;
+    this.adjacencyMap = buildAdjacencyMap(cellIds, this.cellPositions);
+
+    for (const cellId of cellIds) {
+      if (!this.adjacencyMap[cellId] || this.adjacencyMap[cellId].length === 0) {
+        this.adjacencyMap[cellId] = adjacencyWithStringKeys[cellId] || [];
       }
     }
 
     this.state.phase = GamePhase.ACTIVE;
 
-    this.onMessage('exploreCell', (client, { cellId }: { cellId: string }) => {
-      this.handleExploreCell(client, cellId);
+    this.tickSystem.start((tick) => this.onTick(tick));
+
+    this.onMessage('moveUnit', (client, data: { unitId: string; targetCellId: string }) => {
+      this.handleMoveUnit(client, data);
+    });
+
+    this.onMessage('setUnitIdle', (client, data: { unitId: string }) => {
+      this.handleSetUnitIdle(client, data);
+    });
+
+    this.onMessage('toggleCityProduction', (client, data: { cityId: string; producing: boolean }) => {
+      this.handleToggleCityProduction(client, data);
     });
 
     this.onMessage('ping', (client) => {
-      client.send('pong', { timestamp: Date.now() });
+      client.send('pong', { serverTick: this.state.tick });
     });
 
     this.onMessage('updateCamera', (client, data: { qx: number; qy: number; qz: number; qw: number; zoom: number }) => {
@@ -83,19 +117,22 @@ export class VantarisRoom extends Room<GameState> {
     player.color = PLAYER_COLORS[this.state.players.size % PLAYER_COLORS.length];
     player.territoryCellCount = 0;
 
-    const spawnCellId = options?.spawnPoint || this.findAvailableSpawnCell();
-    if (spawnCellId) {
-      const cluster = this.findClusterAroundCell(spawnCellId, STARTING_TERRITORY_SIZE);
-      for (const cid of cluster) {
-        claimCell(this.state, playerId, cid);
-      }
+    const spawnCellId = this.findAvailableSpawnCell();
+    if (!spawnCellId) {
+      console.error('[vantaris] No available spawn cell for player', playerId);
+      return;
     }
 
     this.state.players.set(playerId, player);
 
-    computeVisibilityForPlayer(this.state, playerId, VISION_RANGE);
+    const city = createCity(this.state, playerId, spawnCellId);
+    city.producingUnit = true;
 
-    const slice = this.computePlayerSlice(playerId);
+    completeClaim(this.state, spawnCellId, playerId);
+
+    computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, TROOP_VISION_RANGE);
+
+    const slice = buildPlayerSlice(this.state, playerId);
     client.send('stateUpdate', slice);
   }
 
@@ -105,133 +142,182 @@ export class VantarisRoom extends Room<GameState> {
       await this.allowReconnection(client, RECONNECTION_WINDOW);
       const player = this.state.players.get(client.sessionId);
       if (player) {
-        const slice = this.computePlayerSlice(client.sessionId);
+        computeVisibilityForPlayer(this.state, client.sessionId, this.adjacencyMap, TROOP_VISION_RANGE);
+        const slice = buildPlayerSlice(this.state, client.sessionId);
         client.send('stateUpdate', slice);
       }
     } catch {
-      // reconnection timeout — player stays but disconnected
+      // reconnection timeout
     }
   }
 
   onDispose(): void {
-    // cleanup
+    this.tickSystem.stop();
   }
 
-  private handleExploreCell(client: Client, cellId: string): void {
+  private onTick(tick: number): void {
+    this.processCityProduction(tick);
+    this.processUnitMovement();
+    this.processClaimTimers();
+    this.broadcastPlayerSlices();
+    this.state.tick = tick;
+  }
+
+  private processCityProduction(tick: number): void {
+    for (const [, city] of this.state.cities) {
+      const shouldSpawn = tickCityProduction(city);
+      if (shouldSpawn) {
+        const unitsOnCell = this.countUnitsOnCell(city.cellId);
+        if (unitsOnCell < MAX_UNITS_PER_HEX) {
+          spawnUnit(this.state, city.ownerId, city.cellId);
+        }
+      }
+    }
+  }
+
+  private processUnitMovement(): void {
+    for (const [, unit] of this.state.units) {
+      if (unit.status === 'MOVING') {
+        stepUnit(this.state, unit.unitId, this.adjacencyMap);
+      }
+    }
+  }
+
+  private processClaimTimers(): void {
+    const completedClaims: { unitId: string; cellId: string; ownerId: string }[] = [];
+
+    for (const [, unit] of this.state.units) {
+      if (unit.status === 'CLAIMING') {
+        unit.claimTicksRemaining--;
+        if (unit.claimTicksRemaining <= 0) {
+          completedClaims.push({
+            unitId: unit.unitId,
+            cellId: unit.cellId,
+            ownerId: unit.ownerId,
+          });
+        }
+      }
+    }
+
+    for (const claim of completedClaims) {
+      const unit = this.state.units.get(claim.unitId);
+      if (unit) {
+        unit.status = 'IDLE';
+        unit.claimTicksRemaining = 0;
+      }
+      completeClaim(this.state, claim.cellId, claim.ownerId);
+
+      const owner = this.state.players.get(claim.ownerId);
+      if (owner) {
+        computeVisibilityForPlayer(this.state, claim.ownerId, this.adjacencyMap, TROOP_VISION_RANGE);
+      }
+    }
+  }
+
+  private broadcastPlayerSlices(): void {
+    for (const client of this.clients) {
+      const playerId = client.sessionId;
+      computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, TROOP_VISION_RANGE);
+      const slice = buildPlayerSlice(this.state, playerId);
+      client.send('stateUpdate', slice);
+    }
+  }
+
+  private handleMoveUnit(client: Client, data: { unitId: string; targetCellId: string }): void {
     const playerId = client.sessionId;
-    const player = this.state.players.get(playerId);
-    if (!player) return;
+    const unit = this.state.units.get(data.unitId);
+    if (!unit || unit.ownerId !== playerId) return;
 
-    const cell = this.state.cells.get(cellId);
-    if (!cell) return;
-
-    let adjacent = false;
-    for (const [cid, cs] of this.state.cells) {
-      if (cs.ownerId === playerId) {
-        const neighbors = (cs as any)._neighbors as string[];
-        if (neighbors && neighbors.includes(cellId)) {
-          adjacent = true;
-          break;
-        }
-      }
+    const targetCell = this.state.cells.get(data.targetCellId);
+    if (!targetCell || targetCell.biome === BiomeType.Ocean) {
+      client.send('error', { type: 'error', code: 'NO_PATH' });
+      return;
     }
 
-    if (!adjacent) return;
+    const unitsByCellId = buildUnitsByCellId(this.state.units);
 
-    claimCell(this.state, playerId, cellId);
+    const path = findPath(
+      unit.cellId,
+      data.targetCellId,
+      this.state.cells,
+      this.adjacencyMap,
+      unitsByCellId,
+      MAX_UNITS_PER_HEX,
+      this.cellPositions,
+    );
 
-    this.broadcastStateUpdate(playerId);
-  }
-
-  private broadcastStateUpdate(playerId: string): void {
-    const client = this.clients.find(c => c.sessionId === playerId);
-    if (!client) return;
-
-    const slice = this.computePlayerSlice(playerId);
-    client.send('stateUpdate', slice);
-  }
-
-  private computePlayerSlice(playerId: string) {
-    const player = this.state.players.get(playerId);
-    if (!player) return { visibleCells: [], revealedCells: [], players: [] };
-
-    const visibleCells: any[] = [];
-    const revealedCells: any[] = [];
-
-    for (const [cellId, fogValue] of player.fog.visibility) {
-      if (fogValue === FogVisibility.VISIBLE) {
-        const cell = this.state.cells.get(cellId);
-        if (cell) {
-          visibleCells.push({
-            cellId: cell.cellId,
-            biome: cell.biome,
-            ownerId: cell.ownerId,
-          });
-        }
-      } else if (fogValue === FogVisibility.REVEALED) {
-        const snapshot = player.fog.getSnapshot(cellId);
-        if (snapshot) {
-          revealedCells.push({
-            ...JSON.parse(snapshot),
-            cellId,
-          });
-        }
-      }
+    if (!path) {
+      client.send('error', { type: 'error', code: 'NO_PATH' });
+      return;
     }
 
-    const players: any[] = [];
-    for (const [pid, ps] of this.state.players) {
-      players.push({
-        playerId: ps.playerId,
-        displayName: ps.displayName,
-        color: ps.color,
-        territoryCellCount: ps.territoryCellCount,
-      });
-    }
-
-    return {
-      visibleCells,
-      revealedCells,
-      players,
-      camera: {
-        qx: player.cameraQuatX,
-        qy: player.cameraQuatY,
-        qz: player.cameraQuatZ,
-        qw: player.cameraQuatW,
-        zoom: player.cameraZoom,
-      },
-    };
+    assignPath(this.state, unit.unitId, path);
   }
 
-  private findAvailableSpawnCell(): string {
-    for (const [cellId, cell] of this.state.cells) {
-      if (cell.ownerId === '') {
-        return cellId;
-      }
-    }
-    return this.state.cells.keys().next().value || 'cell_0';
+  private handleSetUnitIdle(client: Client, data: { unitId: string }): void {
+    const playerId = client.sessionId;
+    const unit = this.state.units.get(data.unitId);
+    if (!unit || unit.ownerId !== playerId) return;
+
+    unit.status = 'IDLE';
+    unit.path = '[]';
+    unit.movementTicksRemaining = 0;
+    unit.claimTicksRemaining = 0;
   }
 
-  private findClusterAroundCell(startCellId: string, size: number): string[] {
-    const visited: string[] = [startCellId];
-    const queue: string[] = [startCellId];
+  private handleToggleCityProduction(client: Client, data: { cityId: string; producing: boolean }): void {
+    const playerId = client.sessionId;
+    const city = this.state.cities.get(data.cityId);
+    if (!city || city.ownerId !== playerId) return;
 
-    while (visited.length < size && queue.length > 0) {
-      const current = queue.shift()!;
-      const neighbors = this.adjacency.get(current) ?? [];
-      for (const n of neighbors) {
-        if (!visited.includes(n)) {
-          const cell = this.state.cells.get(n);
-          if (cell && cell.ownerId === '') {
-            visited.push(n);
-            queue.push(n);
-            if (visited.length >= size) break;
+    city.producingUnit = data.producing;
+  }
+
+  private findAvailableSpawnCell(): string | null {
+    const terrainPriority = [BiomeType.Plains, BiomeType.Desert, BiomeType.Tundra];
+
+    for (const terrain of terrainPriority) {
+      for (const [cellId, cell] of this.state.cells) {
+        if (cell.biome !== terrain) continue;
+        if (cell.ownerId !== '') continue;
+
+        const neighbors = this.adjacencyMap[cellId] ?? [];
+        let adjacentToOtherPlayer = false;
+        for (const nId of neighbors) {
+          const nCell = this.state.cells.get(nId);
+          if (nCell && nCell.ownerId !== '') {
+            adjacentToOtherPlayer = true;
+            break;
           }
         }
-        if (visited.length >= size) break;
+
+        if (adjacentToOtherPlayer) continue;
+
+        let bufferOk = true;
+        for (const nId of neighbors) {
+          const nNeighbors = this.adjacencyMap[nId] ?? [];
+          for (const nnId of nNeighbors) {
+            const nnCell = this.state.cells.get(nnId);
+            if (nnCell && nnCell.ownerId !== '') {
+              bufferOk = false;
+              break;
+            }
+          }
+          if (!bufferOk) break;
+        }
+
+        if (bufferOk) return cellId;
       }
     }
 
-    return visited;
+    return null;
+  }
+
+  private countUnitsOnCell(cellId: string): number {
+    let count = 0;
+    for (const [, unit] of this.state.units) {
+      if (unit.cellId === cellId) count++;
+    }
+    return count;
   }
 }

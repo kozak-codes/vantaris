@@ -14,7 +14,7 @@
     "sourceMap": true,
     "outDir": "./dist",
     "paths": {
-      "@vantaris/shared": ["../shared/src/types.ts"],
+      "@vantaris/shared": ["../shared/src/index.ts"],
       "@vantaris/shared/constants": ["../shared/src/constants.ts"]
     }
   },

@@ -1,14 +1,18 @@
 import * as THREE from 'three';
 import { generateHexGrid } from './globe/HexGrid';
 import { GlobeRenderer } from './globe/GlobeRenderer';
-import { FogOfWar } from './systems/FogOfWar';
+import { FogRenderer } from './systems/FogRenderer';
+import { UnitRenderer } from './systems/UnitRenderer';
+import { CityRenderer } from './systems/CityRenderer';
+import { SelectionRenderer } from './systems/SelectionRenderer';
 import { CameraControls } from './camera/CameraControls';
 import { HUD } from './ui/HUD';
-import { createDebugAPI } from './debug/DebugAPI';
 import { LobbyUI } from './ui/LobbyUI';
+import { GlobeInput } from './input/GlobeInput';
+import { createDebugAPI } from './debug/DebugAPI';
 import { getRoomIdFromURL, setRoomIdInURL, clearRoomFromURL, getStoredRoomId, getDisplayName } from './network/RoomPersistence';
-import { joinGame, reconnectToGame, sendExploreCell, leaveGame, sendUpdateCamera } from './network/ColyseusClient';
-import { FogVisibility } from './types/index';
+import { joinGame, reconnectToGame, leaveGame, sendUpdateCamera } from './network/ColyseusClient';
+import { clientState, clearClientState } from './state/ClientState';
 
 const canvas = document.getElementById('globe-canvas') as HTMLCanvasElement;
 
@@ -42,43 +46,27 @@ scene.add(ambientLight);
 const grid = generateHexGrid();
 
 const globeRenderer = new GlobeRenderer(pivot, grid, scene);
-const fogOfWar = new FogOfWar(grid);
-fogOfWar.revealStartingTerritory();
-globeRenderer.forceColorUpdate();
-
-let cameraRotated = false;
-
-function rotateToCellCenter(center: [number, number, number]): void {
-  if (cameraRotated) return;
-  cameraRotated = true;
-  const target = new THREE.Vector3(center[0], center[1], center[2]);
-  const defaultForward = new THREE.Vector3(0, 0, 1);
-  const quaternion = new THREE.Quaternion().setFromUnitVectors(
-    target.clone().normalize(),
-    defaultForward,
-  );
-  pivot.quaternion.premultiply(quaternion);
-}
-
-const roomIdFromURL = getRoomIdFromURL();
-const roomIdFromStorage = getStoredRoomId();
-const roomId = roomIdFromURL || roomIdFromStorage;
-
-if (!roomId) {
-  const startingCenter = fogOfWar.getStartingCenter();
-  if (startingCenter) rotateToCellCenter(startingCenter as [number, number, number]);
-}
+const fogRenderer = new FogRenderer(pivot, grid, globeRenderer.getCellMeshes(), globeRenderer.getGlobeGroup());
+const unitRenderer = new UnitRenderer(globeRenderer.getGlobeGroup(), grid);
+const cityRenderer = new CityRenderer(globeRenderer.getGlobeGroup(), grid);
+const selectionRenderer = new SelectionRenderer(globeRenderer.getGlobeGroup(), grid);
 
 const leaveBtn = document.getElementById('hud-leave')!;
 leaveBtn.addEventListener('click', handleLeaveGame);
 
 const hud = new HUD();
 const cameraControls = new CameraControls(camera, canvas, pivot);
+const globeInput = new GlobeInput(canvas, camera, globeRenderer.getGlobeGroup());
 
-(window as any).vantaris = createDebugAPI(grid, fogOfWar, globeRenderer, cameraControls, pivot);
+(window as any).vantaris = createDebugAPI(grid, globeRenderer, cameraControls, pivot);
 console.log('%c[vantaris] Debug API available at window.vantaris', 'color: #4488ff; font-weight: bold');
 
 let useServerState = false;
+let lastCameraSync = 0;
+
+const roomIdFromURL = getRoomIdFromURL();
+const roomIdFromStorage = getStoredRoomId();
+const roomId = roomIdFromURL || roomIdFromStorage;
 
 if (roomId) {
   attemptReconnect(roomId);
@@ -115,9 +103,18 @@ async function handleGameJoin(newRoomId: string): Promise<void> {
     handleGameRoom(room);
   } catch {
     clearRoomFromURL();
-    fogOfWar.revealStartingTerritory();
-    globeRenderer.forceColorUpdate();
   }
+}
+
+function handleGameRoom(room: any): void {
+  useServerState = true;
+  leaveBtn.classList.remove('hidden');
+  pivot.quaternion.identity();
+
+  room.onLeave(() => {
+    useServerState = false;
+    leaveBtn.classList.add('hidden');
+  });
 }
 
 function handleLeaveGame(): void {
@@ -126,104 +123,9 @@ function handleLeaveGame(): void {
   localStorage.removeItem('vantaris_currentRoom');
   useServerState = false;
   leaveBtn.classList.add('hidden');
-  for (const cell of grid.cells) {
-    cell.fog = FogVisibility.UNREVEALED;
-  }
-  fogOfWar.revealStartingTerritory();
-  globeRenderer.forceColorUpdate();
-  cameraRotated = false;
-  const startingCenter = fogOfWar.getStartingCenter();
-  if (startingCenter) rotateToCellCenter(startingCenter as [number, number, number]);
+  pivot.quaternion.identity();
   showLobby();
 }
-
-function handleGameRoom(room: any): void {
-  useServerState = true;
-  leaveBtn.classList.remove('hidden');
-  cameraRotated = false;
-
-  // Reset all fog to unrevealed, server will send visible cells
-  for (const cell of grid.cells) {
-    cell.fog = FogVisibility.UNREVEALED;
-  }
-  pivot.quaternion.identity();
-  globeRenderer.forceColorUpdate();
-
-  room.onMessage('stateUpdate', (slice: any) => {
-    applyServerState(slice);
-  });
-
-  room.onMessage('pong', () => {
-    // connection confirmed
-  });
-
-  room.onLeave(() => {
-    useServerState = false;
-    leaveBtn.classList.add('hidden');
-  });
-}
-
-function applyServerState(slice: { visibleCells: any[]; revealedCells: any[]; players: any[]; camera?: { qx: number; qy: number; qz: number; qw: number; zoom: number } }): void {
-  for (const cell of slice.visibleCells) {
-    const idx = parseInt(cell.cellId.replace('cell_', ''));
-    if (idx >= 0 && idx < grid.cells.length) {
-      grid.cells[idx].fog = FogVisibility.VISIBLE;
-    }
-  }
-  for (const cell of slice.revealedCells) {
-    const idx = parseInt(cell.cellId.replace('cell_', ''));
-    if (idx >= 0 && idx < grid.cells.length) {
-      grid.cells[idx].fog = FogVisibility.REVEALED;
-    }
-  }
-  globeRenderer.forceColorUpdate();
-
-  if (!cameraRotated && slice.visibleCells.length > 0) {
-    if (slice.camera) {
-      const { qx, qy, qz, qw, zoom } = slice.camera;
-      cameraControls.setQuaternion(qx, qy, qz, qw);
-      cameraControls.setZoom(zoom);
-      cameraRotated = true;
-    } else {
-      const firstVisible = slice.visibleCells[0];
-      const firstIdx = parseInt(firstVisible.cellId.replace('cell_', ''));
-      if (firstIdx >= 0 && firstIdx < grid.cells.length) {
-        rotateToCellCenter(grid.cells[firstIdx].center);
-      }
-    }
-  }
-}
-
-const raycaster = new THREE.Raycaster();
-const pointer = new THREE.Vector2();
-let hoveredCellId: number | null = null;
-let lastCameraSync = 0;
-
-canvas.addEventListener('pointermove', (e: PointerEvent) => {
-  pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
-  pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
-});
-
-canvas.addEventListener('click', (e: MouseEvent) => {
-  if (e.button !== 0) return;
-  if (hoveredCellId !== null) {
-    const cell = grid.cells[hoveredCellId];
-    if (!cell || cell.fog !== FogVisibility.VISIBLE) return;
-    if (useServerState) {
-      sendExploreCell(`cell_${hoveredCellId}`);
-    } else {
-      const newlyRevealed = fogOfWar.expandFromCell(hoveredCellId);
-      for (const cellId of newlyRevealed) {
-        globeRenderer.beginRevealAnimation(cellId, grid.cells[cellId].fog);
-      }
-    }
-  }
-});
-
-canvas.addEventListener('pointerleave', () => {
-  hud.hideTooltip();
-  hoveredCellId = null;
-});
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -235,32 +137,9 @@ function animate(): void {
   requestAnimationFrame(animate);
 
   cameraControls.update();
-  globeRenderer.updateFogColors(16);
-
-  raycaster.setFromCamera(pointer, camera);
-  const globeGroup = globeRenderer.getGlobeGroup();
-  const meshes: THREE.Object3D[] = [];
-  globeGroup.traverse((child) => {
-    if (child instanceof THREE.Mesh && child.userData.cellId !== undefined) {
-      meshes.push(child);
-    }
-  });
-  const intersects = raycaster.intersectObjects(meshes, false);
-
-  if (intersects.length > 0) {
-    const cellId = globeRenderer.getCellAtIntersection(intersects[0]);
-    if (cellId !== null) {
-      hoveredCellId = cellId;
-      const info = fogOfWar.getCellInfo(cellId);
-      if (info) {
-        const biome = info.fog === FogVisibility.VISIBLE ? info.biome : null;
-        hud.showTooltip(cellId, biome, info.fog, info.isPentagon);
-      }
-    }
-  } else {
-    hud.hideTooltip();
-    hoveredCellId = null;
-  }
+  fogRenderer.updateFogColors();
+  unitRenderer.update();
+  selectionRenderer.update();
 
   globeRenderer.updateGlow(camera);
 

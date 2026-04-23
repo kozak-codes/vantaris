@@ -1,19 +1,10 @@
 import * as THREE from 'three';
 import type { HexGrid as HexGridData } from '../types/index';
-import { FogVisibility } from '../types/index';
-import type { FogOfWar } from '../systems/FogOfWar';
 import type { GlobeRenderer } from '../globe/GlobeRenderer';
 import type { CameraControls } from '../camera/CameraControls';
+import { clientState } from '../state/ClientState';
 
 export interface DebugAPI {
-  fog: {
-    revealAll(): void;
-    hideAll(): void;
-    revealCell(id: number): void;
-    revealTerritory(startId?: number): number[];
-    getState(id: number): string | null;
-    count(): { visible: number; explored: number; unexplored: number };
-  };
   camera: {
     focusCell(id: number): void;
     zoom(distance: number): void;
@@ -28,14 +19,13 @@ export interface DebugAPI {
   };
   grid: HexGridData;
   renderer: GlobeRenderer;
-  fogSystem: FogOfWar;
   cameraControls: CameraControls;
   pivot: THREE.Group;
+  clientState: typeof clientState;
 }
 
 export function createDebugAPI(
   grid: HexGridData,
-  fogOfWar: FogOfWar,
   globeRenderer: GlobeRenderer,
   cameraControls: CameraControls,
   pivot: THREE.Group,
@@ -61,65 +51,6 @@ export function createDebugAPI(
   fpsLoop();
 
   const api: DebugAPI = {
-    fog: {
-      revealAll(): void {
-        for (const cell of grid.cells) {
-          if (cell.fog !== FogVisibility.VISIBLE) {
-            cell.fog = FogVisibility.VISIBLE;
-          }
-        }
-        globeRenderer.forceColorUpdate();
-        console.log(`[debug] All ${grid.cells.length} cells revealed`);
-      },
-
-      hideAll(): void {
-        for (const cell of grid.cells) {
-          cell.fog = FogVisibility.UNREVEALED;
-        }
-        globeRenderer.forceColorUpdate();
-        console.log('[debug] All cells hidden');
-      },
-
-      revealCell(id: number): void {
-        const cell = grid.cells[id];
-        if (!cell) {
-          console.warn(`[debug] Cell ${id} not found`);
-          return;
-        }
-        const newlyVisible = fogOfWar.expandFromCell(id);
-        for (const cid of newlyVisible) {
-          globeRenderer.beginRevealAnimation(cid, grid.cells[cid].fog);
-        }
-        console.log(`[debug] Expanded from cell ${id}, revealed: [${newlyVisible.join(', ')}]`);
-      },
-
-      revealTerritory(startId?: number): number[] {
-        const idx = startId ?? Math.floor(Math.random() * grid.cells.length);
-        const result = fogOfWar.revealStartingTerritory();
-        globeRenderer.forceColorUpdate();
-        console.log(`[debug] Revealed territory starting at cell ${idx}: [${result.join(', ')}]`);
-        return result;
-      },
-
-      getState(id: number): string | null {
-        const cell = grid.cells[id];
-        if (!cell) return null;
-        return cell.fog;
-      },
-
-      count(): { visible: number; explored: number; unexplored: number } {
-        let visible = 0;
-        let explored = 0;
-        let unexplored = 0;
-        for (const cell of grid.cells) {
-        if (cell.fog === FogVisibility.VISIBLE) visible++;
-        else if (cell.fog === FogVisibility.REVEALED) explored++;
-          else unexplored++;
-        }
-        return { visible, explored, unexplored };
-      },
-    },
-
     camera: {
       focusCell(id: number): void {
         const cell = grid.cells[id];
@@ -157,11 +88,17 @@ export function createDebugAPI(
           console.warn(`[debug] Cell ${id} not found`);
           return {};
         }
+        const cellKey = `cell_${id}`;
         const neighbors = grid.adjacency.get(id) ?? [];
+        const visibility = clientState.visibleCells.has(cellKey)
+          ? 'VISIBLE'
+          : clientState.revealedCells.has(cellKey)
+            ? 'REVEALED'
+            : 'UNREVEALED';
         return {
           id: cell.id,
           biome: cell.biome,
-          fog: cell.fog,
+          visibility,
           isPentagon: cell.isPentagon,
           center: Array.from(cell.center),
           neighborIds: neighbors,
@@ -170,19 +107,23 @@ export function createDebugAPI(
       },
 
       get cells(): object {
+        const visible = Array.from(clientState.visibleCells.keys()).length;
+        const revealed = Array.from(clientState.revealedCells.keys()).length;
         return {
           total: grid.cells.length,
-          pentagons: grid.cells.filter(c => c.isPentagon).length,
-          hexagons: grid.cells.filter(c => !c.isPentagon).length,
+          pentagons: grid.cells.filter((c: any) => c.isPentagon).length,
+          hexagons: grid.cells.filter((c: any) => !c.isPentagon).length,
           vertices: grid.vertices.length,
+          clientVisible: visible,
+          clientRevealed: revealed,
         };
       },
 
       get gridInfo(): object {
         return {
           total: grid.cells.length,
-          pentagons: grid.cells.filter(c => c.isPentagon).length,
-          hexagons: grid.cells.filter(c => !c.isPentagon).length,
+          pentagons: grid.cells.filter((c: any) => c.isPentagon).length,
+          hexagons: grid.cells.filter((c: any) => !c.isPentagon).length,
           vertices: grid.vertices.length,
         };
       },
@@ -194,9 +135,9 @@ export function createDebugAPI(
 
     grid,
     renderer: globeRenderer,
-    fogSystem: fogOfWar,
     cameraControls,
     pivot,
+    clientState,
   };
 
   return api;

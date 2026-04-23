@@ -8,7 +8,7 @@ export {
   BuildingType,
   CityTier,
   TerrainType,
-} from '@vantaris/shared';
+} from './types';
 
 export type {
   CellSnapshot,
@@ -28,6 +28,6 @@ export type {
   PlayerSummary,
   MoveOrder,
   AdjacencyMap,
-} from '@vantaris/shared';
+} from './types';
 
-export { buildAdjacencyMap } from '@vantaris/shared';
+export { buildAdjacencyMap } from './hexAdjacency';
