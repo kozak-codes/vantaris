@@ -60,11 +60,11 @@ export const IMPASSABLE_TERRAIN: TerrainType[] = [
 ];
 
 export const MOVEMENT_COST: Record<string, number> = {
-  PLAINS: 10,
-  DESERT: 10,
-  FOREST: 20,
-  MOUNTAIN: 30,
-  TUNDRA: 20,
+  PLAINS: 3,
+  DESERT: 3,
+  FOREST: 6,
+  MOUNTAIN: 9,
+  TUNDRA: 6,
   OCEAN: Infinity,
 };
 

@@ -122,26 +122,40 @@ export class UnitRenderer {
     this.updateSelectionRings();
   }
 
-  private buildHexRing(cellId: string, color: number, offset: number): THREE.LineSegments | null {
-    const numericId = parseInt(cellId.replace('cell_', ''));
-    if (isNaN(numericId) || numericId < 0 || numericId >= this.grid.cells.length) return null;
+  private buildSelectionCircle(cellId: string): THREE.LineSegments | null {
+    const center = this.getCellCenter(cellId);
+    if (!center) return null;
 
-    const cell = this.grid.cells[numericId];
-    const verts = cell.vertexIds.map((fi: number) => {
-      const dv = this.grid.vertices[fi];
-      return new THREE.Vector3(dv[0], dv[1], dv[2]).normalize().multiplyScalar(GLOBE_RADIUS + offset);
-    });
+    const basePos = new THREE.Vector3(center[0], center[1], center[2]).normalize().multiplyScalar(GLOBE_RADIUS * SURFACE_OFFSET);
+    const normal = basePos.clone().normalize();
+    const up = new THREE.Vector3(0, 1, 0);
+    if (Math.abs(normal.dot(up)) > 0.99) {
+      up.set(1, 0, 0);
+    }
+    const tangent = new THREE.Vector3().crossVectors(normal, up).normalize();
+    const bitangent = new THREE.Vector3().crossVectors(normal, tangent).normalize();
 
+    const radius = 0.25;
+    const segments = 24;
     const positions: number[] = [];
-    for (let i = 0; i < verts.length; i++) {
-      const a = verts[i];
-      const b = verts[(i + 1) % verts.length];
-      positions.push(a.x, a.y, a.z, b.x, b.y, b.z);
+
+    for (let i = 0; i < segments; i++) {
+      const angle1 = (i / segments) * Math.PI * 2;
+      const angle2 = ((i + 1) / segments) * Math.PI * 2;
+      const p1 = basePos.clone()
+        .add(tangent.clone().multiplyScalar(Math.cos(angle1) * radius))
+        .add(bitangent.clone().multiplyScalar(Math.sin(angle1) * radius));
+      const p2 = basePos.clone()
+        .add(tangent.clone().multiplyScalar(Math.cos(angle2) * radius))
+        .add(bitangent.clone().multiplyScalar(Math.sin(angle2) * radius));
+      p1.normalize().multiplyScalar(GLOBE_RADIUS * 1.012);
+      p2.normalize().multiplyScalar(GLOBE_RADIUS * 1.012);
+      positions.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
     }
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.9 });
+    const material = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
     return new THREE.LineSegments(geometry, material);
   }
 
@@ -160,7 +174,7 @@ export class UnitRenderer {
           (existing.material as THREE.Material).dispose();
           this.selectionRings.delete(clientState.selectedUnitId);
         }
-        const ring = this.buildHexRing(cellId, 0xffffff, 0.01);
+        const ring = this.buildSelectionCircle(cellId);
         if (ring) {
           this.globe.add(ring);
           this.selectionRings.set(clientState.selectedUnitId, ring);
