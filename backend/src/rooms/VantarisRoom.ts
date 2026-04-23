@@ -62,6 +62,17 @@ export class VantarisRoom extends Room<GameState> {
     this.onMessage('ping', (client) => {
       client.send('pong', { timestamp: Date.now() });
     });
+
+    this.onMessage('updateCamera', (client, data: { qx: number; qy: number; qz: number; qw: number; zoom: number }) => {
+      const player = this.state.players.get(client.sessionId);
+      if (player) {
+        player.cameraQuatX = data.qx;
+        player.cameraQuatY = data.qy;
+        player.cameraQuatZ = data.qz;
+        player.cameraQuatW = data.qw;
+        player.cameraZoom = data.zoom;
+      }
+    });
   }
 
   onJoin(client: Client, options: { spawnPoint?: string; displayName?: string }): void {
@@ -178,7 +189,18 @@ export class VantarisRoom extends Room<GameState> {
       });
     }
 
-    return { visibleCells, revealedCells, players };
+    return {
+      visibleCells,
+      revealedCells,
+      players,
+      camera: {
+        qx: player.cameraQuatX,
+        qy: player.cameraQuatY,
+        qz: player.cameraQuatZ,
+        qw: player.cameraQuatW,
+        zoom: player.cameraZoom,
+      },
+    };
   }
 
   private findAvailableSpawnCell(): string {

@@ -218,4 +218,23 @@ export class CameraControls {
   getPivot(): THREE.Group {
     return this.pivot;
   }
+
+  getQuaternion(): { x: number; y: number; z: number; w: number } {
+    const q = this.pivot.quaternion;
+    return { x: q.x, y: q.y, z: q.z, w: q.w };
+  }
+
+  setQuaternion(x: number, y: number, z: number, w: number): void {
+    this.pivot.quaternion.set(x, y, z, w);
+  }
+
+  getZoom(): number {
+    return this.currentDistance;
+  }
+
+  setZoom(zoom: number): void {
+    this.currentDistance = zoom;
+    this.targetZoom = zoom;
+    this.updateCameraPosition();
+  }
 }

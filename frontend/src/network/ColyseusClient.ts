@@ -65,6 +65,12 @@ export function sendExploreCell(cellId: string): void {
   }
 }
 
+export function sendUpdateCamera(qx: number, qy: number, qz: number, qw: number, zoom: number): void {
+  if (currentRoom) {
+    currentRoom.send('updateCamera', { qx, qy, qz, qw, zoom });
+  }
+}
+
 export function getCurrentRoom(): Room | null {
   return currentRoom;
 }

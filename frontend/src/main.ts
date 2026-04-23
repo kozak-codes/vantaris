@@ -7,7 +7,7 @@ import { HUD } from './ui/HUD';
 import { createDebugAPI } from './debug/DebugAPI';
 import { LobbyUI } from './ui/LobbyUI';
 import { getRoomIdFromURL, setRoomIdInURL, clearRoomFromURL, getStoredRoomId, getDisplayName } from './network/RoomPersistence';
-import { joinGame, reconnectToGame, sendExploreCell, leaveGame } from './network/ColyseusClient';
+import { joinGame, reconnectToGame, sendExploreCell, leaveGame, sendUpdateCamera } from './network/ColyseusClient';
 import { FogVisibility } from './types/index';
 
 const canvas = document.getElementById('globe-canvas') as HTMLCanvasElement;
@@ -163,7 +163,7 @@ function handleGameRoom(room: any): void {
   });
 }
 
-function applyServerState(slice: { visibleCells: any[]; revealedCells: any[]; players: any[] }): void {
+function applyServerState(slice: { visibleCells: any[]; revealedCells: any[]; players: any[]; camera?: { qx: number; qy: number; qz: number; qw: number; zoom: number } }): void {
   for (const cell of slice.visibleCells) {
     const idx = parseInt(cell.cellId.replace('cell_', ''));
     if (idx >= 0 && idx < grid.cells.length) {
@@ -179,10 +179,17 @@ function applyServerState(slice: { visibleCells: any[]; revealedCells: any[]; pl
   globeRenderer.forceColorUpdate();
 
   if (!cameraRotated && slice.visibleCells.length > 0) {
-    const firstVisible = slice.visibleCells[0];
-    const firstIdx = parseInt(firstVisible.cellId.replace('cell_', ''));
-    if (firstIdx >= 0 && firstIdx < grid.cells.length) {
-      rotateToCellCenter(grid.cells[firstIdx].center);
+    if (slice.camera) {
+      const { qx, qy, qz, qw, zoom } = slice.camera;
+      cameraControls.setQuaternion(qx, qy, qz, qw);
+      cameraControls.setZoom(zoom);
+      cameraRotated = true;
+    } else {
+      const firstVisible = slice.visibleCells[0];
+      const firstIdx = parseInt(firstVisible.cellId.replace('cell_', ''));
+      if (firstIdx >= 0 && firstIdx < grid.cells.length) {
+        rotateToCellCenter(grid.cells[firstIdx].center);
+      }
     }
   }
 }
@@ -190,6 +197,7 @@ function applyServerState(slice: { visibleCells: any[]; revealedCells: any[]; pl
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 let hoveredCellId: number | null = null;
+let lastCameraSync = 0;
 
 canvas.addEventListener('pointermove', (e: PointerEvent) => {
   pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -255,6 +263,16 @@ function animate(): void {
   }
 
   globeRenderer.updateGlow(camera);
+
+  if (useServerState) {
+    const now = performance.now();
+    if (now - lastCameraSync > 1000) {
+      const q = cameraControls.getQuaternion();
+      sendUpdateCamera(q.x, q.y, q.z, q.w, cameraControls.getZoom());
+      lastCameraSync = now;
+    }
+  }
+
   renderer.render(scene, camera);
 }
 
