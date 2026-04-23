@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { clientState, onStateUpdate } from '../state/ClientState';
 import { createInfantryIcon, positionOnSurface, offsetOnSurface, orientToSurface, GLOBE_RADIUS } from './IconFactory';
 
-const SURFACE_OFFSET = 1.04;
-const TICK_INTERVAL_MS = 5000;
+const SURFACE_OFFSET = 1.008;
+const TICK_INTERVAL_MS = 1000;
 
 const UNIT_OFFSETS = [
   [0, 0],
@@ -19,8 +19,7 @@ const UNIT_OFFSETS = [
 
 interface UnitVisual {
   icon: THREE.Mesh;
-  prevCellId: string;
-  targetCellId: string;
+  selectionRing: THREE.LineSegments | null;
 }
 
 interface MovingUnitState {
@@ -35,8 +34,8 @@ export class UnitRenderer {
   private globe: THREE.Group;
   private grid: any;
   private units: Map<string, UnitVisual> = new Map();
-  private prevState: Map<string, { cellId: string; status: string; path: string[]; movementTicksRemaining: number; movementTicksTotal: number }> = new Map();
   private movingUnits: Map<string, MovingUnitState> = new Map();
+  private selectionRings: Map<string, THREE.LineSegments> = new Map();
 
   constructor(globe: THREE.Group, grid: any) {
     this.globe = globe;
@@ -83,53 +82,26 @@ export class UnitRenderer {
         const mat = uv.icon.material as THREE.MeshBasicMaterial;
         mat.color.set(color);
 
-        const prev = this.prevState.get(unitId);
-        const prevCellId = prev ? prev.cellId : unit.cellId;
-
         if (unit.status === 'MOVING' && unit.path && unit.path.length > 0) {
           const nextCellId = unit.path[0];
-          if (!this.movingUnits.has(unitId)) {
-            this.movingUnits.set(unitId, {
-              fromCellId: unit.cellId,
-              toCellId: nextCellId,
-              totalTicks: unit.movementTicksTotal || 10,
-              remainingTicks: unit.movementTicksRemaining,
-              stateTimestamp: performance.now(),
-            });
-            uv.prevCellId = unit.cellId;
-            uv.targetCellId = nextCellId;
-          } else {
-            const mu = this.movingUnits.get(unitId)!;
-            mu.fromCellId = unit.cellId;
-            mu.toCellId = nextCellId;
-            mu.remainingTicks = unit.movementTicksRemaining;
-            mu.totalTicks = unit.movementTicksTotal || 10;
-            mu.stateTimestamp = performance.now();
-          }
+          this.movingUnits.set(unitId, {
+            fromCellId: unit.cellId,
+            toCellId: nextCellId,
+            totalTicks: unit.movementTicksTotal || 10,
+            remainingTicks: unit.movementTicksRemaining,
+            stateTimestamp: performance.now(),
+          });
         } else {
-          uv.targetCellId = unit.cellId;
           this.movingUnits.delete(unitId);
         }
       } else {
         const icon = createInfantryIcon(color);
-        positionOnSurface(icon, this.getCellCenter(unit.cellId) || [0, GLOBE_RADIUS, 0]);
+        positionOnSurface(icon, this.getCellCenter(unit.cellId) || [0, GLOBE_RADIUS, 0], SURFACE_OFFSET);
         icon.userData = { unitId, type: 'unit' };
         this.globe.add(icon);
 
-        this.units.set(unitId, {
-          icon,
-          prevCellId: unit.cellId,
-          targetCellId: unit.cellId,
-        });
+        this.units.set(unitId, { icon, selectionRing: null });
       }
-
-      this.prevState.set(unitId, {
-        cellId: unit.cellId,
-        status: unit.status,
-        path: unit.path,
-        movementTicksRemaining: unit.movementTicksRemaining,
-        movementTicksTotal: unit.movementTicksTotal,
-      });
     }
 
     for (const [unitId, uv] of this.units) {
@@ -137,86 +109,132 @@ export class UnitRenderer {
         this.globe.remove(uv.icon);
         uv.icon.geometry.dispose();
         (uv.icon.material as THREE.Material).dispose();
+        if (uv.selectionRing) {
+          this.globe.remove(uv.selectionRing);
+          uv.selectionRing.geometry.dispose();
+          (uv.selectionRing.material as THREE.Material).dispose();
+        }
         this.units.delete(unitId);
         this.movingUnits.delete(unitId);
-        this.prevState.delete(unitId);
       }
     }
 
-    this.updatePositions();
+    this.updateSelectionRings();
   }
 
-  private updatePositions(): void {
-    const cellUnitCounts = new Map<string, string[]>();
+  private buildHexRing(cellId: string, color: number, offset: number): THREE.LineSegments | null {
+    const numericId = parseInt(cellId.replace('cell_', ''));
+    if (isNaN(numericId) || numericId < 0 || numericId >= this.grid.cells.length) return null;
 
-    for (const [unitId, unit] of clientState.units) {
-      const cellId = unit.cellId;
-      if (!cellUnitCounts.has(cellId)) {
-        cellUnitCounts.set(cellId, []);
-      }
-      cellUnitCounts.get(cellId)!.push(unitId);
+    const cell = this.grid.cells[numericId];
+    const verts = cell.vertexIds.map((fi: number) => {
+      const dv = this.grid.vertices[fi];
+      return new THREE.Vector3(dv[0], dv[1], dv[2]).normalize().multiplyScalar(GLOBE_RADIUS + offset);
+    });
+
+    const positions: number[] = [];
+    for (let i = 0; i < verts.length; i++) {
+      const a = verts[i];
+      const b = verts[(i + 1) % verts.length];
+      positions.push(a.x, a.y, a.z, b.x, b.y, b.z);
     }
 
-    for (const [cellId, unitIds] of cellUnitCounts) {
-      for (let i = 0; i < unitIds.length; i++) {
-        const unitId = unitIds[i];
-        const uv = this.units.get(unitId);
-        if (!uv) continue;
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.9 });
+    return new THREE.LineSegments(geometry, material);
+  }
 
-        const [dx, dy] = this.getUnitOffset(i, unitIds.length);
-        const basePos = this.cellCenterToWorld(cellId);
-        const offsetPos = offsetOnSurface(basePos, dx, dy);
-        uv.icon.position.copy(offsetPos);
-        orientToSurface(uv.icon, offsetPos);
+  private updateSelectionRings(): void {
+    const prevRings = new Set(this.selectionRings.keys());
+    const ringsToKeep = new Set<string>();
+
+    if (clientState.selectedUnitId) {
+      const unit = clientState.units.get(clientState.selectedUnitId);
+      if (unit) {
+        const cellId = unit.cellId;
+        const existing = this.selectionRings.get(clientState.selectedUnitId);
+        if (existing) {
+          this.globe.remove(existing);
+          existing.geometry.dispose();
+          (existing.material as THREE.Material).dispose();
+          this.selectionRings.delete(clientState.selectedUnitId);
+        }
+        const ring = this.buildHexRing(cellId, 0xffffff, 0.01);
+        if (ring) {
+          this.globe.add(ring);
+          this.selectionRings.set(clientState.selectedUnitId, ring);
+        }
+        ringsToKeep.add(clientState.selectedUnitId);
+      }
+    }
+
+    for (const unitId of prevRings) {
+      if (!ringsToKeep.has(unitId)) {
+        const ring = this.selectionRings.get(unitId)!;
+        this.globe.remove(ring);
+        ring.geometry.dispose();
+        (ring.material as THREE.Material).dispose();
+        this.selectionRings.delete(unitId);
       }
     }
   }
 
   update(): void {
     const now = performance.now();
+    const movingIds = new Set(this.movingUnits.keys());
+
+    const cellUnitCounts = new Map<string, string[]>();
+    for (const [unitId, unit] of clientState.units) {
+      if (!clientState.visibleCells.has(unit.cellId)) continue;
+      const cellId = unit.cellId;
+      if (!cellUnitCounts.has(cellId)) cellUnitCounts.set(cellId, []);
+      cellUnitCounts.get(cellId)!.push(unitId);
+    }
 
     for (const [unitId, mu] of this.movingUnits) {
       const uv = this.units.get(unitId);
       if (!uv) continue;
 
-      const unit = clientState.units.get(unitId);
-      if (!unit) continue;
-
       const total = mu.totalTicks || 10;
       const remaining = mu.remainingTicks;
+      const stateAge = now - mu.stateTimestamp;
 
-      const elapsedSinceState = now - mu.stateTimestamp;
-      const ticksElapsed = elapsedSinceState / TICK_INTERVAL_MS;
-      const estimatedRemaining = Math.max(0, remaining - ticksElapsed);
-      const t = Math.max(0, Math.min(1, 1 - (estimatedRemaining / total)));
+      const progressAtStateArrival = 1 - (remaining / total);
+      const interpolatedProgress = Math.max(0, Math.min(1,
+        progressAtStateArrival + (stateAge / TICK_INTERVAL_MS / total)
+      ));
 
       const fromPos = this.cellCenterToWorld(mu.fromCellId);
       const toPos = this.cellCenterToWorld(mu.toCellId);
 
-      const interpPos = new THREE.Vector3().lerpVectors(fromPos, toPos, t);
+      const interpPos = new THREE.Vector3().lerpVectors(fromPos, toPos, interpolatedProgress);
       interpPos.normalize().multiplyScalar(GLOBE_RADIUS * SURFACE_OFFSET);
 
-      const cellUnitList: string[] = [];
-      for (const [uid, u] of clientState.units) {
-        if (u.cellId === unit.cellId && !this.movingUnits.has(uid)) {
-          cellUnitList.push(uid);
-        }
+      const unit = clientState.units.get(unitId);
+      let idx = 0;
+      const cellId = unit ? unit.cellId : mu.fromCellId;
+      const cellList = cellUnitCounts.get(cellId);
+      if (cellList) {
+        idx = cellList.indexOf(unitId);
+        if (idx < 0) idx = 0;
       }
-      const idx = cellUnitList.indexOf(unitId);
-      const finalCount = cellUnitList.length + (this.movingUnits.has(unitId) ? 1 : 0);
-      const [dx, dy] = this.getUnitOffset(idx >= 0 ? idx : 0, Math.max(1, finalCount));
+      const totalUnits = cellList ? cellList.length : 1;
+
+      const [dx, dy] = this.getUnitOffset(idx, totalUnits);
       const offsetPos = offsetOnSurface(interpPos, dx, dy);
       uv.icon.position.copy(offsetPos);
       orientToSurface(uv.icon, offsetPos);
     }
 
-    const movingIds = new Set(this.movingUnits.keys());
-    for (const [cellId, unitIds] of this.getCellUnitsMap()) {
+    for (const [cellId, unitIds] of cellUnitCounts) {
       for (let i = 0; i < unitIds.length; i++) {
         const unitId = unitIds[i];
         if (movingIds.has(unitId)) continue;
+
         const uv = this.units.get(unitId);
         if (!uv) continue;
+
         const [dx, dy] = this.getUnitOffset(i, unitIds.length);
         const basePos = this.cellCenterToWorld(cellId);
         const offsetPos = offsetOnSurface(basePos, dx, dy);
@@ -224,17 +242,11 @@ export class UnitRenderer {
         orientToSurface(uv.icon, offsetPos);
       }
     }
-  }
 
-  private getCellUnitsMap(): Map<string, string[]> {
-    const map = new Map<string, string[]>();
-    for (const [unitId, unit] of clientState.units) {
-      if (!map.has(unit.cellId)) {
-        map.set(unit.cellId, []);
-      }
-      map.get(unit.cellId)!.push(unitId);
+    for (const [unitId, ring] of this.selectionRings) {
+      const time = performance.now() * 0.003;
+      (ring.material as THREE.LineBasicMaterial).opacity = 0.6 + 0.3 * Math.sin(time);
     }
-    return map;
   }
 
   getMeshes(): THREE.Object3D[] {

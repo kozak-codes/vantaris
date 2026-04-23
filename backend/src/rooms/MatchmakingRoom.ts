@@ -1,7 +1,7 @@
 import { Room, Client, matchMaker } from '@colyseus/core';
 import { MatchmakingState } from '../state/MatchmakingState';
 import { GamePhase, QueueType } from '@vantaris/shared';
-import { TICK_INTERVAL_MS } from '@vantaris/shared/constants';
+import { MATCHMAKING_COUNTDOWN_SECONDS } from '@vantaris/shared/constants';
 import {
   addPlayerToQueue,
   removePlayerFromQueue,
@@ -44,7 +44,7 @@ export class MatchmakingRoom extends Room<MatchmakingState> {
 
   private startTickInterval(): void {
     if (this.tickInterval) return;
-    this.secondsRemaining = Math.floor(TICK_INTERVAL_MS / 1000);
+    this.secondsRemaining = MATCHMAKING_COUNTDOWN_SECONDS;
     startCountdown(this.state);
     this.state.countdownSeconds = this.secondsRemaining;
 

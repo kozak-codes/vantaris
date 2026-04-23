@@ -21,7 +21,7 @@ export interface ClientState {
   selectedUnitId: string | null;
   selectedCityId: string | null;
   pendingCommand: CommandAction | null;
-  commandQueue: { entityId: string; entityType: 'unit' | 'city'; action: CommandAction; target?: string }[];
+  hoveredCellId: string | null;
 }
 
 export const clientState: ClientState = {
@@ -36,7 +36,7 @@ export const clientState: ClientState = {
   selectedUnitId: null,
   selectedCityId: null,
   pendingCommand: null,
-  commandQueue: [],
+  hoveredCellId: null,
 };
 
 type RenderCallback = () => void;
@@ -191,6 +191,6 @@ export function clearClientState(): void {
   clientState.selectedUnitId = null;
   clientState.selectedCityId = null;
   clientState.pendingCommand = null;
-  clientState.commandQueue = [];
+  clientState.hoveredCellId = null;
   hasReceivedFirstState = false;
 }

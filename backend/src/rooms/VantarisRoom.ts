@@ -13,6 +13,7 @@ import { UnitState } from '../state/UnitState';
 import { TickSystem } from '../systems/TickSystem';
 import { findPath, buildUnitsByCellId } from '../systems/Pathfinding';
 import { spawnUnit, assignPath, stepUnit, startClaiming } from '../mutations/units';
+import type { StepResult } from '../mutations/units';
 
 interface CreateOptions {
   spawnPoints: { cellId: string }[];
@@ -182,7 +183,13 @@ export class VantarisRoom extends Room<GameState> {
   private processUnitMovement(): void {
     for (const [, unit] of this.state.units) {
       if (unit.status === 'MOVING') {
-        stepUnit(this.state, unit.unitId, this.adjacencyMap);
+        const result = stepUnit(this.state, unit.unitId, this.adjacencyMap);
+        if (result && result.arrived) {
+          const cell = this.state.cells.get(result.cellId);
+          if (cell && !cell.ownerId) {
+            startClaiming(this.state, unit.unitId);
+          }
+        }
       }
     }
   }

@@ -25,6 +25,7 @@ export class GlobeInput {
 
     canvas.addEventListener('pointerdown', this.onPointerDown.bind(this));
     canvas.addEventListener('pointerup', this.onPointerUp.bind(this));
+    canvas.addEventListener('pointermove', this.onPointerMove.bind(this));
     window.addEventListener('keydown', this.onKeyDown.bind(this));
   }
 
@@ -42,10 +43,60 @@ export class GlobeInput {
 
     if (Math.sqrt(dx * dx + dy * dy) > CLICK_THRESHOLD_PX) return;
 
-    this.handleClick(e.shiftKey, e.clientX, e.clientY);
+    this.handleClick(e.clientX, e.clientY);
   }
 
-  private handleClick(shiftHeld: boolean, clientX: number, clientY: number): void {
+  private onPointerMove(e: PointerEvent): void {
+    const rect = this.canvas.getBoundingClientRect();
+    const pointer = new THREE.Vector2(
+      (2 * (e.clientX - rect.left) / rect.width) - 1,
+      -(2 * (e.clientY - rect.top) / rect.height) + 1,
+    );
+
+    this.raycaster.setFromCamera(pointer, this.camera);
+
+    const hexMeshes: THREE.Object3D[] = [];
+    this.globe.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.userData.cellId !== undefined) {
+        hexMeshes.push(child);
+      }
+    });
+
+    const hexIntersects = this.raycaster.intersectObjects(hexMeshes, false);
+    if (hexIntersects.length === 0) {
+      if (clientState.hoveredCellId !== null) {
+        clientState.hoveredCellId = null;
+        notifySelectionChanged();
+      }
+      return;
+    }
+
+    const cellId = this.getCellIdFromIntersection(hexIntersects[0]);
+    if (!cellId) {
+      if (clientState.hoveredCellId !== null) {
+        clientState.hoveredCellId = null;
+        notifySelectionChanged();
+      }
+      return;
+    }
+
+    const visibility = clientState.visibleCells.get(cellId);
+    const revealed = clientState.revealedCells.has(cellId);
+    if (!visibility && !revealed) {
+      if (clientState.hoveredCellId !== null) {
+        clientState.hoveredCellId = null;
+        notifySelectionChanged();
+      }
+      return;
+    }
+
+    if (clientState.hoveredCellId !== cellId) {
+      clientState.hoveredCellId = cellId;
+      notifySelectionChanged();
+    }
+  }
+
+  private handleClick(clientX: number, clientY: number): void {
     const rect = this.canvas.getBoundingClientRect();
     const pointer = new THREE.Vector2(
       (2 * (clientX - rect.left) / rect.width) - 1,
@@ -79,8 +130,8 @@ export class GlobeInput {
       return;
     }
 
-    const prevTileId = clientState.selectedTileId;
     const prevUnitId = clientState.selectedUnitId;
+    const prevCityId = clientState.selectedCityId;
     const pendingCommand = clientState.pendingCommand;
 
     if (pendingCommand === 'move' && prevUnitId) {
@@ -88,14 +139,6 @@ export class GlobeInput {
       if (unit && unit.status === 'IDLE' && unit.ownerId === clientState.myPlayerId && visibility) {
         if (PASSABLE_TERRAIN.includes(visibility.biome as TerrainType)) {
           sendMoveUnit(prevUnitId, cellId);
-          if (shiftHeld) {
-            clientState.commandQueue.push({
-              entityId: prevUnitId,
-              entityType: 'unit',
-              action: 'claim',
-              target: cellId,
-            });
-          }
           clientState.pendingCommand = null;
           clientState.selectedTileId = cellId;
           clientState.selectedCityId = null;
@@ -105,13 +148,35 @@ export class GlobeInput {
       }
     }
 
-    if (cellId === prevTileId) {
-      clientState.selectedTileId = null;
+    if (cellId === clientState.selectedTileId && !prevUnitId && !prevCityId) {
+      this.deselectAll();
+      return;
+    }
+
+    if (cellId === clientState.selectedTileId && (prevUnitId || prevCityId)) {
       clientState.selectedUnitId = null;
       clientState.selectedCityId = null;
       clientState.pendingCommand = null;
       notifySelectionChanged();
       return;
+    }
+
+    // Clicking a different tile while entity is selected: update tile context, keep entity only if still on that tile
+    if (prevUnitId) {
+      const unit = clientState.units.get(prevUnitId);
+      if (unit && unit.cellId === cellId) {
+        clientState.selectedTileId = cellId;
+        notifySelectionChanged();
+        return;
+      }
+    }
+    if (prevCityId) {
+      const city = clientState.cities.get(prevCityId);
+      if (city && city.cellId === cellId) {
+        clientState.selectedTileId = cellId;
+        notifySelectionChanged();
+        return;
+      }
     }
 
     clientState.selectedTileId = cellId;
@@ -151,15 +216,69 @@ export class GlobeInput {
     }
 
     if (e.key === '1' || e.key === 'm' || e.key === 'M') {
-      this.handleMoveKey(e.shiftKey);
+      if (clientState.selectedUnitId) {
+        this.handleMoveKey();
+      } else {
+        this.selectEntityOnTile(0);
+      }
     }
 
     if (e.key === '2' || e.key === 'c' || e.key === 'C') {
-      this.handleClaimKey();
+      if (clientState.selectedUnitId) {
+        this.handleClaimKey();
+      } else {
+        this.selectEntityOnTile(1);
+      }
+    }
+
+    if (e.key === '3') {
+      this.selectEntityOnTile(2);
+    }
+
+    if (e.key === '4') {
+      this.selectEntityOnTile(3);
     }
   }
 
-  private handleMoveKey(shiftHeld: boolean): void {
+  private selectEntityOnTile(index: number): void {
+    const tileId = clientState.selectedTileId;
+    if (!tileId) return;
+
+    if (index === 0) {
+      for (const [unitId, unit] of clientState.units) {
+        if (unit.cellId === tileId) {
+          clientState.selectedUnitId = unitId;
+          clientState.selectedCityId = null;
+          clientState.pendingCommand = null;
+          notifySelectionChanged();
+          return;
+        }
+      }
+    } else if (index === 1) {
+      for (const [cityId, city] of clientState.cities) {
+        if (city.cellId === tileId) {
+          clientState.selectedCityId = cityId;
+          clientState.selectedUnitId = null;
+          clientState.pendingCommand = null;
+          notifySelectionChanged();
+          return;
+        }
+      }
+    } else {
+      const unitsOnTile: string[] = [];
+      for (const [unitId, unit] of clientState.units) {
+        if (unit.cellId === tileId) unitsOnTile.push(unitId);
+      }
+      if (unitsOnTile.length > index - 1) {
+        clientState.selectedUnitId = unitsOnTile[index - 1];
+        clientState.selectedCityId = null;
+        clientState.pendingCommand = null;
+        notifySelectionChanged();
+      }
+    }
+  }
+
+  private handleMoveKey(): void {
     const unitId = clientState.selectedUnitId;
     if (!unitId) return;
     const unit = clientState.units.get(unitId);

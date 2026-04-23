@@ -51,13 +51,18 @@ export function assignPath(
   }
 }
 
+export interface StepResult {
+  arrived: boolean;
+  cellId: string;
+}
+
 export function stepUnit(
   state: GameState,
   unitId: string,
   _adjacencyMap: AdjacencyMap,
-): void {
+): StepResult | null {
   const unit = state.units.get(unitId);
-  if (!unit || unit.status !== UnitStatus.MOVING) return;
+  if (!unit || unit.status !== UnitStatus.MOVING) return null;
 
   unit.movementTicksRemaining--;
 
@@ -68,7 +73,7 @@ export function stepUnit(
       unit.status = UnitStatus.IDLE;
       unit.path = '[]';
       unit.movementTicksTotal = 0;
-      return;
+      return { arrived: true, cellId: unit.cellId };
     }
 
     const nextCellId = path.shift()!;
@@ -80,6 +85,7 @@ export function stepUnit(
       unit.path = '[]';
       unit.movementTicksRemaining = 0;
       unit.movementTicksTotal = 0;
+      return { arrived: true, cellId: nextCellId };
     } else {
       const nextCell = state.cells.get(path[0]);
       if (nextCell) {
@@ -90,8 +96,11 @@ export function stepUnit(
         unit.movementTicksRemaining = 10;
         unit.movementTicksTotal = 10;
       }
+      return { arrived: false, cellId: nextCellId };
     }
   }
+
+  return null;
 }
 
 export function startClaiming(

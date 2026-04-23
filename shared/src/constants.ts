@@ -41,8 +41,7 @@ export const QUEUE_CONFIG: { minPlayers: number; maxPlayers: number; subdivideLe
 };
 
 export const TICK_RATE_MS = 1000;
-
-export const TICK_INTERVAL_MS = 5000;
+export const MATCHMAKING_COUNTDOWN_SECONDS = 5;
 export const RECONNECTION_WINDOW = 60;
 export const STARTING_TERRITORY_SIZE = 1;
 export const VISION_RANGE = 1;

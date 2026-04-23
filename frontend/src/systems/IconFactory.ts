@@ -103,7 +103,7 @@ export function createCityIcon(color: string, tier: number): THREE.Mesh {
   return mesh;
 }
 
-export function positionOnSurface(mesh: THREE.Mesh, cellCenter: [number, number, number], offset: number = 1.04): void {
+export function positionOnSurface(mesh: THREE.Mesh, cellCenter: [number, number, number], offset: number = 1.01): void {
   const pos = new THREE.Vector3(cellCenter[0], cellCenter[1], cellCenter[2]).normalize().multiplyScalar(GLOBE_RADIUS * offset);
   mesh.position.copy(pos);
   orientToSurface(mesh, pos);

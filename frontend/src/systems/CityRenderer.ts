@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { clientState, onStateUpdate } from '../state/ClientState';
 import { createCityIcon, positionOnSurface, orientToSurface, GLOBE_RADIUS } from './IconFactory';
 
-const CITY_SURFACE_OFFSET = 1.045;
+const CITY_SURFACE_OFFSET = 1.01;
 
 interface CityVisual {
   icon: THREE.Mesh;

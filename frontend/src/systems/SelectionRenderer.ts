@@ -1,22 +1,28 @@
 import * as THREE from 'three';
 import { clientState, onStateUpdate } from '../state/ClientState';
-import type { CityData } from '@vantaris/shared';
-import { createCityIcon, createInfantryIcon, positionOnSurface, offsetOnSurface, orientToSurface, GLOBE_RADIUS } from './IconFactory';
+import { GLOBE_RADIUS } from './IconFactory';
+import { PASSABLE_TERRAIN } from '@vantaris/shared/constants';
+import { TerrainType } from '@vantaris/shared';
 
-const SELECTION_OFFSET = 1.01;
+const SELECTION_OFFSET = 0.015;
 const PATH_LINE_OFFSET = 1.02;
-const ENTITY_RING_OFFSET = 1.06;
+const HOVER_OFFSET = 0.012;
+
+const COLOR_HOVER = 0xffffff;
+const COLOR_MOVE_TARGET = 0xaa44ff;
+const COLOR_CLAIM_TARGET = 0xffcc00;
 
 export class SelectionRenderer {
   private globe: THREE.Group;
   private grid: any;
   private hexRing: THREE.LineSegments | null = null;
-  private cityIndicator: THREE.Mesh | null = null;
-  private unitIndicator: THREE.Mesh | null = null;
+  private hoverRing: THREE.LineSegments | null = null;
   private pathLines: THREE.Line | null = null;
   private currentTileId: string | null = null;
   private currentUnitId: string | null = null;
   private currentCityId: string | null = null;
+  private currentHoveredCellId: string | null = null;
+  private currentPendingCommand: string | null = null;
 
   constructor(globe: THREE.Group, grid: any) {
     this.globe = globe;
@@ -31,7 +37,7 @@ export class SelectionRenderer {
     return this.grid.cells[numericId].center;
   }
 
-  private cellCenterToWorld(cellId: string, offset: number = SELECTION_OFFSET): THREE.Vector3 | null {
+  private cellCenterToWorld(cellId: string, offset: number = 1.01): THREE.Vector3 | null {
     const center = this.getCellCenter(cellId);
     if (!center) return null;
     return new THREE.Vector3(center[0], center[1], center[2]).normalize().multiplyScalar(GLOBE_RADIUS * offset);
@@ -41,43 +47,79 @@ export class SelectionRenderer {
     const tileId = clientState.selectedTileId;
     const unitId = clientState.selectedUnitId;
     const cityId = clientState.selectedCityId;
+    const hoveredId = clientState.hoveredCellId;
+    const pendingCommand = clientState.pendingCommand;
 
     const tileChanged = tileId !== this.currentTileId;
     const unitChanged = unitId !== this.currentUnitId;
     const cityChanged = cityId !== this.currentCityId;
+    const hoverChanged = hoveredId !== this.currentHoveredCellId;
+    const commandChanged = pendingCommand !== this.currentPendingCommand;
 
     this.currentTileId = tileId;
     this.currentUnitId = unitId;
     this.currentCityId = cityId;
+    this.currentHoveredCellId = hoveredId;
+    this.currentPendingCommand = pendingCommand;
 
     if (tileChanged || unitChanged || cityChanged) {
       this.rebuild();
     } else {
       this.updatePathLines();
     }
+
+    if (hoverChanged || commandChanged) {
+      this.rebuildHover();
+    }
   }
 
   private rebuild(): void {
     this.removeHexRing();
-    this.removeUnitIndicator();
-    this.removeCityIndicator();
     this.removePathLines();
 
     if (!this.currentTileId) return;
 
     this.buildHexRing(this.currentTileId);
-    this.buildUnitIndicator();
-    this.buildCityIndicator();
     this.buildPathLines();
   }
 
+  private getHoverColor(): number {
+    if (clientState.pendingCommand === 'move') return COLOR_MOVE_TARGET;
+    if (clientState.pendingCommand === 'claim') return COLOR_CLAIM_TARGET;
+    return COLOR_HOVER;
+  }
+
+  private rebuildHover(): void {
+    this.removeHoverRing();
+
+    if (!this.currentHoveredCellId) return;
+    if (this.currentHoveredCellId === this.currentTileId) return;
+
+    const visible = clientState.visibleCells.has(this.currentHoveredCellId);
+    const revealed = clientState.revealedCells.has(this.currentHoveredCellId);
+    if (!visible && !revealed) return;
+
+    if (clientState.pendingCommand === 'move' && visible) {
+      const cellData = clientState.visibleCells.get(this.currentHoveredCellId);
+      if (cellData && !PASSABLE_TERRAIN.includes(cellData.biome as TerrainType)) {
+        this.buildCellRing(this.currentHoveredCellId, 0xff4444, HOVER_OFFSET);
+        return;
+      }
+    }
+
+    this.buildCellRing(this.currentHoveredCellId, this.getHoverColor(), HOVER_OFFSET);
+  }
+
   private buildHexRing(cellId: string): void {
+    const ring = this.buildCellRing(cellId, 0xffff44, SELECTION_OFFSET);
+    if (ring) this.hexRing = ring;
+  }
+
+  private buildCellRing(cellId: string, color: number, offset: number): THREE.LineSegments | null {
     const numericId = parseInt(cellId.replace('cell_', ''));
-    if (isNaN(numericId) || numericId < 0 || numericId >= this.grid.cells.length) return;
+    if (isNaN(numericId) || numericId < 0 || numericId >= this.grid.cells.length) return null;
 
     const cell = this.grid.cells[numericId];
-    const offset = 0.015;
-
     const verts = cell.vertexIds.map((fi: number) => {
       const dv = this.grid.vertices[fi];
       return new THREE.Vector3(dv[0], dv[1], dv[2]).normalize().multiplyScalar(GLOBE_RADIUS + offset);
@@ -92,65 +134,10 @@ export class SelectionRenderer {
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    const material = new THREE.LineBasicMaterial({
-      color: 0xffff44,
-      transparent: true,
-      opacity: 0.85,
-    });
-    this.hexRing = new THREE.LineSegments(geometry, material);
-    this.globe.add(this.hexRing);
-  }
-
-  private buildUnitIndicator(): void {
-    this.removeUnitIndicator();
-    if (!this.currentTileId || !this.currentUnitId) return;
-
-    const unit = clientState.units.get(this.currentUnitId);
-    if (!unit) return;
-
-    const player = clientState.players.get(unit.ownerId);
-    const color = player ? player.color : '#ffffff';
-
-    const center = this.getCellCenter(this.currentTileId);
-    if (!center) return;
-
-    this.unitIndicator = createInfantryIcon(color);
-    const basePos = new THREE.Vector3(center[0], center[1], center[2]).normalize().multiplyScalar(GLOBE_RADIUS * ENTITY_RING_OFFSET);
-    this.unitIndicator.position.copy(basePos);
-    orientToSurface(this.unitIndicator, basePos);
-    this.unitIndicator.scale.set(1.5, 1.5, 1.5);
-    this.globe.add(this.unitIndicator);
-  }
-
-  private updateUnitIndicator(): void {
-    this.buildUnitIndicator();
-  }
-
-  private buildCityIndicator(): void {
-    this.removeCityIndicator();
-    if (!this.currentTileId || !this.currentCityId) return;
-
-    const city = clientState.cities.get(this.currentCityId);
-    if (!city) return;
-
-    const player = clientState.players.get(city.ownerId);
-    const color = player ? player.color : '#ffffff';
-
-    const center = this.getCellCenter(this.currentTileId);
-    if (!center) return;
-
-    this.cityIndicator = createCityIcon(color, city.tier);
-    const basePos = new THREE.Vector3(center[0], center[1], center[2]).normalize().multiplyScalar(GLOBE_RADIUS * ENTITY_RING_OFFSET);
-    this.cityIndicator.position.copy(basePos);
-    orientToSurface(this.cityIndicator, basePos);
-    const offsetPos = offsetOnSurface(basePos, 0.15, -0.15);
-    this.cityIndicator.position.copy(offsetPos);
-    orientToSurface(this.cityIndicator, offsetPos);
-    this.globe.add(this.cityIndicator);
-  }
-
-  private updateCityIndicator(): void {
-    this.buildCityIndicator();
+    const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85 });
+    const lineSegments = new THREE.LineSegments(geometry, material);
+    this.globe.add(lineSegments);
+    return lineSegments;
   }
 
   private buildPathLines(): void {
@@ -188,13 +175,6 @@ export class SelectionRenderer {
     this.buildPathLines();
   }
 
-  private findCityOnCell(cellId: string): CityData | null {
-    for (const [, city] of clientState.cities) {
-      if (city.cellId === cellId) return city;
-    }
-    return null;
-  }
-
   private removeHexRing(): void {
     if (this.hexRing) {
       this.globe.remove(this.hexRing);
@@ -204,21 +184,12 @@ export class SelectionRenderer {
     }
   }
 
-  private removeUnitIndicator(): void {
-    if (this.unitIndicator) {
-      this.globe.remove(this.unitIndicator);
-      this.unitIndicator.geometry.dispose();
-      (this.unitIndicator.material as THREE.Material).dispose();
-      this.unitIndicator = null;
-    }
-  }
-
-  private removeCityIndicator(): void {
-    if (this.cityIndicator) {
-      this.globe.remove(this.cityIndicator);
-      this.cityIndicator.geometry.dispose();
-      (this.cityIndicator.material as THREE.Material).dispose();
-      this.cityIndicator = null;
+  private removeHoverRing(): void {
+    if (this.hoverRing) {
+      this.globe.remove(this.hoverRing);
+      this.hoverRing.geometry.dispose();
+      (this.hoverRing.material as THREE.Material).dispose();
+      this.hoverRing = null;
     }
   }
 
