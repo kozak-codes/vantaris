@@ -3,7 +3,7 @@ import { clientState, onStateUpdate } from '../state/ClientState';
 import { createInfantryIcon, positionOnSurface, offsetOnSurface, orientToSurface, GLOBE_RADIUS } from './IconFactory';
 
 const SURFACE_OFFSET = 1.008;
-const TICK_INTERVAL_MS = 1000;
+const TICK_MS = 1000;
 
 const UNIT_OFFSETS = [
   [0, 0],
@@ -25,9 +25,8 @@ interface UnitVisual {
 interface MovingUnitState {
   fromCellId: string;
   toCellId: string;
-  totalTicks: number;
-  remainingTicks: number;
-  stateTimestamp: number;
+  stepStartTime: number;
+  stepEndTime: number;
 }
 
 export class UnitRenderer {
@@ -69,6 +68,7 @@ export class UnitRenderer {
 
   private onStateChange(): void {
     const currentUnitIds = new Set<string>();
+    const now = performance.now();
 
     for (const [unitId, unit] of clientState.units) {
       if (!clientState.visibleCells.has(unit.cellId)) continue;
@@ -84,13 +84,24 @@ export class UnitRenderer {
 
         if (unit.status === 'MOVING' && unit.path && unit.path.length > 0) {
           const nextCellId = unit.path[0];
-          this.movingUnits.set(unitId, {
-            fromCellId: unit.cellId,
-            toCellId: nextCellId,
-            totalTicks: unit.movementTicksTotal || 10,
-            remainingTicks: unit.movementTicksRemaining,
-            stateTimestamp: performance.now(),
-          });
+          const prev = this.movingUnits.get(unitId);
+
+          const stepChanged = !prev || prev.fromCellId !== unit.cellId || prev.toCellId !== nextCellId;
+
+          if (stepChanged) {
+            const remaining = unit.movementTicksRemaining;
+            const total = unit.movementTicksTotal || 10;
+            const estimatedElapsed = (total - remaining) * TICK_MS;
+            const stepStartTime = now - estimatedElapsed;
+            const stepEndTime = now + remaining * TICK_MS;
+
+            this.movingUnits.set(unitId, {
+              fromCellId: unit.cellId,
+              toCellId: nextCellId,
+              stepStartTime,
+              stepEndTime,
+            });
+          }
         } else {
           this.movingUnits.delete(unitId);
         }
@@ -210,19 +221,14 @@ export class UnitRenderer {
       const uv = this.units.get(unitId);
       if (!uv) continue;
 
-      const total = mu.totalTicks || 10;
-      const remaining = mu.remainingTicks;
-      const stateAge = now - mu.stateTimestamp;
-
-      const progressAtStateArrival = 1 - (remaining / total);
-      const interpolatedProgress = Math.max(0, Math.min(1,
-        progressAtStateArrival + (stateAge / TICK_INTERVAL_MS / total)
+      const t = Math.max(0, Math.min(1,
+        (now - mu.stepStartTime) / (mu.stepEndTime - mu.stepStartTime)
       ));
 
       const fromPos = this.cellCenterToWorld(mu.fromCellId);
       const toPos = this.cellCenterToWorld(mu.toCellId);
 
-      const interpPos = new THREE.Vector3().lerpVectors(fromPos, toPos, interpolatedProgress);
+      const interpPos = new THREE.Vector3().lerpVectors(fromPos, toPos, t);
       interpPos.normalize().multiplyScalar(GLOBE_RADIUS * SURFACE_OFFSET);
 
       const unit = clientState.units.get(unitId);
