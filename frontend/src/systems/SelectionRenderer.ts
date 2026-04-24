@@ -102,12 +102,12 @@ export class SelectionRenderer {
     if (clientState.pendingCommand === 'move' && visible) {
       const cellData = clientState.visibleCells.get(this.currentHoveredCellId);
       if (cellData && !PASSABLE_TERRAIN.includes(cellData.biome as TerrainType)) {
-        this.buildCellRing(this.currentHoveredCellId, 0xff4444, HOVER_OFFSET);
+        this.hoverRing = this.buildCellRing(this.currentHoveredCellId, 0xff4444, HOVER_OFFSET);
         return;
       }
     }
 
-    this.buildCellRing(this.currentHoveredCellId, this.getHoverColor(), HOVER_OFFSET);
+    this.hoverRing = this.buildCellRing(this.currentHoveredCellId, this.getHoverColor(), HOVER_OFFSET);
   }
 
   private buildHexRing(cellId: string): void {
