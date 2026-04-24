@@ -11,9 +11,12 @@
     "dev": "concurrently -n frontend,backend -c blue,red \"npm run dev:frontend\" \"npm run dev:backend\"",
     "dev:frontend": "npm run dev --workspace=frontend",
     "dev:backend": "npm run dev --workspace=backend",
-    "build": "npm run build --workspaces"
+    "build": "npm run build --workspaces",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
-    "concurrently": "^9.1.0"
+    "concurrently": "^9.1.0",
+    "vitest": "^4.1.5"
   }
 }

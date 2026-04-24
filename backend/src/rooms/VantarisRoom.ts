@@ -59,13 +59,8 @@ export class VantarisRoom extends Room<GameState> {
 
     const rawAdjacency = globe.adjacency;
     const adjacencyWithStringKeys: AdjacencyMap = {};
-    for (const [key, neighbors] of rawAdjacency) {
-      const cellId = `cell_${String(key)}`;
-      const neighborIds: string[] = [];
-      for (const n of neighbors) {
-        neighborIds.push(`cell_${String(n)}`);
-      }
-      adjacencyWithStringKeys[cellId] = neighborIds;
+    for (const [cellId, neighbors] of rawAdjacency) {
+      adjacencyWithStringKeys[cellId] = [...neighbors];
     }
 
     this.adjacencyMap = adjacencyWithStringKeys;
