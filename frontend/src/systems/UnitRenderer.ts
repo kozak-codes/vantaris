@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { clientState, onStateUpdate } from '../state/ClientState';
-import { createInfantryIcon, positionOnSurface, offsetOnSurface, orientToSurface, GLOBE_RADIUS } from './IconFactory';
+import { createInfantryIcon, createEngineerIcon, positionOnSurface, offsetOnSurface, orientToSurface, GLOBE_RADIUS } from './IconFactory';
 
 const SURFACE_OFFSET = 1.008;
 const TICK_MS = 100;
@@ -107,7 +107,9 @@ export class UnitRenderer {
           this.movingUnits.delete(unitId);
         }
       } else {
-        const icon = createInfantryIcon(color);
+        const icon = unit.type === 'ENGINEER'
+          ? createEngineerIcon(color)
+          : createInfantryIcon(color);
         positionOnSurface(icon, this.getCellCenter(unit.cellId) || [0, GLOBE_RADIUS, 0], SURFACE_OFFSET);
         icon.userData = { unitId, type: 'unit' };
         this.globe.add(icon);

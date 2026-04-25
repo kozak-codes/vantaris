@@ -1,11 +1,19 @@
 import { Client, Room } from 'colyseus.js';
 import { storeReconnectionToken, getReconnectionToken, getStoredRoomId } from './RoomPersistence';
-import { applyStateSlice, clearClientState } from '../state/ClientState';
+import { applyStateSlice, clearClientState, clientState } from '../state/ClientState';
+import type { ChatMessage } from '@vantaris/shared';
 
 const SERVER_URL = 'ws://localhost:2567';
 
 let client: Client | null = null;
 let currentRoom: Room | null = null;
+
+export type ChatHandler = (msg: ChatMessage) => void;
+const chatHandlers: ChatHandler[] = [];
+
+export function onChatMessage(handler: ChatHandler): void {
+  chatHandlers.push(handler);
+}
 
 function getClient(): Client {
   if (!client) {
@@ -50,6 +58,20 @@ export async function joinGame(roomId: string, displayName?: string): Promise<Ro
     console.warn('[vantaris] Server error:', data);
   });
 
+  room.onMessage('playerEliminated', (data: { playerId: string; displayName: string; color: string; eliminatedTick: number }) => {
+    clientState.eliminationEvent = data;
+  });
+
+  room.onMessage('gameWon', (data: { playerId: string; displayName: string; color: string }) => {
+    clientState.gameWonEvent = data;
+  });
+
+  room.onMessage('chatMessage', (data: ChatMessage) => {
+    for (const handler of chatHandlers) {
+      handler(data);
+    }
+  });
+
   return room;
 }
 
@@ -68,6 +90,20 @@ export async function reconnectToGame(roomId: string): Promise<Room> {
 
   room.onMessage('error', (data: any) => {
     console.warn('[vantaris] Server error:', data);
+  });
+
+  room.onMessage('playerEliminated', (data: { playerId: string; displayName: string; color: string; eliminatedTick: number }) => {
+    clientState.eliminationEvent = data;
+  });
+
+  room.onMessage('gameWon', (data: { playerId: string; displayName: string; color: string }) => {
+    clientState.gameWonEvent = data;
+  });
+
+  room.onMessage('chatMessage', (data: ChatMessage) => {
+    for (const handler of chatHandlers) {
+      handler(data);
+    }
   });
 
   return room;
@@ -91,9 +127,45 @@ export function sendClaimTerritory(unitId: string): void {
   }
 }
 
-export function sendToggleCityProduction(cityId: string, producing: boolean): void {
+export function sendBuildStructure(unitId: string, buildingType: string, cellId: string): void {
   if (currentRoom) {
-    currentRoom.send('toggleCityProduction', { cityId, producing });
+    currentRoom.send('buildStructure', { unitId, buildingType, cellId });
+  }
+}
+
+export function sendRestoreRuin(unitId: string, cellId: string): void {
+  if (currentRoom) {
+    currentRoom.send('restoreRuin', { unitId, cellId });
+  }
+}
+
+export function sendSetFactoryRecipe(buildingId: string, recipeId: string): void {
+  if (currentRoom) {
+    currentRoom.send('setFactoryRecipe', { buildingId, recipeId });
+  }
+}
+
+export function sendCityQueueAddPriority(cityId: string, unitType: string): void {
+  if (currentRoom) {
+    currentRoom.send('cityQueueAddPriority', { cityId, unitType });
+  }
+}
+
+export function sendCityQueueAddRepeat(cityId: string, unitType: string): void {
+  if (currentRoom) {
+    currentRoom.send('cityQueueAddRepeat', { cityId, unitType });
+  }
+}
+
+export function sendCityQueueRemoveRepeat(cityId: string, index: number): void {
+  if (currentRoom) {
+    currentRoom.send('cityQueueRemoveRepeat', { cityId, index });
+  }
+}
+
+export function sendCityQueueClearPriority(cityId: string): void {
+  if (currentRoom) {
+    currentRoom.send('cityQueueClearPriority', { cityId });
   }
 }
 
@@ -110,6 +182,18 @@ export function getCurrentRoom(): Room | null {
 export function sendPing(): void {
   if (currentRoom) {
     currentRoom.send('ping');
+  }
+}
+
+export function sendChatMessage(text: string): void {
+  if (currentRoom) {
+    currentRoom.send('chatMessage', { text });
+  }
+}
+
+export function sendDirectMessage(targetId: string, text: string): void {
+  if (currentRoom) {
+    currentRoom.send('chatDirect', { targetId, text });
   }
 }
 

@@ -70,6 +70,37 @@ export function createInfantryIcon(color: string): THREE.Mesh {
   return mesh;
 }
 
+export function createEngineerIcon(color: string): THREE.Mesh {
+  const key = `engineer_${color}`;
+  let texture = textureCache.get(key);
+
+  if (!texture) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+      <circle cx="24" cy="16" r="7" fill="${color}" stroke="#fff" stroke-width="1.2"/>
+      <rect x="16" y="25" width="16" height="12" rx="2" fill="${color}" stroke="#fff" stroke-width="1.2"/>
+      <rect x="14" y="37" width="20" height="4" rx="1" fill="${color}" stroke="#fff" stroke-width="0.8"/>
+      <line x1="24" y1="25" x2="24" y2="20" stroke="#ffcc44" stroke-width="2" stroke-linecap="round"/>
+      <line x1="22" y1="22" x2="26" y2="18" stroke="#ffcc44" stroke-width="2" stroke-linecap="round"/>
+    </svg>`;
+    texture = createTextureFromSVG(svg);
+    textureCache.set(key, texture);
+  }
+
+  const geometry = new THREE.PlaneGeometry(0.35, 0.35);
+  const material = new THREE.MeshBasicMaterial({
+    map: texture,
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.renderOrder = 999;
+  mesh.raycast = () => {};
+  mesh.userData = { type: 'unit' };
+  return mesh;
+}
+
 export function createCityIcon(color: string, tier: number): THREE.Mesh {
   const key = `city_${color}_${tier}`;
   let texture = textureCache.get(key);

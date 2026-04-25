@@ -6,6 +6,8 @@ export class PlayerState extends Schema {
   @type('string') displayName: string = '';
   @type('string') color: string = '';
   @type('number') territoryCellCount: number = 0;
+  @type('boolean') alive: boolean = true;
+  @type('number') eliminatedTick: number = -1;
   @type('number') cameraQuatX: number = 0;
   @type('number') cameraQuatY: number = 0;
   @type('number') cameraQuatZ: number = 0;
@@ -14,4 +16,5 @@ export class PlayerState extends Schema {
   @type(FogState) fog: FogState = new FogState();
   @type('number') energyCredits: number = 0;
   @type('string') tradingTable: string = '{}';
+  @type('number') totalPopulation: number = 0;
 }

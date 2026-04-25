@@ -10,17 +10,21 @@ export function spawnUnit(
   state: GameState,
   ownerId: string,
   cellId: string,
+  unitType: string = 'INFANTRY',
+  engineerLevel: number = 1,
 ): UnitState {
   const unit = new UnitState();
   unit.unitId = `unit_${unitIdCounter++}`;
   unit.ownerId = ownerId;
-  unit.type = UnitType.INFANTRY;
+  unit.type = unitType;
   unit.status = UnitStatus.IDLE;
   unit.cellId = cellId;
   unit.movementTicksRemaining = 0;
   unit.movementTicksTotal = 0;
   unit.path = '[]';
   unit.claimTicksRemaining = 0;
+  unit.buildTicksRemaining = 0;
+  unit.engineerLevel = unitType === 'ENGINEER' ? engineerLevel : 0;
 
   state.units.set(unit.unitId, unit);
   return unit;

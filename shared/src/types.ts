@@ -26,16 +26,23 @@ export enum QueueType {
 
 export enum UnitType {
   INFANTRY = 'INFANTRY',
+  ENGINEER = 'ENGINEER',
 }
 
 export enum UnitStatus {
   IDLE = 'IDLE',
   MOVING = 'MOVING',
   CLAIMING = 'CLAIMING',
+  BUILDING = 'BUILDING',
 }
 
 export enum BuildingType {
   CITY = 'CITY',
+  FARM = 'FARM',
+  MINE = 'MINE',
+  OIL_WELL = 'OIL_WELL',
+  LUMBER_CAMP = 'LUMBER_CAMP',
+  FACTORY = 'FACTORY',
 }
 
 export enum CityTier {
@@ -56,9 +63,104 @@ export enum TerrainType {
   TUNDRA = 'TUNDRA',
 }
 
+export enum RuinType {
+  RUINED_CITY = 'RUINED_CITY',
+  RUINED_FACTORY = 'RUINED_FACTORY',
+  RUINED_PORT = 'RUINED_PORT',
+  RUINED_BARRACKS = 'RUINED_BARRACKS',
+  COLLAPSED_MINE = 'COLLAPSED_MINE',
+  OVERGROWN_FARM = 'OVERGROWN_FARM',
+}
+
+export enum ResourceType {
+  GRAIN = 'GRAIN',
+  ORE = 'ORE',
+  OIL = 'OIL',
+  TIMBER = 'TIMBER',
+  BREAD = 'BREAD',
+  STEEL = 'STEEL',
+  POWER = 'POWER',
+  LUMBER = 'LUMBER',
+  NONE = 'NONE',
+}
+
+export enum ResourceTier {
+  RAW = 0,
+  PROCESSED = 1,
+}
+
+export type RawResourceType = ResourceType.GRAIN | ResourceType.ORE | ResourceType.OIL | ResourceType.TIMBER;
+export type ProcessedResourceType = ResourceType.BREAD | ResourceType.STEEL | ResourceType.POWER | ResourceType.LUMBER;
+
+export interface ResourceYield {
+  primary: ResourceType;
+  amount: number;
+}
+
+export interface StockpileEntry {
+  resource: string;
+  amount: number;
+}
+
+export interface BuildingData {
+  buildingId: string;
+  ownerId: string;
+  cellId: string;
+  type: string;
+  productionTicksRemaining: number;
+  recipe: string;
+  factoryTier: number;
+  factoryXp: number;
+  stockpile: StockpileEntry[];
+}
+
+export interface CityStockpileData {
+  resources: StockpileEntry[];
+}
+
+export interface PlayerResourceData {
+  food: number;
+  energy: number;
+  manpower: number;
+  foodPerTick: number;
+  energyPerTick: number;
+  manpowerPerTick: number;
+  totalPopulation: number;
+  factoryCount: number;
+}
+
+export interface FactoryRecipe {
+  id: string;
+  name: string;
+  input: { resource: ResourceType; amount: number }[];
+  output: { resource: ResourceType; amount: number }[];
+  ticksPerCycle: number;
+  minFactoryTier: number;
+}
+
+export interface PlateData {
+  plateId: string;
+  type: 'oceanic' | 'continental';
+  driftX: number;
+  driftY: number;
+  driftZ: number;
+  seedCellId: string;
+}
+
+export enum BoundaryType {
+  CONVERGENT_CC = 'CONVERGENT_CC',
+  CONVERGENT_CO = 'CONVERGENT_CO',
+  CONVERGENT_OO = 'CONVERGENT_OO',
+  DIVERGENT_C = 'DIVERGENT_C',
+  DIVERGENT_O = 'DIVERGENT_O',
+  TRANSFORM = 'TRANSFORM',
+  NONE = 'NONE',
+}
+
 export interface CellSnapshot {
   ownerId: string | null;
   biome: BiomeType;
+  ruin: RuinType | null;
 }
 
 export interface SpawnPoint {
@@ -119,23 +221,42 @@ export interface CameraConfig {
 export interface PlayerStateSlice {
   myPlayerId: string;
   currentTick: number;
+  sunAngle: number;
+  dayNightCycleTicks: number;
   visibleCells: VisibleCellData[];
   revealedCells: RevealedCellData[];
+  ruinMarkers: RuinMarkerData[];
   units: UnitData[];
   cities: CityData[];
+  buildings: BuildingData[];
   players: PlayerSummary[];
+  resources: PlayerResourceData;
 }
 
 export interface VisibleCellData {
   cellId: string;
   biome: string;
   ownerId: string;
+  elevation: number;
+  moisture: number;
+  temperature: number;
+  resourceYield: ResourceYield | null;
+  ruin: RuinType | null;
+  ruinRevealed: boolean;
+  buildings: BuildingData[];
+  buildingCapacity: number;
 }
 
 export interface RevealedCellData {
   cellId: string;
   lastKnownBiome: string;
   lastKnownOwnerId: string;
+  lastKnownRuin: RuinType | null;
+}
+
+export interface RuinMarkerData {
+  cellId: string;
+  ruin: RuinType;
 }
 
 export interface UnitData {
@@ -148,6 +269,15 @@ export interface UnitData {
   movementTicksRemaining: number;
   movementTicksTotal: number;
   claimTicksRemaining: number;
+  buildTicksRemaining: number;
+  engineerLevel: number;
+}
+
+export interface ProductionItem {
+  type: string;
+  ticksCost: number;
+  resourceCost: Record<string, number>;
+  manpowerCost: number;
 }
 
 export interface CityData {
@@ -156,15 +286,39 @@ export interface CityData {
   cellId: string;
   tier: number;
   xp: number;
+  xpToNext: number;
   population: number;
-  producingUnit: boolean;
+  repeatQueue: string[];
+  priorityQueue: ProductionItem[];
+  currentProduction: ProductionItem | null;
   productionTicksRemaining: number;
+  productionTicksTotal: number;
+  foodPerTick: number;
+  energyPerTick: number;
+  manpowerPerTick: number;
+  stockpile: StockpileEntry[];
 }
 
 export interface PlayerSummary {
   playerId: string;
   displayName: string;
   color: string;
+  alive: boolean;
+  territoryCount: number;
+  unitCount: number;
+  cityCount: number;
+  population: number;
+  factoryCount: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderColor: string;
+  text: string;
+  timestamp: number;
+  targetId: string | null;
 }
 
 export interface MoveOrder {

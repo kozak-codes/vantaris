@@ -5,6 +5,10 @@ import { FogRenderer } from './systems/FogRenderer';
 import { UnitRenderer } from './systems/UnitRenderer';
 import { CityRenderer } from './systems/CityRenderer';
 import { SelectionRenderer } from './systems/SelectionRenderer';
+import { RuinRenderer } from './systems/RuinRenderer';
+import { BuildingRenderer } from './systems/BuildingRenderer';
+import { DayNightRenderer } from './systems/DayNightRenderer';
+import { ChatPanel } from './ui/ChatPanel';
 import { CameraControls } from './camera/CameraControls';
 import { HUD } from './ui/HUD';
 import { LobbyUI } from './ui/LobbyUI';
@@ -36,11 +40,7 @@ const camera = new THREE.PerspectiveCamera(
 const pivot = new THREE.Group();
 scene.add(pivot);
 
-const light = new THREE.DirectionalLight(0xffffff, 1.5);
-light.position.set(5, 3, 5);
-scene.add(light);
-
-const ambientLight = new THREE.AmbientLight(0x334466, 0.8);
+const ambientLight = new THREE.AmbientLight(0x556688, 1.2);
 scene.add(ambientLight);
 
 const grid = generateHexGrid();
@@ -50,11 +50,18 @@ const fogRenderer = new FogRenderer(pivot, grid, globeRenderer.getCellMeshes(), 
 const unitRenderer = new UnitRenderer(globeRenderer.getGlobeGroup(), grid);
 const cityRenderer = new CityRenderer(globeRenderer.getGlobeGroup(), grid);
 const selectionRenderer = new SelectionRenderer(globeRenderer.getGlobeGroup(), grid);
+const ruinRenderer = new RuinRenderer(globeRenderer.getGlobeGroup(), grid);
+const buildingRenderer = new BuildingRenderer(globeRenderer.getGlobeGroup(), grid);
+const dayNightRenderer = new DayNightRenderer(ambientLight, globeRenderer.getGlobeGroup(), fogRenderer.getCellMeshMap());
 
 const leaveBtn = document.getElementById('hud-leave')!;
 leaveBtn.addEventListener('click', handleLeaveGame);
 
 const hud = new HUD();
+const chatPanel = new ChatPanel();
+const chatToggle = document.getElementById('hud-chat-toggle')!;
+chatToggle.addEventListener('click', () => chatPanel.toggle());
+hud.setOnDirectMessage((playerId: string) => chatPanel.openDirectMessage(playerId));
 const cameraControls = new CameraControls(camera, canvas, pivot);
 const globeInput = new GlobeInput(canvas, camera, globeRenderer.getGlobeGroup());
 
@@ -109,6 +116,8 @@ async function handleGameJoin(newRoomId: string): Promise<void> {
 function handleGameRoom(room: any): void {
   useServerState = true;
   leaveBtn.classList.remove('hidden');
+  document.getElementById('hud-player-list')?.classList.remove('hidden');
+  document.getElementById('hud-resources')?.classList.remove('hidden');
   pivot.quaternion.identity();
 
   onFirstSpawn((_playerId: string, cityCellId: string) => {
@@ -121,6 +130,8 @@ function handleGameRoom(room: any): void {
   room.onLeave(() => {
     useServerState = false;
     leaveBtn.classList.add('hidden');
+    document.getElementById('hud-player-list')?.classList.add('hidden');
+    document.getElementById('hud-resources')?.classList.add('hidden');
   });
 }
 
@@ -130,6 +141,8 @@ function handleLeaveGame(): void {
   localStorage.removeItem('vantaris_currentRoom');
   useServerState = false;
   leaveBtn.classList.add('hidden');
+  document.getElementById('hud-player-list')?.classList.add('hidden');
+  document.getElementById('hud-resources')?.classList.add('hidden');
   pivot.quaternion.identity();
   showLobby();
 }
@@ -144,9 +157,12 @@ function animate(): void {
   requestAnimationFrame(animate);
 
   cameraControls.update();
-  fogRenderer.updateFogColors();
-  unitRenderer.update();
-  selectionRenderer.update();
+    fogRenderer.updateFogColors();
+    unitRenderer.update();
+    selectionRenderer.update();
+    ruinRenderer.update();
+    buildingRenderer.update();
+    dayNightRenderer.update();
 
   globeRenderer.updateGlow(camera);
 

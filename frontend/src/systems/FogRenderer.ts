@@ -12,6 +12,11 @@ const VISIBLE_COLOR_FACTOR = 1.0;
 const REVEALED_COLOR_FACTOR = 0.25;
 const UNREVEALED_COLOR = new THREE.Color('#111111');
 
+const TERRITORY_TINT_STRENGTH = 0.10;
+const BORDER_PULSE_SPEED = 0.002;
+const BORDER_PULSE_MIN = 0.5;
+const BORDER_PULSE_MAX = 1.0;
+
 export class FogRenderer {
   private cellMeshes: Map<string, THREE.Mesh>;
   private targetColors: Map<string, THREE.Color> = new Map();
@@ -20,6 +25,7 @@ export class FogRenderer {
   private globe: THREE.Group;
   private grid: any;
   private lerpSpeed = 0.08;
+  private animTime: number = 0;
 
   constructor(parent: THREE.Object3D, grid: any, cellMeshes: Map<number, THREE.Mesh>, globe: THREE.Group) {
     this.grid = grid;
@@ -61,6 +67,13 @@ export class FogRenderer {
         if (data) {
           const biomeColor = biomeColorMap.get(data.biome);
           targetColor = biomeColor ? biomeColor.clone() : new THREE.Color('#333333');
+          if (data.ownerId && data.ownerId !== '') {
+            const ownerPlayer = clientState.players.get(data.ownerId);
+            if (ownerPlayer) {
+              const ownerColor = new THREE.Color(ownerPlayer.color);
+              targetColor.lerp(ownerColor, TERRITORY_TINT_STRENGTH);
+            }
+          }
         } else {
           targetColor = biomeColorMap.get(cell.biome)!.clone();
         }
@@ -82,6 +95,8 @@ export class FogRenderer {
   }
 
   updateFogColors(): void {
+    this.animTime += 1;
+
     for (const cell of this.grid.cells) {
       const key = `cell_${cell.id}`;
       const mesh = this.cellMeshes.get(key);
@@ -92,6 +107,11 @@ export class FogRenderer {
 
       const mat = mesh.material as THREE.MeshStandardMaterial;
       mat.color.lerp(target, this.lerpSpeed);
+    }
+
+    if (this.ownerLines) {
+      const pulse = BORDER_PULSE_MIN + (BORDER_PULSE_MAX - BORDER_PULSE_MIN) * (0.5 + 0.5 * Math.sin(this.animTime * BORDER_PULSE_SPEED));
+      (this.ownerLines.material as THREE.LineBasicMaterial).opacity = pulse;
     }
   }
 
@@ -227,5 +247,9 @@ export class FogRenderer {
     if (clientState.visibleCells.has(cellId)) return 'VISIBLE';
     if (clientState.revealedCells.has(cellId)) return 'REVEALED';
     return null;
+  }
+
+  getCellMeshMap(): Map<string, THREE.Mesh> {
+    return this.cellMeshes;
   }
 }

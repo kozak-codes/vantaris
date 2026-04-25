@@ -1,22 +1,28 @@
 import { Room, Client } from '@colyseus/core';
 import { GameState } from '../state/GameState';
-import { GamePhase, BiomeType } from '@vantaris/shared';
-import { QUEUE_CONFIG, RECONNECTION_WINDOW, TROOP_VISION_RANGE, MAX_UNITS_PER_HEX } from '@vantaris/shared/constants';
+import { GamePhase, BiomeType, ResourceType, BuildingType, UnitType, UnitStatus } from '@vantaris/shared';
+import type { ProductionItem } from '@vantaris/shared';
+import { QUEUE_CONFIG, RECONNECTION_WINDOW, TROOP_VISION_RANGE, MAX_UNITS_PER_HEX, DAY_NIGHT_CYCLE_TICKS, BUILDING_TICKS, BUILDING_COSTS, CITY_POPULATION_INITIAL, EXTRACTOR_TYPES, FACTORY_RECIPES } from '@vantaris/shared/constants';
 import { AdjacencyMap, buildAdjacencyMap } from '@vantaris/shared';
 import { generateGlobe } from '../globe';
 import { computeVisibilityForPlayer, buildPlayerSlice } from '../mutations/fog';
 import { completeClaim } from '../mutations/units';
-import { createCity, tickCityProduction } from '../mutations/cities';
+import { createCity, tickCityProduction, tickPassiveExpansion, addToRepeatQueue, removeFromRepeatQueue, addPriorityItem, clearPriorityQueue, canCityAffordProduction, consumeProductionCosts, getRepeatQueue } from '../mutations/cities';
 import { CellState } from '../state/CellState';
 import { PlayerState } from '../state/PlayerState';
 import { UnitState } from '../state/UnitState';
+import { BuildingState } from '../state/BuildingState';
 import { TickSystem } from '../systems/TickSystem';
 import { findPath, buildUnitsByCellId } from '../systems/Pathfinding';
 import { spawnUnit, assignPath, stepUnit, startClaiming } from '../mutations/units';
 import type { StepResult } from '../mutations/units';
+import { createBuilding, tickBuildingProduction, canPlaceBuilding, cancelBuilding, getAvailableBuildTypes, countBuildingsOnCell, payBuildingCost } from '../mutations/buildings';
+import { tickExtractorOutput, tickFactoryProcessing, tickFactoryOutputToCities, tickCityResourceDrain, tickPopulation, tickCityXP } from '../mutations/resources';
+import { claimCell, loseCell } from '../mutations/territory';
 
 interface CreateOptions {
   spawnPoints: { cellId: string }[];
+  dayNightCycleTicks?: number;
 }
 
 const PLAYER_COLORS = [
@@ -29,6 +35,15 @@ const PLAYER_COLORS = [
   '#ff8844',
   '#8844ff',
 ];
+
+const RUIN_TYPE_TO_BUILDING: Record<string, string> = {
+  'RUINED_FACTORY': 'FACTORY',
+  'COLLAPSED_MINE': 'MINE',
+  'OVERGROWN_FARM': 'FARM',
+  'RUINED_BARRACKS': 'FARM',
+  'RUINED_PORT': 'FACTORY',
+  'RUINED_CITY': 'CITY',
+};
 
 export class VantarisRoom extends Room<GameState> {
   maxClients = 8;
@@ -44,6 +59,8 @@ export class VantarisRoom extends Room<GameState> {
 
     this.setState(new GameState());
 
+    this.state.dayNightCycleTicks = options.dayNightCycleTicks || DAY_NIGHT_CYCLE_TICKS;
+
     const cellIds: string[] = [];
     for (const cell of globe.cells) {
       const cellState = new CellState();
@@ -52,6 +69,15 @@ export class VantarisRoom extends Room<GameState> {
       cellState.ownerId = '';
       cellState.hasCity = false;
       cellState.cityId = '';
+      cellState.elevation = cell.elevation;
+      cellState.moisture = cell.moisture;
+      cellState.temperature = cell.temperature;
+      cellState.plateId = cell.plateId;
+      cellState.resourceType = cell.resourceType as ResourceType;
+      cellState.resourceAmount = cell.resourceAmount;
+      cellState.ruin = cell.ruin;
+      cellState.ruinRevealed = cell.ruinRevealed;
+      cellState.isPentagon = cell.isPentagon;
       this.state.cells.set(cell.id, cellState);
       cellIds.push(cell.id);
       this.cellPositions[cell.id] = cell.center;
@@ -84,16 +110,61 @@ export class VantarisRoom extends Room<GameState> {
       this.handleSetUnitIdle(client, data);
     });
 
-    this.onMessage('toggleCityProduction', (client, data: { cityId: string; producing: boolean }) => {
-      this.handleToggleCityProduction(client, data);
+    this.onMessage('cityQueueAddPriority', (client, data: { cityId: string; unitType: string }) => {
+      this.handleCityQueueAddPriority(client, data);
+    });
+
+    this.onMessage('cityQueueAddRepeat', (client, data: { cityId: string; unitType: string }) => {
+      this.handleCityQueueAddRepeat(client, data);
+    });
+
+    this.onMessage('cityQueueRemoveRepeat', (client, data: { cityId: string; index: number }) => {
+      this.handleCityQueueRemoveRepeat(client, data);
+    });
+
+    this.onMessage('cityQueueClearPriority', (client, data: { cityId: string }) => {
+      this.handleCityQueueClearPriority(client, data);
     });
 
     this.onMessage('claimTerritory', (client, data: { unitId: string }) => {
       this.handleClaimTerritory(client, data);
     });
 
+    this.onMessage('buildStructure', (client, data: { unitId: string; buildingType: string; cellId: string }) => {
+      this.handleBuildStructure(client, data);
+    });
+
+    this.onMessage('restoreRuin', (client, data: { unitId: string; cellId: string }) => {
+      this.handleRestoreRuin(client, data);
+    });
+
+    this.onMessage('setFactoryRecipe', (client, data: { buildingId: string; recipeId: string }) => {
+      this.handleSetFactoryRecipe(client, data);
+    });
+
+    this.onMessage('revealRuin', (client, data: { cellId: string }) => {
+      const cell = this.state.cells.get(data.cellId);
+      if (cell && cell.ruin && !cell.ruinRevealed) {
+        cell.ruinRevealed = true;
+      }
+    });
+
     this.onMessage('ping', (client) => {
       client.send('pong', { serverTick: this.state.tick });
+    });
+
+    this.onMessage('chatMessage', (client, data: { text: string }) => {
+      this.handleChatMessage(client, data.text);
+    });
+
+    this.onMessage('chatDirect', (client, data: { targetId: string; text: string }) => {
+      this.handleDirectMessage(client, data.targetId, data.text);
+    });
+
+    this.onMessage('availableBuildTypes', (client, data: { cellId: string }) => {
+      const playerId = client.sessionId;
+      const types = getAvailableBuildTypes(this.state, data.cellId, playerId);
+      client.send('availableBuildTypesResult', { cellId: data.cellId, types });
     });
 
     this.onMessage('updateCamera', (client, data: { qx: number; qy: number; qz: number; qw: number; zoom: number }) => {
@@ -125,7 +196,9 @@ export class VantarisRoom extends Room<GameState> {
     this.state.players.set(playerId, player);
 
     const city = createCity(this.state, playerId, spawnCellId);
-    city.producingUnit = true;
+    city.population = CITY_POPULATION_INITIAL;
+
+    spawnUnit(this.state, playerId, spawnCellId, 'INFANTRY');
 
     completeClaim(this.state, spawnCellId, playerId);
 
@@ -155,20 +228,63 @@ export class VantarisRoom extends Room<GameState> {
   }
 
   private onTick(tick: number): void {
-    this.processCityProduction(tick);
+    this.processBuildTimers();
+    this.processCityProduction();
     this.processUnitMovement();
     this.processClaimTimers();
+    this.processPassiveExpansion();
+    this.processExtractorOutput();
+    this.processFactoryProcessing();
+    this.processFactoryOutput();
+    this.processCityResourceDrain();
+    this.processPopulation();
+    this.processCityXP();
+    this.checkElimination();
     this.broadcastPlayerSlices();
     this.state.tick = tick;
   }
 
-  private processCityProduction(tick: number): void {
+  private processBuildTimers(): void {
+    const consumedEngineers: string[] = [];
+
+    for (const [, unit] of this.state.units) {
+      if (unit.status === 'BUILDING') {
+        const cell = this.state.cells.get(unit.cellId);
+        const buildingOnCell = cell ? this.findConsumableBuildingOnCell(unit.cellId, unit.ownerId) : null;
+
+        unit.buildTicksRemaining--;
+        if (unit.buildTicksRemaining <= 0) {
+          if (buildingOnCell && BUILDING_COSTS[buildingOnCell.type]?.consumesEngineer) {
+            consumedEngineers.push(unit.unitId);
+          } else {
+            unit.status = 'IDLE';
+            unit.buildTicksRemaining = 0;
+          }
+        }
+      }
+    }
+
+    for (const unitId of consumedEngineers) {
+      this.state.units.delete(unitId);
+    }
+
+    for (const [, building] of this.state.buildings) {
+      if (building.productionTicksRemaining > 0) {
+        building.productionTicksRemaining--;
+      }
+    }
+  }
+
+  private processCityProduction(): void {
     for (const [, city] of this.state.cities) {
-      const shouldSpawn = tickCityProduction(city);
-      if (shouldSpawn) {
+      if (!canCityAffordProduction(city)) continue;
+
+      const completed = tickCityProduction(city);
+      if (completed) {
         const unitsOnCell = this.countUnitsOnCell(city.cellId);
         if (unitsOnCell < MAX_UNITS_PER_HEX) {
-          spawnUnit(this.state, city.ownerId, city.cellId);
+          consumeProductionCosts(city, completed);
+          spawnUnit(this.state, city.ownerId, city.cellId, completed.type);
         }
       }
     }
@@ -180,8 +296,11 @@ export class VantarisRoom extends Room<GameState> {
         const result = stepUnit(this.state, unit.unitId, this.adjacencyMap);
         if (result && result.arrived) {
           const cell = this.state.cells.get(result.cellId);
-          if (cell && !cell.ownerId) {
+          if (cell && !cell.ownerId && this.isAdjacentToTerritory(result.cellId, unit.ownerId)) {
             startClaiming(this.state, unit.unitId);
+          }
+          if (cell && cell.ruin && !cell.ruinRevealed) {
+            cell.ruinRevealed = true;
           }
         }
       }
@@ -219,6 +338,45 @@ export class VantarisRoom extends Room<GameState> {
     }
   }
 
+  private processPassiveExpansion(): void {
+    for (const [, city] of this.state.cities) {
+      if (getRepeatQueue(city).length === 0) continue;
+
+      const targetCellId = tickPassiveExpansion(this.state, city, this.adjacencyMap);
+      if (targetCellId) {
+        completeClaim(this.state, targetCellId, city.ownerId);
+        const owner = this.state.players.get(city.ownerId);
+        if (owner) {
+          computeVisibilityForPlayer(this.state, city.ownerId, this.adjacencyMap, TROOP_VISION_RANGE);
+        }
+      }
+    }
+  }
+
+  private processExtractorOutput(): void {
+    tickExtractorOutput(this.state, this.adjacencyMap);
+  }
+
+  private processFactoryProcessing(): void {
+    tickFactoryProcessing(this.state);
+  }
+
+  private processFactoryOutput(): void {
+    tickFactoryOutputToCities(this.state, this.adjacencyMap);
+  }
+
+  private processCityResourceDrain(): void {
+    tickCityResourceDrain(this.state);
+  }
+
+  private processPopulation(): void {
+    tickPopulation(this.state);
+  }
+
+  private processCityXP(): void {
+    tickCityXP(this.state);
+  }
+
   private broadcastPlayerSlices(): void {
     for (const client of this.clients) {
       const playerId = client.sessionId;
@@ -226,6 +384,18 @@ export class VantarisRoom extends Room<GameState> {
       const slice = buildPlayerSlice(this.state, playerId);
       client.send('stateUpdate', slice);
     }
+  }
+
+  private handleSetFactoryRecipe(client: Client, data: { buildingId: string; recipeId: string }): void {
+    const playerId = client.sessionId;
+    const building = this.state.buildings.get(data.buildingId);
+    if (!building || building.ownerId !== playerId || building.type !== 'FACTORY') return;
+
+    const recipe = FACTORY_RECIPES.find(r => r.id === data.recipeId);
+    if (!recipe) return;
+    if (building.factoryTier < recipe.minFactoryTier) return;
+
+    building.recipe = data.recipeId;
   }
 
   private handleMoveUnit(client: Client, data: { unitId: string; targetCellId: string }): void {
@@ -270,12 +440,32 @@ export class VantarisRoom extends Room<GameState> {
     unit.claimTicksRemaining = 0;
   }
 
-  private handleToggleCityProduction(client: Client, data: { cityId: string; producing: boolean }): void {
+  private handleCityQueueAddPriority(client: Client, data: { cityId: string; unitType: string }): void {
     const playerId = client.sessionId;
     const city = this.state.cities.get(data.cityId);
     if (!city || city.ownerId !== playerId) return;
+    addPriorityItem(city, data.unitType);
+  }
 
-    city.producingUnit = data.producing;
+  private handleCityQueueAddRepeat(client: Client, data: { cityId: string; unitType: string }): void {
+    const playerId = client.sessionId;
+    const city = this.state.cities.get(data.cityId);
+    if (!city || city.ownerId !== playerId) return;
+    addToRepeatQueue(city, data.unitType);
+  }
+
+  private handleCityQueueRemoveRepeat(client: Client, data: { cityId: string; index: number }): void {
+    const playerId = client.sessionId;
+    const city = this.state.cities.get(data.cityId);
+    if (!city || city.ownerId !== playerId) return;
+    removeFromRepeatQueue(city, data.index);
+  }
+
+  private handleCityQueueClearPriority(client: Client, data: { cityId: string }): void {
+    const playerId = client.sessionId;
+    const city = this.state.cities.get(data.cityId);
+    if (!city || city.ownerId !== playerId) return;
+    clearPriorityQueue(city);
   }
 
   private handleClaimTerritory(client: Client, data: { unitId: string }): void {
@@ -284,9 +474,117 @@ export class VantarisRoom extends Room<GameState> {
     if (!unit || unit.ownerId !== playerId || unit.status !== 'IDLE') return;
 
     const cell = this.state.cells.get(unit.cellId);
-    if (cell && cell.ownerId === playerId) return;
+    if (!cell) return;
+    if (cell.ownerId === playerId) return;
+
+    if (!this.isAdjacentToTerritory(unit.cellId, playerId)) return;
 
     startClaiming(this.state, data.unitId);
+  }
+
+  private handleBuildStructure(client: Client, data: { unitId: string; buildingType: string; cellId: string }): void {
+    const playerId = client.sessionId;
+    const unit = this.state.units.get(data.unitId);
+    if (!unit || unit.ownerId !== playerId || unit.type !== 'ENGINEER') return;
+    if (unit.status !== 'IDLE') return;
+
+    const cell = this.state.cells.get(data.cellId);
+    if (!cell) return;
+
+    if (unit.cellId !== data.cellId) return;
+
+    if (!canPlaceBuilding(this.state, data.cellId, data.buildingType, playerId, unit.engineerLevel)) {
+      client.send('error', { type: 'error', code: 'INVALID_BUILD' });
+      return;
+    }
+
+    if (!payBuildingCost(this.state, data.cellId, data.buildingType, playerId, this.adjacencyMap)) {
+      client.send('error', { type: 'error', code: 'INSUFFICIENT_RESOURCES' });
+      return;
+    }
+
+    const building = createBuilding(this.state, playerId, data.cellId, data.buildingType);
+    if (!building) {
+      client.send('error', { type: 'error', code: 'INVALID_BUILD' });
+      return;
+    }
+
+    const cost = BUILDING_COSTS[data.buildingType];
+
+    if (data.buildingType === 'CITY') {
+      this.state.buildings.delete(building.buildingId);
+      const city = createCity(this.state, playerId, data.cellId);
+      city.population = CITY_POPULATION_INITIAL;
+      unit.status = 'BUILDING';
+      unit.buildTicksRemaining = BUILDING_TICKS[data.buildingType] ?? 500;
+    } else {
+      unit.status = 'BUILDING';
+      unit.buildTicksRemaining = BUILDING_TICKS[data.buildingType] ?? 200;
+    }
+
+    if (cost && cost.consumesEngineer) {
+      unit.buildTicksRemaining = 1;
+    }
+  }
+
+  private handleRestoreRuin(client: Client, data: { unitId: string; cellId: string }): void {
+    const playerId = client.sessionId;
+    const unit = this.state.units.get(data.unitId);
+    if (!unit || unit.ownerId !== playerId || unit.type !== 'ENGINEER') return;
+    if (unit.status !== 'IDLE') return;
+
+    const cell = this.state.cells.get(data.cellId);
+    if (!cell || !cell.ruin) return;
+    if (!cell.ruinRevealed) return;
+    if (unit.cellId !== data.cellId) return;
+    if (cell.ownerId !== playerId) return;
+
+    const ruinType = cell.ruin;
+    const buildingType = RUIN_TYPE_TO_BUILDING[ruinType] ?? 'FARM';
+
+    if (!canPlaceBuilding(this.state, data.cellId, buildingType, playerId, unit.engineerLevel)) {
+      client.send('error', { type: 'error', code: 'INVALID_BUILD' });
+      return;
+    }
+
+    const cost = BUILDING_COSTS[buildingType];
+    if (cost && (cost.food > 0 || cost.material > 0)) {
+      if (!payBuildingCost(this.state, data.cellId, buildingType, playerId, this.adjacencyMap)) {
+        client.send('error', { type: 'error', code: 'INSUFFICIENT_RESOURCES' });
+        return;
+      }
+    }
+
+    cell.ruin = '';
+    cell.ruinRevealed = false;
+
+    if (buildingType === 'CITY') {
+      const city = createCity(this.state, playerId, data.cellId);
+      city.population = CITY_POPULATION_INITIAL;
+      unit.status = 'BUILDING';
+      unit.buildTicksRemaining = BUILDING_TICKS.RUIN_RESTORE;
+      if (cost?.consumesEngineer) {
+        unit.buildTicksRemaining = 1;
+      }
+    } else {
+      const building = createBuilding(this.state, playerId, data.cellId, buildingType);
+      if (building) {
+        unit.status = 'BUILDING';
+        unit.buildTicksRemaining = BUILDING_TICKS.RUIN_RESTORE;
+        if (cost?.consumesEngineer) {
+          unit.buildTicksRemaining = 1;
+        }
+      }
+    }
+  }
+
+  private isAdjacentToTerritory(cellId: string, playerId: string): boolean {
+    const neighbors = this.adjacencyMap[cellId] ?? [];
+    for (const nId of neighbors) {
+      const nCell = this.state.cells.get(nId);
+      if (nCell && nCell.ownerId === playerId) return true;
+    }
+    return false;
   }
 
   private findAvailableSpawnCell(): string | null {
@@ -335,5 +633,114 @@ export class VantarisRoom extends Room<GameState> {
       if (unit.cellId === cellId) count++;
     }
     return count;
+  }
+
+  private checkElimination(): void {
+    for (const [playerId, player] of this.state.players) {
+      if (!player.alive) continue;
+
+      let hasCity = false;
+      for (const [, city] of this.state.cities) {
+        if (city.ownerId === playerId) { hasCity = true; break; }
+      }
+
+      if (!hasCity) {
+        player.alive = false;
+        player.eliminatedTick = this.state.tick + 1;
+
+        const unitsToRemove: string[] = [];
+        for (const [unitId, unit] of this.state.units) {
+          if (unit.ownerId === playerId) unitsToRemove.push(unitId);
+        }
+        for (const unitId of unitsToRemove) {
+          this.state.units.delete(unitId);
+        }
+
+        for (const client of this.clients) {
+          client.send('playerEliminated', {
+            playerId,
+            displayName: player.displayName,
+            color: player.color,
+            eliminatedTick: player.eliminatedTick,
+          });
+        }
+      }
+    }
+
+    const alivePlayers: string[] = [];
+    for (const [pid, ps] of this.state.players) {
+      if (ps.alive) alivePlayers.push(pid);
+    }
+    if (alivePlayers.length === 1 && this.state.players.size > 1) {
+      const winner = this.state.players.get(alivePlayers[0]);
+      if (winner && this.state.phase !== GamePhase.FINISHED) {
+        this.state.phase = GamePhase.FINISHED;
+        for (const client of this.clients) {
+          client.send('gameWon', {
+            playerId: alivePlayers[0],
+            displayName: winner.displayName,
+            color: winner.color,
+          });
+        }
+      }
+    }
+  }
+
+  private handleChatMessage(client: Client, text: string): void {
+    const player = this.state.players.get(client.sessionId);
+    if (!player || !player.alive) return;
+    const trimmed = (text || '').slice(0, 200).trim();
+    if (!trimmed) return;
+
+    const msg = {
+      id: `chat_${this.state.tick}_${client.sessionId}`,
+      senderId: client.sessionId,
+      senderName: player.displayName,
+      senderColor: player.color,
+      text: trimmed,
+      timestamp: Date.now(),
+      targetId: null as string | null,
+    };
+
+    for (const c of this.clients) {
+      c.send('chatMessage', msg);
+    }
+  }
+
+  private handleDirectMessage(client: Client, targetId: string, text: string): void {
+    const player = this.state.players.get(client.sessionId);
+    if (!player || !player.alive) return;
+    const trimmed = (text || '').slice(0, 200).trim();
+    if (!trimmed) return;
+
+    const msg = {
+      id: `dm_${this.state.tick}_${client.sessionId}`,
+      senderId: client.sessionId,
+      senderName: player.displayName,
+      senderColor: player.color,
+      text: trimmed,
+      timestamp: Date.now(),
+      targetId,
+    };
+
+    client.send('chatMessage', msg);
+
+    for (const c of this.clients) {
+      if (c.sessionId === targetId) {
+        c.send('chatMessage', msg);
+        break;
+      }
+    }
+  }
+
+  private findConsumableBuildingOnCell(cellId: string, ownerId: string): BuildingState | null {
+    for (const [, building] of this.state.buildings) {
+      if (building.cellId === cellId && building.ownerId === ownerId) {
+        if (BUILDING_COSTS[building.type]?.consumesEngineer) {
+          return building;
+        }
+      }
+    }
+    return null;
   }
 }

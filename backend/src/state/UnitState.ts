@@ -10,4 +10,6 @@ export class UnitState extends Schema {
   @type('number') movementTicksTotal: number = 0;
   @type('string') path: string = '[]';
   @type('number') claimTicksRemaining: number = 0;
+  @type('number') buildTicksRemaining: number = 0;
+  @type('number') engineerLevel: number = 1;
 }

@@ -8,9 +8,15 @@ export {
   BuildingType,
   CityTier,
   TerrainType,
+  RuinType,
+  ResourceType,
+  ResourceTier,
+  BoundaryType,
 } from './types';
 
 export type {
+  RawResourceType,
+  ProcessedResourceType,
   CellSnapshot,
   SpawnPoint,
   HexCell,
@@ -23,11 +29,21 @@ export type {
   PlayerStateSlice,
   VisibleCellData,
   RevealedCellData,
+  RuinMarkerData,
   UnitData,
   CityData,
+  BuildingData,
+  PlayerResourceData,
   PlayerSummary,
   MoveOrder,
   AdjacencyMap,
+  ResourceYield,
+  StockpileEntry,
+  CityStockpileData,
+  FactoryRecipe,
+  ProductionItem,
+  PlateData,
+  ChatMessage,
 } from './types';
 
 export { buildAdjacencyMap } from './hexAdjacency';

@@ -1,26 +1,8 @@
 import { BiomeType } from '@vantaris/shared';
-import { BIOME_CONFIGS } from '@vantaris/shared/constants';
-
-let _seed = 42;
-
-function seededRandom(): number {
-  _seed = (_seed * 16807 + 0) % 2147483647;
-  return (_seed - 1) / 2147483646;
-}
-
-export function resetBiomeSeed(seed: number): void {
-  _seed = seed;
-}
-
-export function assignBiomes(cellIndex: number): BiomeType {
-  const totalWeight = BIOME_CONFIGS.reduce((s, b) => s + b.weight, 0);
-  let r = seededRandom() * totalWeight;
-  for (const config of BIOME_CONFIGS) {
-    r -= config.weight;
-    if (r <= 0) return config.type;
-  }
-  return BiomeType.Ocean;
-}
+import { GLOBE_CONFIG } from '@vantaris/shared/constants';
+import { generateWorld } from './worldgen/pipeline';
+import { placeRuins } from './worldgen/ruins';
+import { SeededRandom } from './worldgen/rng';
 
 interface Vec3 {
   x: number;
@@ -47,6 +29,14 @@ export interface ServerHexCell {
   neighborIds: string[];
   biome: BiomeType;
   isPentagon: boolean;
+  elevation: number;
+  moisture: number;
+  temperature: number;
+  plateId: string;
+  resourceType: string;
+  resourceAmount: number;
+  ruin: string;
+  ruinRevealed: boolean;
 }
 
 function createIcosahedron(radius: number): { vertices: Vec3[]; faces: [number, number, number][] } {
@@ -102,11 +92,11 @@ function subdivide(
   return { vertices: v, faces: f };
 }
 
-export function generateGlobe(subdivideLevel: number): {
+export function generateGlobe(subdivideLevel: number, worldSeed?: number): {
   cells: ServerHexCell[];
   adjacency: Map<string, string[]>;
 } {
-  const radius = 5;
+  const radius = GLOBE_CONFIG.radius;
   const ico = createIcosahedron(radius);
   const { vertices, faces } = subdivide(ico.vertices, ico.faces, subdivideLevel, radius);
 
@@ -119,49 +109,72 @@ export function generateGlobe(subdivideLevel: number): {
     }
   }
 
-  resetBiomeSeed(42);
+  const seed = worldSeed ?? 42;
 
-  const cells: ServerHexCell[] = [];
-  const adjacency = new Map<string, string[]>();
+  const rawCells: { cellId: string; x: number; y: number; z: number; neighborIds: string[]; isPentagon: boolean }[] = [];
   const vertexToCellId = new Map<number, string>();
-
   const vertexIndices = Array.from(cellFaceMap.keys());
 
   for (const vi of vertexIndices) {
     const faceSet = cellFaceMap.get(vi)!;
-    const cellId = `cell_${cells.length}`;
-    const center: [number, number, number] = [vertices[vi].x, vertices[vi].y, vertices[vi].z];
+    const cellId = `cell_${rawCells.length}`;
     const isPentagon = faceSet.size === 5;
-
     vertexToCellId.set(vi, cellId);
-    cells.push({
-      id: cellId,
-      center,
+    rawCells.push({
+      cellId,
+      x: vertices[vi].x,
+      y: vertices[vi].y,
+      z: vertices[vi].z,
       neighborIds: [],
-      biome: assignBiomes(cells.length),
       isPentagon,
     });
   }
 
-  // Build adjacency from shared faces
-  for (let ci = 0; ci < cells.length; ci++) {
+  for (let ci = 0; ci < rawCells.length; ci++) {
     const vi = vertexIndices[ci];
     const neighborSet = new Set<string>();
     const faceSet = cellFaceMap.get(vi)!;
-
     for (const fi of faceSet) {
       const face = faces[fi];
       for (const fvi of face) {
         const nId = vertexToCellId.get(fvi);
-        if (nId && nId !== cells[ci].id) {
+        if (nId && nId !== rawCells[ci].cellId) {
           neighborSet.add(nId);
         }
       }
     }
-
-    cells[ci].neighborIds = Array.from(neighborSet);
-    adjacency.set(cells[ci].id, cells[ci].neighborIds);
+    rawCells[ci].neighborIds = Array.from(neighborSet);
   }
+
+  const adjacency = new Map<string, string[]>();
+  for (const c of rawCells) {
+    adjacency.set(c.cellId, c.neighborIds);
+  }
+
+  const world = generateWorld(rawCells, adjacency, seed);
+
+  const rng = new SeededRandom(seed + 999);
+  let landCount = 0;
+  for (const wc of world.cells) {
+    if (wc.elevation >= 0) landCount++;
+  }
+  placeRuins(world.cells, rng, landCount);
+
+  const cells: ServerHexCell[] = world.cells.map(wc => ({
+    id: wc.cellId,
+    center: [wc.center.x, wc.center.y, wc.center.z],
+    neighborIds: wc.neighborIds,
+    biome: wc.biome,
+    isPentagon: wc.isPentagon,
+    elevation: wc.elevation,
+    moisture: wc.moisture,
+    temperature: wc.temperature,
+    plateId: wc.plateId,
+    resourceType: wc.resourceType,
+    resourceAmount: wc.resourceAmount,
+    ruin: wc.ruin,
+    ruinRevealed: wc.ruinRevealed,
+  }));
 
   return { cells, adjacency };
 }

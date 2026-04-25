@@ -169,6 +169,19 @@ vantaris.state.fps()       // Current FPS
 
 When making changes:
 1. Update `docs/AGENTS.md` if architecture, interfaces, or workflow changes
-2. Update `README.md` if structure, commands, or modules change
-3. Update `shared/src/types.ts` comments when adding/changing interfaces
-4. Update `shared/src/constants.ts` comments when tuning values
+2. Update `docs/stages.md` if completing or starting a new phase item
+3. Update relevant design doc in `docs/` if adding/changing a game system
+4. Update `shared/src/types.ts` comments when adding/changing interfaces
+5. Update `shared/src/constants.ts` comments when tuning values
+
+### Design Docs Index
+
+See `docs/README.md` for the full index. Key docs:
+- `docs/world.md` — Globe, hexes, biomes, terrain, ruins
+- `docs/fog-of-war.md` — Server-authoritative fog, visibility states
+- `docs/territory.md` — Claiming, passive expansion, borders
+- `docs/units.md` — Infantry, movement, pathfinding, claim timers
+- `docs/cities.md` — City tiers, production, growth
+- `docs/hud.md` — Broadcast-tone UI, panels, tooltips
+- `docs/multiplayer.md` — Colyseus rooms, matchmaking, reconnection
+- `docs/stages.md` — Phase completion tracker

@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { clientState, notifySelectionChanged } from '../state/ClientState';
-import { sendMoveUnit, sendClaimTerritory } from '../network/ColyseusClient';
+import { sendMoveUnit, sendClaimTerritory, sendBuildStructure, sendRestoreRuin } from '../network/ColyseusClient';
 import { TerrainType } from '@vantaris/shared';
-import { PASSABLE_TERRAIN } from '@vantaris/shared/constants';
+import { PASSABLE_TERRAIN, ENGINEER_LEVEL_BUILD_RULES, BUILDING_COSTS, BUILDING_PLACEMENT_RULES } from '@vantaris/shared/constants';
 
 const CLICK_THRESHOLD_PX = 5;
 
@@ -49,6 +49,9 @@ export class GlobeInput {
   }
 
   private onPointerMove(e: PointerEvent): void {
+    clientState.mouseClientX = e.clientX;
+    clientState.mouseClientY = e.clientY;
+
     const rect = this.canvas.getBoundingClientRect();
     const pointer = new THREE.Vector2(
       (2 * (e.clientX - rect.left) / rect.width) - 1,
@@ -192,6 +195,24 @@ export class GlobeInput {
     clientState.selectedUnitId = null;
     clientState.selectedCityId = null;
     clientState.pendingCommand = null;
+
+    const unitsOnTile: string[] = [];
+    for (const [unitId, unit] of clientState.units) {
+      if (unit.cellId === cellId) unitsOnTile.push(unitId);
+    }
+    const citiesOnTile: string[] = [];
+    for (const [cityId, city] of clientState.cities) {
+      if (city.cellId === cellId) citiesOnTile.push(cityId);
+    }
+
+    if (unitsOnTile.length === 1 && citiesOnTile.length === 0) {
+      const unit = clientState.units.get(unitsOnTile[0]);
+      if (unit && unit.ownerId === clientState.myPlayerId && unit.status === 'IDLE') {
+        clientState.selectedUnitId = unitsOnTile[0];
+        clientState.pendingCommand = 'move';
+      }
+    }
+
     notifySelectionChanged();
   }
 
@@ -240,8 +261,12 @@ export class GlobeInput {
       }
     }
 
-    if (e.key === '3') {
-      this.selectEntityOnTile(2);
+    if (e.key === '3' || e.key === 'b' || e.key === 'B') {
+      if (clientState.selectedUnitId) {
+        this.handleBuildKey();
+      } else {
+        this.selectEntityOnTile(2);
+      }
     }
 
     if (e.key === '4') {
@@ -306,5 +331,39 @@ export class GlobeInput {
     sendClaimTerritory(unitId);
     clientState.pendingCommand = null;
     notifySelectionChanged();
+  }
+
+  private handleBuildKey(): void {
+    const unitId = clientState.selectedUnitId;
+    if (!unitId) return;
+    const unit = clientState.units.get(unitId);
+    if (!unit || unit.status !== 'IDLE' || unit.ownerId !== clientState.myPlayerId || unit.type !== 'ENGINEER') return;
+
+    const cellId = unit.cellId;
+    const cellData = clientState.visibleCells.get(cellId);
+    if (!cellData || cellData.ownerId !== clientState.myPlayerId) return;
+
+    if (cellData.ruin && cellData.ruinRevealed) {
+      sendRestoreRuin(unitId, cellId);
+      clientState.pendingCommand = null;
+      notifySelectionChanged();
+      return;
+    }
+
+    const allowedTypes = ENGINEER_LEVEL_BUILD_RULES[unit.engineerLevel] ?? ENGINEER_LEVEL_BUILD_RULES[1] ?? [];
+    const freeExtractor = allowedTypes.find((bt: string) => {
+      const cost = BUILDING_COSTS[bt];
+      if (!cost || cost.food > 0 || cost.material > 0) return false;
+      const allowedBiomes = BUILDING_PLACEMENT_RULES[bt];
+      if (allowedBiomes && !allowedBiomes.includes(cellData.biome)) return false;
+      if (bt === 'CITY') return false;
+      return cellData.buildings.length < cellData.buildingCapacity;
+    });
+
+    if (freeExtractor) {
+      sendBuildStructure(unitId, freeExtractor, cellId);
+      clientState.pendingCommand = null;
+      notifySelectionChanged();
+    }
   }
 }
