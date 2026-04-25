@@ -3,7 +3,7 @@ import { clientState, onStateUpdate } from '../state/ClientState';
 import { createInfantryIcon, positionOnSurface, offsetOnSurface, orientToSurface, GLOBE_RADIUS } from './IconFactory';
 
 const SURFACE_OFFSET = 1.008;
-const TICK_MS = 1000;
+const TICK_MS = 100;
 
 const UNIT_OFFSETS = [
   [0, 0],
@@ -91,9 +91,10 @@ export class UnitRenderer {
           if (stepChanged) {
             const remaining = unit.movementTicksRemaining;
             const total = unit.movementTicksTotal || 10;
-            const estimatedElapsed = (total - remaining) * TICK_MS;
-            const stepStartTime = now - estimatedElapsed;
             const stepEndTime = now + remaining * TICK_MS;
+            const stepStartTime = remaining >= total
+              ? now
+              : now - (total - remaining) * TICK_MS;
 
             this.movingUnits.set(unitId, {
               fromCellId: unit.cellId,

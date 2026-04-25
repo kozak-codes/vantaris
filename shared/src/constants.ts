@@ -40,7 +40,7 @@ export const QUEUE_CONFIG: { minPlayers: number; maxPlayers: number; subdivideLe
   subdivideLevel: 3,
 };
 
-export const TICK_RATE_MS = 1000;
+export const TICK_RATE_MS = 100;
 export const MATCHMAKING_COUNTDOWN_SECONDS = 5;
 export const RECONNECTION_WINDOW = 60;
 export const STARTING_TERRITORY_SIZE = 1;
@@ -60,18 +60,18 @@ export const IMPASSABLE_TERRAIN: TerrainType[] = [
 ];
 
 export const MOVEMENT_COST: Record<string, number> = {
-  PLAINS: 3,
-  DESERT: 3,
-  FOREST: 6,
-  MOUNTAIN: 9,
-  TUNDRA: 6,
+  PLAINS: 30,
+  DESERT: 30,
+  FOREST: 60,
+  MOUNTAIN: 90,
+  TUNDRA: 60,
   OCEAN: Infinity,
 };
 
-export const CITY_TROOP_PRODUCTION_TICKS = 10;
+export const CITY_TROOP_PRODUCTION_TICKS = 100;
 export const MAX_UNITS_PER_HEX = 3;
 
-export const CITY_TIER_XP_THRESHOLDS = [0, 500, 1500, 4000, 10000, 25000];
+export const CITY_TIER_XP_THRESHOLDS = [0, 5000, 15000, 40000, 100000, 250000];
 
 export const CITY_TIER_MANPOWER: Record<number, number> = {
   1: 2, 2: 6, 3: 15, 4: 35, 5: 90, 6: 250,
@@ -85,8 +85,8 @@ export const CITY_ENERGY_COST: Record<number, number> = {
   1: 1, 2: 2, 3: 5, 4: 12, 5: 30, 6: 80,
 };
 
-export const CLAIM_TICKS_UNCLAIMED = 50;
-export const CLAIM_TICKS_ENEMY = 300;
+export const CLAIM_TICKS_UNCLAIMED = 500;
+export const CLAIM_TICKS_ENEMY = 3000;
 
 export const VALID_CITY_SPAWN_TERRAIN = [TerrainType.PLAINS];
 
