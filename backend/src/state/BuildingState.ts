@@ -9,6 +9,7 @@ export class BuildingState extends Schema {
   @type('string') recipe: string = '';
   @type('number') factoryTier: number = 1;
   @type('number') factoryXp: number = 0;
-  @type('string') stockpile: string = '[]';
+  @type('string') stockpile: string = '{}';
+  @type('string') resourcesInvested: string = '{"food":0,"material":0}';
   recipeTicksRemaining: number = 0;
 }

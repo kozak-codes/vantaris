@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { clientState, notifySelectionChanged } from '../state/ClientState';
 import { sendMoveUnit, sendClaimTerritory, sendBuildStructure, sendRestoreRuin } from '../network/ColyseusClient';
 import { TerrainType } from '@vantaris/shared';
-import { PASSABLE_TERRAIN, ENGINEER_LEVEL_BUILD_RULES, BUILDING_COSTS, BUILDING_PLACEMENT_RULES } from '@vantaris/shared/constants';
+import { PASSABLE_TERRAIN, BUILDING_COSTS, BUILDING_PLACEMENT_RULES, getEngineerBuildableTypes } from '@vantaris/shared/constants';
 
 const CLICK_THRESHOLD_PX = 5;
 
@@ -350,7 +350,7 @@ export class GlobeInput {
       return;
     }
 
-    const allowedTypes = ENGINEER_LEVEL_BUILD_RULES[unit.engineerLevel] ?? ENGINEER_LEVEL_BUILD_RULES[1] ?? [];
+    const allowedTypes = getEngineerBuildableTypes(unit.engineerLevel);
     const freeExtractor = allowedTypes.find((bt: string) => {
       const cost = BUILDING_COSTS[bt];
       if (!cost || cost.food > 0 || cost.material > 0) return false;

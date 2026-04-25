@@ -1,5 +1,5 @@
 import { BiomeType } from '../types/index';
-import { BIOME_CONFIGS, GLOBE_CONFIG } from '@vantaris/shared/constants';
+import { CFG } from '@vantaris/shared/constants';
 
 let _seed = 42;
 
@@ -13,9 +13,9 @@ export function resetBiomeSeed(seed: number): void {
 }
 
 export function assignBiomes(cellIndex: number): BiomeType {
-  const totalWeight = BIOME_CONFIGS.reduce((s, b) => s + b.weight, 0);
+  const totalWeight = CFG.BIOMES.reduce((s, b) => s + b.weight, 0);
   let r = seededRandom() * totalWeight;
-  for (const config of BIOME_CONFIGS) {
+  for (const config of CFG.BIOMES) {
     r -= config.weight;
     if (r <= 0) return config.type;
   }

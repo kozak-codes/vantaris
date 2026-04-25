@@ -1,5 +1,5 @@
 import { BiomeType } from '@vantaris/shared';
-import { GLOBE_CONFIG } from '@vantaris/shared/constants';
+import { CFG } from '@vantaris/shared/constants';
 import { generateWorld } from './worldgen/pipeline';
 import { placeRuins } from './worldgen/ruins';
 import { SeededRandom } from './worldgen/rng';
@@ -96,7 +96,7 @@ export function generateGlobe(subdivideLevel: number, worldSeed?: number): {
   cells: ServerHexCell[];
   adjacency: Map<string, string[]>;
 } {
-  const radius = GLOBE_CONFIG.radius;
+  const radius = CFG.GLOBE.radius;
   const ico = createIcosahedron(radius);
   const { vertices, faces } = subdivide(ico.vertices, ico.faces, subdivideLevel, radius);
 

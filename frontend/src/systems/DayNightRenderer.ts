@@ -1,14 +1,7 @@
 import * as THREE from 'three';
 import { clientState, onStateUpdate } from '../state/ClientState';
 import { GLOBE_RADIUS } from './IconFactory';
-import {
-  SUN_INTENSITY,
-  AMBIENT_DAY_INTENSITY,
-  AMBIENT_NIGHT_INTENSITY,
-  CITY_GLOW_INTENSITY,
-  CITY_GLOW_COLOR,
-  NIGHT_COLOR_MIX,
-} from '@vantaris/shared/constants';
+import { CFG } from '@vantaris/shared/constants';
 
 const MOON_INTENSITY = 0.3;
 const MOON_ORBIT_TILT = 0.35;
@@ -21,7 +14,7 @@ export class DayNightRenderer {
   private cityGlowLights: Map<string, THREE.PointLight> = new Map();
   private lastSunAngle: number = -1;
   private nightColor: THREE.Color = new THREE.Color('#040410');
-  private glowColor: THREE.Color = new THREE.Color(CITY_GLOW_COLOR);
+  private glowColor: THREE.Color = new THREE.Color(CFG.DAY_NIGHT.CITY_GLOW_COLOR);
   private sunLight: THREE.DirectionalLight;
   private moonLight: THREE.DirectionalLight;
   private moonOrb: THREE.Mesh;
@@ -39,7 +32,7 @@ export class DayNightRenderer {
     this.hemisphereLight = new THREE.HemisphereLight(0x6688bb, 0x222244, 0.5);
     globeGroup.parent?.add(this.hemisphereLight);
 
-    this.sunLight = new THREE.DirectionalLight(0xffffff, SUN_INTENSITY);
+    this.sunLight = new THREE.DirectionalLight(0xffffff, CFG.DAY_NIGHT.SUN_INTENSITY);
     this.sunLight.position.set(GLOBE_RADIUS * 2, 0, 0);
     this.sunLight.target.position.set(0, 0, 0);
     this.globeGroup.add(this.sunLight);
@@ -115,12 +108,12 @@ export class DayNightRenderer {
     );
 
     const dayFactor = this.computeDayFactor(sunAngle);
-    this.sunLight.intensity = THREE.MathUtils.lerp(0.3, SUN_INTENSITY, dayFactor);
+    this.sunLight.intensity = THREE.MathUtils.lerp(0.3, CFG.DAY_NIGHT.SUN_INTENSITY, dayFactor);
     this.moonLight.intensity = THREE.MathUtils.lerp(MOON_INTENSITY, 0.02, dayFactor);
 
     this.ambientLight.intensity = THREE.MathUtils.lerp(
-      AMBIENT_NIGHT_INTENSITY,
-      AMBIENT_DAY_INTENSITY,
+      CFG.DAY_NIGHT.AMBIENT_NIGHT_INTENSITY,
+      CFG.DAY_NIGHT.AMBIENT_DAY_INTENSITY,
       dayFactor,
     );
     this.hemisphereLight.intensity = THREE.MathUtils.lerp(0.15, 0.5, dayFactor);
@@ -151,7 +144,7 @@ export class DayNightRenderer {
       const dot = pos.dot(sunDir);
 
       const nightFactor = THREE.MathUtils.smoothstep(-dot, -0.2, 0.3);
-      const baseEmissive = nightFactor * NIGHT_COLOR_MIX;
+      const baseEmissive = nightFactor * CFG.DAY_NIGHT.NIGHT_COLOR_MIX;
       mat.emissive.copy(this.nightColor).multiplyScalar(baseEmissive);
       mat.emissiveIntensity = nightFactor > 0.01 ? 1.0 : 0.0;
     }
@@ -167,7 +160,7 @@ export class DayNightRenderer {
       if (!this.cityGlowLights.has(cityId)) {
         const light = new THREE.PointLight(
           this.glowColor,
-          CITY_GLOW_INTENSITY,
+          CFG.DAY_NIGHT.CITY_GLOW_INTENSITY,
           GLOBE_RADIUS * 0.5,
           2,
         );
@@ -202,7 +195,7 @@ export class DayNightRenderer {
 
   private updateCityGlowIntensity(dayFactor: number): void {
     const nightFactor = 1.0 - dayFactor;
-    const intensity = nightFactor * CITY_GLOW_INTENSITY;
+    const intensity = nightFactor * CFG.DAY_NIGHT.CITY_GLOW_INTENSITY;
 
     for (const [, light] of this.cityGlowLights) {
       light.intensity = intensity;

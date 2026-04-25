@@ -6,11 +6,10 @@ import {
   type GlobeConfig,
   type CameraConfig,
 } from './types/index';
-import { BIOME_CONFIGS as SHARED_BIOME_CONFIGS, GLOBE_CONFIG as SHARED_GLOBE_CONFIG, FOG_CONFIG as SHARED_FOG_CONFIG, CAMERA_CONFIG as SHARED_CAMERA_CONFIG, CELL_COLOR_LERP as SHARED_CELL_COLOR_LERP, CITY_TROOP_PRODUCTION_TICKS, MAX_UNITS_PER_HEX } from '@vantaris/shared/constants';
+import { CFG } from '@vantaris/shared/constants';
 
-export const BIOME_CONFIGS: BiomeConfig[] = SHARED_BIOME_CONFIGS;
-export const GLOBE_CONFIG: GlobeConfig = SHARED_GLOBE_CONFIG;
-export const FOG_CONFIG: FogConfig = SHARED_FOG_CONFIG;
-export const CAMERA_CONFIG: CameraConfig = SHARED_CAMERA_CONFIG;
-export const CELL_COLOR_LERP = SHARED_CELL_COLOR_LERP;
-export { CITY_TROOP_PRODUCTION_TICKS, MAX_UNITS_PER_HEX };
+export const BIOME_CONFIGS: BiomeConfig[] = CFG.BIOMES;
+export const GLOBE_CONFIG: GlobeConfig = CFG.GLOBE;
+export const FOG_CONFIG: FogConfig = CFG.FOG;
+export const CAMERA_CONFIG: CameraConfig = CFG.CAMERA;
+export const CELL_COLOR_LERP = CFG.CELL_COLOR_LERP;

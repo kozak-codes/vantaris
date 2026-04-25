@@ -2,7 +2,7 @@ import { Room, Client } from '@colyseus/core';
 import { GameState } from '../state/GameState';
 import { GamePhase, BiomeType, ResourceType, BuildingType, UnitType, UnitStatus } from '@vantaris/shared';
 import type { ProductionItem } from '@vantaris/shared';
-import { QUEUE_CONFIG, RECONNECTION_WINDOW, TROOP_VISION_RANGE, MAX_UNITS_PER_HEX, DAY_NIGHT_CYCLE_TICKS, BUILDING_TICKS, BUILDING_COSTS, CITY_POPULATION_INITIAL, EXTRACTOR_TYPES, FACTORY_RECIPES } from '@vantaris/shared/constants';
+import { CFG, MATCHMAKING_CFG, BUILDING_TICKS, BUILDING_COSTS } from '@vantaris/shared/constants';
 import { AdjacencyMap, buildAdjacencyMap } from '@vantaris/shared';
 import { generateGlobe } from '../globe';
 import { computeVisibilityForPlayer, buildPlayerSlice } from '../mutations/fog';
@@ -16,7 +16,7 @@ import { TickSystem } from '../systems/TickSystem';
 import { findPath, buildUnitsByCellId } from '../systems/Pathfinding';
 import { spawnUnit, assignPath, stepUnit, startClaiming } from '../mutations/units';
 import type { StepResult } from '../mutations/units';
-import { createBuilding, tickBuildingProduction, canPlaceBuilding, cancelBuilding, getAvailableBuildTypes, countBuildingsOnCell, payBuildingCost } from '../mutations/buildings';
+import { createBuilding, tickBuildingProduction, canPlaceBuilding, cancelBuilding, getAvailableBuildTypes, countBuildingsOnCell, canAffordBuildingCost, tickBuildingConstruction, getResourcesInvested } from '../mutations/buildings';
 import { tickExtractorOutput, tickFactoryProcessing, tickFactoryOutputToCities, tickCityResourceDrain, tickPopulation, tickCityXP } from '../mutations/resources';
 import { claimCell, loseCell } from '../mutations/territory';
 
@@ -54,12 +54,12 @@ export class VantarisRoom extends Room<GameState> {
   async onCreate(options: CreateOptions): Promise<void> {
     const playerCount = options.spawnPoints?.length || 1;
     const subdivideLevel = playerCount > 4 ? 4 : 3;
-    this.maxClients = QUEUE_CONFIG.maxPlayers;
+    this.maxClients = MATCHMAKING_CFG.MAX_PLAYERS;
     const globe = generateGlobe(subdivideLevel);
 
     this.setState(new GameState());
 
-    this.state.dayNightCycleTicks = options.dayNightCycleTicks || DAY_NIGHT_CYCLE_TICKS;
+    this.state.dayNightCycleTicks = options.dayNightCycleTicks || CFG.DAY_NIGHT.CYCLE_TICKS;
 
     const cellIds: string[] = [];
     for (const cell of globe.cells) {
@@ -196,13 +196,13 @@ export class VantarisRoom extends Room<GameState> {
     this.state.players.set(playerId, player);
 
     const city = createCity(this.state, playerId, spawnCellId);
-    city.population = CITY_POPULATION_INITIAL;
+    city.population = CFG.CITY.POPULATION_INITIAL;
 
     spawnUnit(this.state, playerId, spawnCellId, 'INFANTRY');
 
     completeClaim(this.state, spawnCellId, playerId);
 
-    computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, TROOP_VISION_RANGE);
+      computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.TROOP_VISION_RANGE);
 
     const slice = buildPlayerSlice(this.state, playerId);
     client.send('stateUpdate', slice);
@@ -211,10 +211,10 @@ export class VantarisRoom extends Room<GameState> {
   async onLeave(client: Client, consented: boolean): Promise<void> {
     if (consented) return;
     try {
-      await this.allowReconnection(client, RECONNECTION_WINDOW);
+      await this.allowReconnection(client, MATCHMAKING_CFG.RECONNECTION_WINDOW);
       const player = this.state.players.get(client.sessionId);
       if (player) {
-        computeVisibilityForPlayer(this.state, client.sessionId, this.adjacencyMap, TROOP_VISION_RANGE);
+        computeVisibilityForPlayer(this.state, client.sessionId, this.adjacencyMap, CFG.TROOP_VISION_RANGE);
         const slice = buildPlayerSlice(this.state, client.sessionId);
         client.send('stateUpdate', slice);
       }
@@ -270,7 +270,7 @@ export class VantarisRoom extends Room<GameState> {
 
     for (const [, building] of this.state.buildings) {
       if (building.productionTicksRemaining > 0) {
-        building.productionTicksRemaining--;
+        tickBuildingConstruction(this.state, building, this.adjacencyMap);
       }
     }
   }
@@ -282,7 +282,7 @@ export class VantarisRoom extends Room<GameState> {
       const completed = tickCityProduction(city);
       if (completed) {
         const unitsOnCell = this.countUnitsOnCell(city.cellId);
-        if (unitsOnCell < MAX_UNITS_PER_HEX) {
+        if (unitsOnCell < CFG.MAX_PER_HEX) {
           consumeProductionCosts(city, completed);
           spawnUnit(this.state, city.ownerId, city.cellId, completed.type);
         }
@@ -333,7 +333,7 @@ export class VantarisRoom extends Room<GameState> {
 
       const owner = this.state.players.get(claim.ownerId);
       if (owner) {
-        computeVisibilityForPlayer(this.state, claim.ownerId, this.adjacencyMap, TROOP_VISION_RANGE);
+        computeVisibilityForPlayer(this.state, claim.ownerId, this.adjacencyMap, CFG.TROOP_VISION_RANGE);
       }
     }
   }
@@ -347,7 +347,7 @@ export class VantarisRoom extends Room<GameState> {
         completeClaim(this.state, targetCellId, city.ownerId);
         const owner = this.state.players.get(city.ownerId);
         if (owner) {
-          computeVisibilityForPlayer(this.state, city.ownerId, this.adjacencyMap, TROOP_VISION_RANGE);
+          computeVisibilityForPlayer(this.state, city.ownerId, this.adjacencyMap, CFG.TROOP_VISION_RANGE);
         }
       }
     }
@@ -380,7 +380,7 @@ export class VantarisRoom extends Room<GameState> {
   private broadcastPlayerSlices(): void {
     for (const client of this.clients) {
       const playerId = client.sessionId;
-      computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, TROOP_VISION_RANGE);
+computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.TROOP_VISION_RANGE);
       const slice = buildPlayerSlice(this.state, playerId);
       client.send('stateUpdate', slice);
     }
@@ -391,7 +391,7 @@ export class VantarisRoom extends Room<GameState> {
     const building = this.state.buildings.get(data.buildingId);
     if (!building || building.ownerId !== playerId || building.type !== 'FACTORY') return;
 
-    const recipe = FACTORY_RECIPES.find(r => r.id === data.recipeId);
+    const recipe = CFG.FACTORY.RECIPES.find(r => r.id === data.recipeId);
     if (!recipe) return;
     if (building.factoryTier < recipe.minFactoryTier) return;
 
@@ -417,7 +417,7 @@ export class VantarisRoom extends Room<GameState> {
       this.state.cells,
       this.adjacencyMap,
       unitsByCellId,
-      MAX_UNITS_PER_HEX,
+      CFG.MAX_PER_HEX,
       this.cellPositions,
     );
 
@@ -498,7 +498,7 @@ export class VantarisRoom extends Room<GameState> {
       return;
     }
 
-    if (!payBuildingCost(this.state, data.cellId, data.buildingType, playerId, this.adjacencyMap)) {
+    if (!canAffordBuildingCost(this.state, data.cellId, data.buildingType, playerId, this.adjacencyMap)) {
       client.send('error', { type: 'error', code: 'INSUFFICIENT_RESOURCES' });
       return;
     }
@@ -514,7 +514,7 @@ export class VantarisRoom extends Room<GameState> {
     if (data.buildingType === 'CITY') {
       this.state.buildings.delete(building.buildingId);
       const city = createCity(this.state, playerId, data.cellId);
-      city.population = CITY_POPULATION_INITIAL;
+      city.population = CFG.CITY.POPULATION_INITIAL;
       unit.status = 'BUILDING';
       unit.buildTicksRemaining = BUILDING_TICKS[data.buildingType] ?? 500;
     } else {
@@ -549,7 +549,7 @@ export class VantarisRoom extends Room<GameState> {
 
     const cost = BUILDING_COSTS[buildingType];
     if (cost && (cost.food > 0 || cost.material > 0)) {
-      if (!payBuildingCost(this.state, data.cellId, buildingType, playerId, this.adjacencyMap)) {
+      if (!canAffordBuildingCost(this.state, data.cellId, buildingType, playerId, this.adjacencyMap)) {
         client.send('error', { type: 'error', code: 'INSUFFICIENT_RESOURCES' });
         return;
       }
@@ -560,7 +560,7 @@ export class VantarisRoom extends Room<GameState> {
 
     if (buildingType === 'CITY') {
       const city = createCity(this.state, playerId, data.cellId);
-      city.population = CITY_POPULATION_INITIAL;
+      city.population = CFG.CITY.POPULATION_INITIAL;
       unit.status = 'BUILDING';
       unit.buildTicksRemaining = BUILDING_TICKS.RUIN_RESTORE;
       if (cost?.consumesEngineer) {

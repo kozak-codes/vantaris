@@ -1,4 +1,4 @@
-import { TICK_RATE_MS } from '@vantaris/shared/constants';
+import { CFG } from '@vantaris/shared/constants';
 
 export class TickSystem {
   private interval: ReturnType<typeof setInterval> | null = null;
@@ -8,7 +8,7 @@ export class TickSystem {
     this.interval = setInterval(() => {
       this.currentTick++;
       onTick(this.currentTick);
-    }, TICK_RATE_MS);
+    }, CFG.TICK_RATE_MS);
   }
 
   stop(): void {

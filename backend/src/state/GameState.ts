@@ -1,6 +1,6 @@
 import { Schema, type, MapSchema } from '@colyseus/schema';
 import { GamePhase } from '@vantaris/shared';
-import { DAY_NIGHT_CYCLE_TICKS } from '@vantaris/shared/constants';
+import { CFG } from '@vantaris/shared/constants';
 import { CellState } from './CellState';
 import { PlayerState } from './PlayerState';
 import { UnitState } from './UnitState';
@@ -15,7 +15,7 @@ export class GameState extends Schema {
   @type({ map: BuildingState }) buildings = new MapSchema<BuildingState>();
   @type('string') phase: GamePhase = GamePhase.WAITING;
   @type('number') tick: number = 0;
-  @type('number') dayNightCycleTicks: number = DAY_NIGHT_CYCLE_TICKS;
+  @type('number') dayNightCycleTicks: number = CFG.DAY_NIGHT.CYCLE_TICKS;
 
   getSunAngle(): number {
     return (this.tick / this.dayNightCycleTicks) * Math.PI * 2;

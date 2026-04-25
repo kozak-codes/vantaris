@@ -1,6 +1,6 @@
 import { clientState, onStateUpdate, notifySelectionChanged, getUnitActions, getCityActions } from '../state/ClientState';
 import { sendMoveUnit, sendSetUnitIdle, sendCityQueueAddPriority, sendCityQueueAddRepeat, sendCityQueueRemoveRepeat, sendCityQueueClearPriority, sendClaimTerritory, sendBuildStructure, sendRestoreRuin } from '../network/ColyseusClient';
-import { PASSABLE_TERRAIN, BUILDING_COSTS, ENGINEER_LEVEL_BUILD_RULES, BUILDING_PLACEMENT_RULES, UNIT_PRODUCTION_COSTS, FOOD_VALUE, MATERIAL_VALUE } from '@vantaris/shared/constants';
+import { PASSABLE_TERRAIN, BUILDING_COSTS, BUILDING_PLACEMENT_RULES, UNIT_PRODUCTION_COSTS, FOOD_VALUE, MATERIAL_VALUE, getEngineerBuildableTypes } from '@vantaris/shared/constants';
 import { TerrainType, CityData, ProductionItem } from '@vantaris/shared';
 
 const TIER_NAMES: Record<number, string> = {
@@ -492,7 +492,7 @@ export class HUD {
         if (cellData.ruin && cellData.ruinRevealed) {
           buildButton = `<button class="panel-btn cmd-btn" id="cmd-restore" title="Restore this ruin">3 Restore<span class="cmd-key">3</span></button>`;
         } else {
-          const allowedTypes = ENGINEER_LEVEL_BUILD_RULES[unit.engineerLevel] ?? ENGINEER_LEVEL_BUILD_RULES[1] ?? [];
+          const allowedTypes = getEngineerBuildableTypes(unit.engineerLevel);
           const placeableTypes = allowedTypes.filter((bt: string) => {
             const allowedBiomes = BUILDING_PLACEMENT_RULES[bt];
             if (allowedBiomes && !allowedBiomes.includes(cellData.biome)) return false;
@@ -528,9 +528,9 @@ export class HUD {
     if (isMyUnit && unit.type === 'ENGINEER' && unit.status === 'IDLE') {
       const cellData = clientState.visibleCells.get(unit.cellId);
       if (cellData && cellData.ownerId === clientState.myPlayerId && !cellData.ruin) {
-        const allowedTypes = ENGINEER_LEVEL_BUILD_RULES[unit.engineerLevel] ?? ENGINEER_LEVEL_BUILD_RULES[1] ?? [];
+        const allowedTypes = getEngineerBuildableTypes(unit.engineerLevel);
         const allBuildable = ['FARM', 'MINE', 'OIL_WELL', 'LUMBER_CAMP', 'FACTORY', 'CITY'];
-        const nextLevelTypes = (ENGINEER_LEVEL_BUILD_RULES[unit.engineerLevel + 1] ?? []).filter((bt: string) => !allowedTypes.includes(bt));
+        const nextLevelTypes = getEngineerBuildableTypes(unit.engineerLevel + 1).filter((bt: string) => !allowedTypes.includes(bt));
 
         for (const bt of allBuildable) {
           const allowedBiomes = BUILDING_PLACEMENT_RULES[bt];
@@ -975,7 +975,7 @@ export class HUD {
         if (u && u.status === 'IDLE' && u.type === 'ENGINEER') {
           const cellData = clientState.visibleCells.get(u.cellId);
           if (cellData && cellData.ownerId === clientState.myPlayerId && !cellData.ruin) {
-            const allowedTypes = ENGINEER_LEVEL_BUILD_RULES[u.engineerLevel] ?? ENGINEER_LEVEL_BUILD_RULES[1] ?? [];
+            const allowedTypes = getEngineerBuildableTypes(u.engineerLevel);
             const freeExtractor = allowedTypes.find((bt: string) => {
               const cost = BUILDING_COSTS[bt];
               return cost && cost.food === 0 && cost.material === 0 && BUILDING_PLACEMENT_RULES[bt]?.includes(cellData.biome);

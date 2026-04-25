@@ -1,10 +1,10 @@
 import { FogVisibility, RuinType, ResourceType } from '@vantaris/shared';
 import { GameState } from '../state/GameState';
-import { TROOP_VISION_RANGE, CITY_TIER_XP_THRESHOLDS } from '@vantaris/shared/constants';
+import { CFG } from '@vantaris/shared/constants';
 import type { AdjacencyMap } from '@vantaris/shared';
 import type { PlayerStateSlice, VisibleCellData, RevealedCellData, UnitData, CityData, PlayerSummary, RuinMarkerData, BuildingData, PlayerResourceData, StockpileEntry, ProductionItem } from '@vantaris/shared';
 import { getCityStockpile } from './resources';
-import { getBuildingStockpile, getCellBuildingCapacity, countBuildingsOnCell } from './buildings';
+import { getBuildingStockpile, getCellBuildingCapacity, countBuildingsOnCell, getResourcesInvested } from './buildings';
 import { getRepeatQueue, getPriorityQueue, getCurrentProduction } from './cities';
 
 export function revealCellForPlayer(state: GameState, playerId: string, cellId: string): void {
@@ -30,7 +30,7 @@ export function computeVisibilityForPlayer(
   state: GameState,
   playerId: string,
   adjacencyMap: AdjacencyMap,
-  visionRange: number = TROOP_VISION_RANGE,
+  visionRange: number = CFG.TROOP_VISION_RANGE,
 ): void {
   const player = state.players.get(playerId);
   if (!player) return;
@@ -149,6 +149,7 @@ export function buildPlayerSlice(
               factoryTier: building.factoryTier,
               factoryXp: building.factoryXp,
               stockpile: stockpileMapToEntries(bsp),
+              resourcesInvested: getResourcesInvested(building),
             });
           }
         }
@@ -218,9 +219,9 @@ export function buildPlayerSlice(
   const cities: CityData[] = [];
   for (const [, city] of state.cities) {
     if (visibleCellIds.has(city.cellId)) {
-      const nextThreshold = city.tier < CITY_TIER_XP_THRESHOLDS.length
-        ? CITY_TIER_XP_THRESHOLDS[city.tier]
-        : CITY_TIER_XP_THRESHOLDS[CITY_TIER_XP_THRESHOLDS.length - 1];
+      const nextThreshold = city.tier < CFG.CITY.TIER_XP_THRESHOLDS.length
+        ? CFG.CITY.TIER_XP_THRESHOLDS[city.tier]
+        : CFG.CITY.TIER_XP_THRESHOLDS[CFG.CITY.TIER_XP_THRESHOLDS.length - 1];
       const citySp = getCityStockpile(city);
       const repeatQ = getRepeatQueue(city);
       const priorityQ = getPriorityQueue(city);
@@ -260,6 +261,7 @@ export function buildPlayerSlice(
         factoryTier: building.factoryTier,
         factoryXp: building.factoryXp,
         stockpile: stockpileMapToEntries(bsp),
+        resourcesInvested: getResourcesInvested(building),
       });
     }
   }

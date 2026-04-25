@@ -3,30 +3,18 @@ import { CityState } from '../state/CityState';
 import { BuildingState } from '../state/BuildingState';
 import { ResourceType } from '@vantaris/shared';
 import {
-  CITY_TIER_MANPOWER,
-  CITY_TIER_XP_THRESHOLDS,
-  CITY_XP_PER_POP_PER_10,
-  POPULATION_GROWTH_BASE,
-  POPULATION_GROWTH_FOOD_BONUS,
-  POPULATION_DECLINE_THRESHOLD,
-  POPULATION_DECLINE_RATE,
-  POPULATION_STARVATION_THRESHOLD,
-  POPULATION_STARVATION_RATE,
+  CFG,
   EXTRACTOR_OUTPUT,
-  SUPPLY_CHAIN_MAX_HOPS,
-  SUPPLY_CHAIN_DISTANCE_PENALTY,
-  FACTORY_RECIPES,
-  FACTORY_XP_PER_CYCLE,
-  FACTORY_TIER_THRESHOLDS,
-  CITY_FOOD_DRAIN_PER_POP,
-  CITY_POWER_DRAIN_BASE,
-  CITY_BASE_GRAIN_RATE,
-  CITY_INITIAL_STOCKPILE,
   RAW_RESOURCES,
-  CITY_BREAD_EMERGENCY_GRAIN_RATIO,
 } from '@vantaris/shared/constants';
 import { getBuildingStockpile, setBuildingStockpile, getBuildingStockpileAmount, addToBuildingStockpile } from './buildings';
 import type { AdjacencyMap } from '@vantaris/shared';
+
+const ROUND_PRECISION = 0.001;
+
+function roundValue(v: number): number {
+  return Math.round(v / ROUND_PRECISION) * ROUND_PRECISION;
+}
 
 export function getCityStockpile(city: CityState): Record<string, number> {
   try {
@@ -39,7 +27,8 @@ export function getCityStockpile(city: CityState): Record<string, number> {
 export function setCityStockpile(city: CityState, stockpile: Record<string, number>): void {
   const filtered: Record<string, number> = {};
   for (const [k, v] of Object.entries(stockpile)) {
-    if (v !== 0) filtered[k] = v;
+    const rv = roundValue(v);
+    if (rv !== 0) filtered[k] = rv;
   }
   city.stockpile = JSON.stringify(filtered);
 }
@@ -65,7 +54,7 @@ export function consumeFromCityStockpile(city: CityState, resource: string, amou
 
 export function initCityStockpile(city: CityState): void {
   const sp: Record<string, number> = {};
-  for (const [k, v] of Object.entries(CITY_INITIAL_STOCKPILE)) {
+  for (const [k, v] of Object.entries(CFG.CITY.INITIAL_STOCKPILE)) {
     sp[k] = v;
   }
   setCityStockpile(city, sp);
@@ -80,7 +69,7 @@ function findNearestStorage(
   const visited = new Set<string>([cellId]);
   let frontier = [cellId];
 
-  for (let dist = 0; dist <= SUPPLY_CHAIN_MAX_HOPS; dist++) {
+  for (let dist = 0; dist <= CFG.SUPPLY_CHAIN.MAX_HOPS; dist++) {
     const nextFrontier: string[] = [];
 
     for (const cid of frontier) {
@@ -131,7 +120,7 @@ export function tickExtractorOutput(state: GameState, adjacencyMap: AdjacencyMap
     const target = findNearestStorage(building.cellId, building.ownerId, state, adjacencyMap);
     if (!target) continue;
 
-    const penalty = 1.0 - (target.distance * SUPPLY_CHAIN_DISTANCE_PENALTY);
+    const penalty = 1.0 - (target.distance * CFG.SUPPLY_CHAIN.DISTANCE_PENALTY);
     const delivered = Math.max(0.01, output.amount * Math.max(0.1, penalty));
 
     if (target.type === 'city') {
@@ -150,7 +139,7 @@ export function tickFactoryProcessing(state: GameState): void {
     if (building.productionTicksRemaining > 0) continue;
     if (!building.recipe) continue;
 
-    const recipe = FACTORY_RECIPES.find(r => r.id === building.recipe);
+    const recipe = CFG.FACTORY.RECIPES.find(r => r.id === building.recipe);
     if (!recipe) continue;
     if (building.factoryTier < recipe.minFactoryTier) continue;
 
@@ -172,11 +161,11 @@ export function tickFactoryProcessing(state: GameState): void {
       for (const out of recipe.output) {
         addToBuildingStockpile(building, out.resource, out.amount);
       }
-      building.factoryXp += FACTORY_XP_PER_CYCLE;
+      building.factoryXp += CFG.FACTORY.XP_PER_CYCLE;
       building.recipeTicksRemaining = recipe.ticksPerCycle;
 
-      for (let i = FACTORY_TIER_THRESHOLDS.length - 1; i >= 0; i--) {
-        if (building.factoryXp >= FACTORY_TIER_THRESHOLDS[i] && i + 1 > building.factoryTier) {
+      for (let i = CFG.FACTORY.TIER_THRESHOLDS.length - 1; i >= 0; i--) {
+        if (building.factoryXp >= CFG.FACTORY.TIER_THRESHOLDS[i] && i + 1 > building.factoryTier) {
           building.factoryTier = i + 1;
           break;
         }
@@ -206,7 +195,7 @@ export function tickFactoryOutputToCities(state: GameState, adjacencyMap: Adjace
       const city = state.cities.get(target.id);
       if (!city) continue;
 
-      const penalty = Math.max(0.1, 1.0 - (target.distance * SUPPLY_CHAIN_DISTANCE_PENALTY));
+      const penalty = Math.max(0.1, 1.0 - (target.distance * CFG.SUPPLY_CHAIN.DISTANCE_PENALTY));
       const delivered = amount * penalty;
 
       const newSp = getBuildingStockpile(building);
@@ -221,7 +210,7 @@ export function tickFactoryOutputToCities(state: GameState, adjacencyMap: Adjace
 export function tickCityResourceDrain(state: GameState): void {
   for (const [, city] of state.cities) {
     const sp = getCityStockpile(city);
-    sp[ResourceType.GRAIN] = (sp[ResourceType.GRAIN] || 0) + CITY_BASE_GRAIN_RATE;
+    sp[ResourceType.GRAIN] = (sp[ResourceType.GRAIN] || 0) + CFG.CITY.BASE_GRAIN_RATE;
 
     const pop = city.population;
     if (pop <= 0) {
@@ -231,17 +220,17 @@ export function tickCityResourceDrain(state: GameState): void {
       continue;
     }
 
-    const breadDrain = pop * CITY_FOOD_DRAIN_PER_POP;
-    const powerDrain = CITY_POWER_DRAIN_BASE + (city.tier - 1) * 0.3;
+    const breadDrain = pop * CFG.CITY.FOOD_DRAIN_PER_POP;
+    const powerDrain = CFG.CITY.POWER_DRAIN_BASE + (city.tier - 1) * 0.3;
 
     const breadAvailable = sp[ResourceType.BREAD] || 0;
 
     let breadConsumed = Math.min(breadAvailable, breadDrain);
     if (breadConsumed < breadDrain) {
       const grainAvailable = sp[ResourceType.GRAIN] || 0;
-      const grainNeeded = (breadDrain - breadConsumed) * CITY_BREAD_EMERGENCY_GRAIN_RATIO;
+      const grainNeeded = (breadDrain - breadConsumed) * CFG.CITY.BREAD_EMERGENCY_GRAIN_RATIO;
       const grainConsumed = Math.min(grainAvailable, grainNeeded);
-      breadConsumed += grainConsumed / CITY_BREAD_EMERGENCY_GRAIN_RATIO;
+      breadConsumed += grainConsumed / CFG.CITY.BREAD_EMERGENCY_GRAIN_RATIO;
       sp[ResourceType.GRAIN] = Math.max(0, (sp[ResourceType.GRAIN] || 0) - grainConsumed);
     }
     sp[ResourceType.BREAD] = Math.max(0, (sp[ResourceType.BREAD] || 0) - breadConsumed);
@@ -264,13 +253,13 @@ export function tickPopulation(state: GameState): void {
     const popCap = getPopulationCap(city.tier);
 
     if (foodSatisfaction >= 1.0 && city.population < popCap) {
-      const growth = POPULATION_GROWTH_BASE + POPULATION_GROWTH_FOOD_BONUS * foodSatisfaction;
+      const growth = CFG.CITY.POPULATION_GROWTH_BASE + CFG.CITY.POPULATION_GROWTH_FOOD_BONUS * foodSatisfaction;
       city.population = Math.min(popCap, city.population + growth);
-    } else if (foodSatisfaction < POPULATION_DECLINE_THRESHOLD && city.population > 0) {
-      if (foodSatisfaction <= POPULATION_STARVATION_THRESHOLD) {
-        city.population = Math.max(0, city.population - POPULATION_STARVATION_RATE);
+    } else if (foodSatisfaction < CFG.CITY.POPULATION_DECLINE_THRESHOLD && city.population > 0) {
+      if (foodSatisfaction <= CFG.CITY.POPULATION_STARVATION_THRESHOLD) {
+        city.population = Math.max(0, city.population - CFG.CITY.POPULATION_STARVATION_RATE);
       } else {
-        city.population = Math.max(0, city.population - POPULATION_DECLINE_RATE);
+        city.population = Math.max(0, city.population - CFG.CITY.POPULATION_DECLINE_RATE);
       }
     }
 
@@ -282,16 +271,16 @@ export function tickPopulation(state: GameState): void {
 
 export function tickCityXP(state: GameState): void {
   for (const [, city] of state.cities) {
-    const baseXP = Math.floor(city.population / 10) * CITY_XP_PER_POP_PER_10;
+    const baseXP = Math.floor(city.population / 10) * CFG.CITY.XP_PER_POP_PER_10;
     let xp = baseXP;
 
-    if (city.foodPerTick >= 1.0) xp = Math.floor(xp * 1.5);
-    if (city.energyPerTick >= 1.0) xp = Math.floor(xp * 1.3);
+    if (city.foodPerTick >= 1.0) xp = Math.floor(xp * CFG.CITY.XP_FOOD_MULTIPLIER);
+    if (city.energyPerTick >= 1.0) xp = Math.floor(xp * CFG.CITY.XP_ENERGY_MULTIPLIER);
 
     city.xp += xp;
 
-    for (let i = CITY_TIER_XP_THRESHOLDS.length - 1; i >= 0; i--) {
-      if (city.xp >= CITY_TIER_XP_THRESHOLDS[i] && i + 1 > city.tier) {
+    for (let i = CFG.CITY.TIER_XP_THRESHOLDS.length - 1; i >= 0; i--) {
+      if (city.xp >= CFG.CITY.TIER_XP_THRESHOLDS[i] && i + 1 > city.tier) {
         city.tier = i + 1;
         break;
       }
@@ -300,8 +289,7 @@ export function tickCityXP(state: GameState): void {
 }
 
 function getPopulationCap(tier: number): number {
-  const caps: Record<number, number> = { 1: 50, 2: 150, 3: 400, 4: 1000, 5: 3000, 6: 10000 };
-  return caps[tier] ?? 50;
+  return CFG.CITY.POPULATION_CAP[tier] ?? 50;
 }
 
 export function computePlayerResourceSummary(state: GameState, playerId: string): {
@@ -322,7 +310,7 @@ export function computePlayerResourceSummary(state: GameState, playerId: string)
     totalFood += (sp[ResourceType.BREAD] || 0) + (sp[ResourceType.GRAIN] || 0);
     totalEnergy += sp[ResourceType.POWER] || 0;
     const tier = city.tier;
-    manpower += CITY_TIER_MANPOWER[tier] ?? 2;
+    manpower += CFG.CITY.TIER_MANPOWER[tier] ?? 2;
   }
 
   for (const [, building] of state.buildings) {

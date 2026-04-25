@@ -1,5 +1,5 @@
 import type { PlayerStateSlice, VisibleCellData, RevealedCellData, UnitData, CityData, PlayerSummary, RuinMarkerData, ChatMessage, BuildingData, PlayerResourceData } from '@vantaris/shared';
-import { ENGINEER_LEVEL_BUILD_RULES, BUILDING_PLACEMENT_RULES } from '@vantaris/shared/constants';
+import { BUILDING_PLACEMENT_RULES, getEngineerBuildableTypes } from '@vantaris/shared/constants';
 
 export type CommandAction = 'move' | 'claim' | 'build' | 'restore';
 
@@ -131,7 +131,7 @@ export function getUnitActions(unitId: string): CommandableAction[] {
         if (cellData.ruin && cellData.ruinRevealed) {
           actions.push({ id: 'restore', label: 'Restore Ruin', key: '3', targetRequired: false });
         } else {
-          const allowedTypes = ENGINEER_LEVEL_BUILD_RULES[unit.engineerLevel] ?? ENGINEER_LEVEL_BUILD_RULES[1] ?? [];
+          const allowedTypes = getEngineerBuildableTypes(unit.engineerLevel);
           const canBuildSomething = allowedTypes.some((bt: string) => {
             const allowedBiomes = BUILDING_PLACEMENT_RULES[bt];
             if (allowedBiomes && !allowedBiomes.includes(cellData.biome)) return false;

@@ -112,6 +112,7 @@ export interface BuildingData {
   factoryTier: number;
   factoryXp: number;
   stockpile: StockpileEntry[];
+  resourcesInvested: { food: number; material: number };
 }
 
 export interface CityStockpileData {

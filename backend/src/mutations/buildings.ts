@@ -1,27 +1,30 @@
 import { GameState } from '../state/GameState';
 import { BuildingState } from '../state/BuildingState';
-import { BuildingType, ResourceType } from '@vantaris/shared';
+import { ResourceType } from '@vantaris/shared';
 import {
+  CFG,
+  CELL_BUILDING_CAPACITY,
   BUILDING_TICKS,
   BUILDING_PLACEMENT_RULES,
   BUILDING_COSTS,
-  CELL_BUILDING_CAPACITY,
-  PENTAGON_BUILDING_CAPACITY,
-  EXTRACTOR_TYPES,
-  ENGINEER_LEVEL_BUILD_RULES,
-  SUPPLY_CHAIN_MAX_HOPS,
-  SUPPLY_CHAIN_DISTANCE_PENALTY,
   FOOD_VALUE,
   MATERIAL_VALUE,
+  getEngineerBuildableTypes,
 } from '@vantaris/shared/constants';
 import type { AdjacencyMap } from '@vantaris/shared';
-import { getCityStockpile, getCityStockpileAmount, consumeFromCityStockpile, setCityStockpile } from './resources';
+import { getCityStockpile, getCityStockpileAmount, setCityStockpile } from './resources';
+
+const ROUND_PRECISION = 0.001;
+
+function roundValue(v: number): number {
+  return Math.round(v / ROUND_PRECISION) * ROUND_PRECISION;
+}
 
 let buildingIdCounter = 0;
 
 export function getCellBuildingCapacity(cell: { biome: string; isPentagon: boolean }): number {
-  if (cell.isPentagon) return PENTAGON_BUILDING_CAPACITY;
-  return CELL_BUILDING_CAPACITY[cell.biome] ?? 0;
+  const key = cell.isPentagon ? 'PENTAGON' : cell.biome;
+  return CELL_BUILDING_CAPACITY[key] ?? 0;
 }
 
 export function countBuildingsOnCell(state: GameState, cellId: string): number {
@@ -61,7 +64,8 @@ export function createBuilding(
   building.recipe = '';
   building.factoryTier = buildingType === 'FACTORY' ? 1 : 0;
   building.factoryXp = 0;
-  building.stockpile = '[]';
+  building.stockpile = '{}';
+  building.resourcesInvested = '{"food":0,"material":0}';
 
   state.buildings.set(building.buildingId, building);
   return building;
@@ -98,7 +102,7 @@ export function canPlaceBuilding(
   const allowedBiomes = BUILDING_PLACEMENT_RULES[buildingType];
   if (allowedBiomes && !allowedBiomes.includes(cell.biome)) return false;
 
-  const allowedTypes = ENGINEER_LEVEL_BUILD_RULES[engineerLevel] ?? ENGINEER_LEVEL_BUILD_RULES[1] ?? [];
+  const allowedTypes = getEngineerBuildableTypes(engineerLevel);
   if (!allowedTypes.includes(buildingType)) return false;
 
   const capacity = getCellBuildingCapacity(cell);
@@ -121,7 +125,7 @@ export function getAvailableBuildTypes(
   const capacity = getCellBuildingCapacity(cell);
   const currentCount = countBuildingsOnCell(state, cellId);
 
-  const allowedTypes = ENGINEER_LEVEL_BUILD_RULES[engineerLevel] ?? ENGINEER_LEVEL_BUILD_RULES[1] ?? [];
+  const allowedTypes = getEngineerBuildableTypes(engineerLevel);
   const available: string[] = [];
   for (const bType of allowedTypes) {
     if (bType === 'CITY' && cell.hasCity) continue;
@@ -134,41 +138,118 @@ export function getAvailableBuildTypes(
   return available;
 }
 
-export function cancelBuilding(state: GameState, buildingId: string): void {
+export function getResourcesInvested(building: BuildingState): { food: number; material: number } {
+  try {
+    return JSON.parse(building.resourcesInvested);
+  } catch {
+    return { food: 0, material: 0 };
+  }
+}
+
+function setResourcesInvested(building: BuildingState, invested: { food: number; material: number }): void {
+  building.resourcesInvested = JSON.stringify({
+    food: roundValue(invested.food),
+    material: roundValue(invested.material),
+  });
+}
+
+export function cancelBuilding(state: GameState, buildingId: string, adjacencyMap: AdjacencyMap): void {
   const building = state.buildings.get(buildingId);
   if (!building) return;
-  if (building.productionTicksRemaining > 0) {
-    removeBuilding(state, buildingId);
+  if (building.productionTicksRemaining <= 0) return;
+
+  const invested = getResourcesInvested(building);
+  if (invested.food > 0 || invested.material > 0) {
+    const target = findNearestCityForPayment(building.cellId, building.ownerId, state, adjacencyMap);
+    if (target) {
+      const city = state.cities.get(target.id);
+      if (city) {
+        if (invested.food > 0) refundFoodValue(city, invested.food);
+        if (invested.material > 0) refundMaterialValue(city, invested.material);
+      }
+    }
   }
+
+  removeBuilding(state, buildingId);
 }
 
-export function getBuildingStockpile(building: BuildingState): Record<string, number> {
-  try {
-    return JSON.parse(building.stockpile);
-  } catch {
-    return {};
+export function tickBuildingConstruction(
+  state: GameState,
+  building: BuildingState,
+  adjacencyMap: AdjacencyMap,
+): boolean {
+  if (building.productionTicksRemaining <= 0) return true;
+
+  const cost = BUILDING_COSTS[building.type];
+  if (!cost || (cost.food === 0 && cost.material === 0)) {
+    building.productionTicksRemaining--;
+    return building.productionTicksRemaining <= 0;
   }
-}
 
-export function setBuildingStockpile(building: BuildingState, stockpile: Record<string, number>): void {
-  const filtered: Record<string, number> = {};
-  for (const [k, v] of Object.entries(stockpile)) {
-    if (v !== 0) filtered[k] = v;
+  const totalTicks = BUILDING_TICKS[building.type] ?? 200;
+  const invested = getResourcesInvested(building);
+
+  let foodPerTick = cost.food / totalTicks;
+  let materialPerTick = cost.material / totalTicks;
+
+  const foodRemaining = cost.food - invested.food;
+  const materialRemaining = cost.material - invested.material;
+
+  foodPerTick = Math.min(foodPerTick, Math.max(0, foodRemaining));
+  materialPerTick = Math.min(materialPerTick, Math.max(0, materialRemaining));
+
+  const target = findNearestCityForPayment(building.cellId, building.ownerId, state, adjacencyMap);
+  if (!target) {
+    return false;
   }
-  building.stockpile = JSON.stringify(filtered);
+
+  const city = state.cities.get(target.id);
+  if (!city) {
+    return false;
+  }
+
+  let foodToConsume = 0;
+  let materialToConsume = 0;
+
+  if (foodPerTick > 0) {
+    const foodAvailable = computeFoodValue(city);
+    foodToConsume = Math.min(foodPerTick, foodAvailable);
+  }
+
+  if (materialPerTick > 0) {
+    const materialAvailable = computeMaterialValue(city);
+    materialToConsume = Math.min(materialPerTick, materialAvailable);
+  }
+
+  if (foodToConsume < foodPerTick - 0.001 || materialToConsume < materialPerTick - 0.001) {
+    return false;
+  }
+
+  if (foodToConsume > 0) {
+    deductFoodValue(city, foodToConsume);
+    invested.food = roundValue(invested.food + foodToConsume);
+  }
+
+  if (materialToConsume > 0) {
+    deductMaterialValue(city, materialToConsume);
+    invested.material = roundValue(invested.material + materialToConsume);
+  }
+
+  setResourcesInvested(building, invested);
+
+  const allFoodPaid = invested.food >= roundValue(cost.food) - 0.001;
+  const allMaterialPaid = invested.material >= roundValue(cost.material) - 0.001;
+
+  if (allFoodPaid && allMaterialPaid) {
+    building.productionTicksRemaining = 0;
+    return true;
+  }
+
+  building.productionTicksRemaining--;
+  return building.productionTicksRemaining <= 0;
 }
 
-export function addToBuildingStockpile(building: BuildingState, resource: string, amount: number): void {
-  const sp = getBuildingStockpile(building);
-  sp[resource] = (sp[resource] || 0) + amount;
-  setBuildingStockpile(building, sp);
-}
-
-export function getBuildingStockpileAmount(building: BuildingState, resource: string): number {
-  return getBuildingStockpile(building)[resource] || 0;
-}
-
-export function payBuildingCost(
+export function canAffordBuildingCost(
   state: GameState,
   cellId: string,
   buildingType: string,
@@ -189,13 +270,11 @@ export function payBuildingCost(
   if (cost.food > 0) {
     const foodAvailable = computeFoodValue(city);
     if (foodAvailable < cost.food) return false;
-    deductFoodValue(city, cost.food);
   }
 
   if (cost.material > 0) {
     const materialAvailable = computeMaterialValue(city);
     if (materialAvailable < cost.material) return false;
-    deductMaterialValue(city, cost.material);
   }
 
   return true;
@@ -235,19 +314,22 @@ function deductFoodValue(city: any, amount: number): boolean {
   ].filter(r => r.value > 0).sort((a, b) => b.value - a.value);
 
   for (const { resource, value } of breadOrder) {
-    if (remaining <= 0) break;
+    if (remaining <= 0.001) break;
     const available = getCityStockpileAmount(city, resource);
+    if (available <= 0) continue;
     const foodFromThis = available * value;
     const foodToTake = Math.min(foodFromThis, remaining);
     const unitsToTake = Math.ceil(foodToTake / value);
     const actualTaken = Math.min(available, unitsToTake);
     if (actualTaken > 0) {
-      consumeFromCityStockpile(city, resource, actualTaken);
+      const sp = getCityStockpile(city);
+      sp[resource] = roundValue(sp[resource] - actualTaken);
+      setCityStockpile(city, sp);
       remaining -= actualTaken * value;
     }
   }
 
-  return remaining <= 0.01;
+  return remaining <= 0.001;
 }
 
 function deductMaterialValue(city: any, amount: number): boolean {
@@ -262,19 +344,66 @@ function deductMaterialValue(city: any, amount: number): boolean {
   ].filter(r => r.value > 0).sort((a, b) => b.value - a.value);
 
   for (const { resource, value } of materialOrder) {
-    if (remaining <= 0) break;
+    if (remaining <= 0.001) break;
     const available = getCityStockpileAmount(city, resource);
+    if (available <= 0) continue;
     const matFromThis = available * value;
     const matToTake = Math.min(matFromThis, remaining);
     const unitsToTake = Math.ceil(matToTake / value);
     const actualTaken = Math.min(available, unitsToTake);
     if (actualTaken > 0) {
-      consumeFromCityStockpile(city, resource, actualTaken);
+      const sp = getCityStockpile(city);
+      sp[resource] = roundValue(sp[resource] - actualTaken);
+      setCityStockpile(city, sp);
       remaining -= actualTaken * value;
     }
   }
 
-  return remaining <= 0.01;
+  return remaining <= 0.001;
+}
+
+function refundFoodValue(city: any, amount: number): void {
+  let remaining = amount;
+
+  const breadValue = FOOD_VALUE['BREAD'] || 0;
+  const grainValue = FOOD_VALUE['GRAIN'] || 0;
+  const oilValue = FOOD_VALUE['OIL'] || 0;
+
+  const refundOrder = [
+    { resource: 'GRAIN', value: grainValue },
+    { resource: 'OIL', value: oilValue },
+    { resource: 'BREAD', value: breadValue },
+  ].filter(r => r.value > 0).sort((a, b) => a.value - b.value);
+
+  for (const { resource, value } of refundOrder) {
+    if (remaining <= 0.001) break;
+    const unitsRefundable = remaining / value;
+    const sp = getCityStockpile(city);
+    sp[resource] = roundValue((sp[resource] || 0) + unitsRefundable);
+    setCityStockpile(city, sp);
+    remaining -= unitsRefundable * value;
+  }
+}
+
+function refundMaterialValue(city: any, amount: number): void {
+  let remaining = amount;
+
+  const oreValue = MATERIAL_VALUE['ORE'] || 0;
+  const steelValue = MATERIAL_VALUE['STEEL'] || 0;
+
+  const refundOrder = [
+    { resource: 'ORE', value: oreValue },
+    { resource: 'STEEL', value: steelValue },
+  ].filter(r => r.value > 0).sort((a, b) => a.value - b.value);
+
+  for (const { resource, value } of refundOrder) {
+    if (remaining <= 0.001) break;
+    const unitsRefundable = remaining / value;
+    const sp = getCityStockpile(city);
+    sp[resource] = roundValue((sp[resource] || 0) + unitsRefundable);
+    setCityStockpile(city, sp);
+    remaining -= unitsRefundable * value;
+  }
 }
 
 function findNearestCityForPayment(
@@ -286,7 +415,7 @@ function findNearestCityForPayment(
   const visited = new Set<string>([cellId]);
   let frontier = [cellId];
 
-  for (let dist = 0; dist <= SUPPLY_CHAIN_MAX_HOPS; dist++) {
+  for (let dist = 0; dist <= CFG.SUPPLY_CHAIN.MAX_HOPS; dist++) {
     const nextFrontier: string[] = [];
 
     for (const cid of frontier) {
@@ -316,4 +445,31 @@ function findNearestCityForPayment(
   }
 
   return null;
+}
+
+export function getBuildingStockpile(building: BuildingState): Record<string, number> {
+  try {
+    return JSON.parse(building.stockpile);
+  } catch {
+    return {};
+  }
+}
+
+export function setBuildingStockpile(building: BuildingState, stockpile: Record<string, number>): void {
+  const filtered: Record<string, number> = {};
+  for (const [k, v] of Object.entries(stockpile)) {
+    const rv = roundValue(v);
+    if (rv !== 0) filtered[k] = rv;
+  }
+  building.stockpile = JSON.stringify(filtered);
+}
+
+export function addToBuildingStockpile(building: BuildingState, resource: string, amount: number): void {
+  const sp = getBuildingStockpile(building);
+  sp[resource] = roundValue((sp[resource] || 0) + amount);
+  setBuildingStockpile(building, sp);
+}
+
+export function getBuildingStockpileAmount(building: BuildingState, resource: string): number {
+  return getBuildingStockpile(building)[resource] || 0;
 }

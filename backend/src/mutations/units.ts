@@ -1,7 +1,7 @@
 import { GameState } from '../state/GameState';
 import { UnitState } from '../state/UnitState';
 import { UnitType, UnitStatus } from '@vantaris/shared';
-import { MOVEMENT_COST, CLAIM_TICKS_UNCLAIMED, CLAIM_TICKS_ENEMY } from '@vantaris/shared/constants';
+import { MOVEMENT_COST, CFG } from '@vantaris/shared/constants';
 import type { AdjacencyMap } from '@vantaris/shared';
 
 let unitIdCounter = 0;
@@ -120,9 +120,9 @@ export function startClaiming(
   unit.status = UnitStatus.CLAIMING;
 
   if (!cell || !cell.ownerId) {
-    unit.claimTicksRemaining = CLAIM_TICKS_UNCLAIMED;
+    unit.claimTicksRemaining = CFG.CLAIM.TICKS_UNCLAIMED;
   } else {
-    unit.claimTicksRemaining = CLAIM_TICKS_ENEMY;
+    unit.claimTicksRemaining = CFG.CLAIM.TICKS_ENEMY;
   }
 }
 

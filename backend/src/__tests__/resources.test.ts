@@ -5,7 +5,7 @@ import { PlayerState } from '../state/PlayerState';
 import { CityState } from '../state/CityState';
 import { BuildingState } from '../state/BuildingState';
 import { BiomeType, ResourceType } from '@vantaris/shared';
-import { createBuilding, canPlaceBuilding, tickBuildingProduction, countBuildingsOnCell, getCellBuildingCapacity, getAvailableBuildTypes, getBuildingStockpile, addToBuildingStockpile, getBuildingStockpileAmount } from '../mutations/buildings';
+import { createBuilding, canPlaceBuilding, tickBuildingProduction, countBuildingsOnCell, getCellBuildingCapacity, getAvailableBuildTypes, getBuildingStockpile, addToBuildingStockpile, getBuildingStockpileAmount, canAffordBuildingCost, tickBuildingConstruction, getResourcesInvested } from '../mutations/buildings';
 import { tickExtractorOutput, tickFactoryProcessing, tickCityResourceDrain, tickPopulation, tickCityXP, getCityStockpile, setCityStockpile, addToCityStockpile, getCityStockpileAmount, initCityStockpile, consumeFromCityStockpile } from '../mutations/resources';
 
 function makeTestState(): GameState {
@@ -355,5 +355,94 @@ describe('Engineer Level Gating', () => {
     const state = makeTestState();
     const result = canPlaceBuilding(state, 'cell_0', 'CITY', 'p1', 1);
     expect(result).toBe(false);
+  });
+});
+
+describe('Gradual Building Construction', () => {
+  it('should drain resources per tick toward building cost', () => {
+    const state = makeTestState();
+    const city = makeTestCity(state, 'cell_0');
+    const building = createBuilding(state, 'p1', 'cell_4', 'OIL_WELL');
+    expect(building).not.toBeNull();
+    expect(building!.productionTicksRemaining).toBe(350);
+
+    const adjMap: Record<string, string[]> = { 'cell_0': ['cell_4'], 'cell_4': ['cell_0'] };
+
+    const investedBefore = getResourcesInvested(building!);
+    expect(investedBefore.food).toBe(0);
+    expect(investedBefore.material).toBe(0);
+
+    tickBuildingConstruction(state, building!, adjMap);
+
+    const investedAfter = getResourcesInvested(building!);
+    expect(investedAfter.food).toBeGreaterThan(0);
+    expect(investedAfter.material).toBeGreaterThan(0);
+  });
+
+  it('should stall construction when city cannot afford per-tick cost', () => {
+    const state = makeTestState();
+    const city = makeTestCity(state, 'cell_0');
+    const sp = getCityStockpile(city);
+    sp['BREAD'] = 0;
+    sp['GRAIN'] = 0;
+    sp['ORE'] = 0;
+    sp['STEEL'] = 0;
+    setCityStockpile(city, sp);
+
+    const building = createBuilding(state, 'p1', 'cell_4', 'OIL_WELL');
+    expect(building).not.toBeNull();
+
+    const adjMap: Record<string, string[]> = { 'cell_0': ['cell_4'], 'cell_4': ['cell_0'] };
+    const ticksBefore = building!.productionTicksRemaining;
+
+    const completed = tickBuildingConstruction(state, building!, adjMap);
+    expect(completed).toBe(false);
+    expect(building!.productionTicksRemaining).toBe(ticksBefore);
+
+    const invested = getResourcesInvested(building!);
+    expect(invested.food).toBe(0);
+    expect(invested.material).toBe(0);
+  });
+
+  it('should mark construction complete when all resources paid and ticks elapsed', () => {
+    const state = makeTestState();
+    const city = makeTestCity(state, 'cell_0');
+    const building = createBuilding(state, 'p1', 'cell_4', 'OIL_WELL');
+    expect(building).not.toBeNull();
+
+    building!.productionTicksRemaining = 2;
+
+    const adjMap: Record<string, string[]> = { 'cell_0': ['cell_4'], 'cell_4': ['cell_0'] };
+
+    tickBuildingConstruction(state, building!, adjMap);
+    tickBuildingConstruction(state, building!, adjMap);
+
+    expect(building!.productionTicksRemaining).toBe(0);
+  });
+
+  it('should validate canAffordBuildingCost correctly', () => {
+    const state = makeTestState();
+    makeTestCity(state, 'cell_0');
+
+    const adjMap: Record<string, string[]> = { 'cell_0': ['cell_4'], 'cell_4': ['cell_0'] };
+
+    expect(canAffordBuildingCost(state, 'cell_1', 'MINE', 'p1', adjMap)).toBe(true);
+
+    const state2 = makeTestState();
+    const city = makeTestCity(state2, 'cell_0');
+    const sp = getCityStockpile(city);
+    sp['BREAD'] = 0;
+    sp['GRAIN'] = 0;
+    setCityStockpile(city, sp);
+
+    const adjMap2: Record<string, string[]> = { 'cell_0': ['cell_4'], 'cell_4': ['cell_0'] };
+    expect(canAffordBuildingCost(state2, 'cell_4', 'OIL_WELL', 'p1', adjMap2)).toBe(false);
+  });
+
+  it('should allow free buildings (FARM) without resource checks', () => {
+    const state = makeTestState();
+    const adjMap: Record<string, string[]> = { 'cell_0': [] };
+
+    expect(canAffordBuildingCost(state, 'cell_0', 'FARM', 'p1', adjMap)).toBe(true);
   });
 });

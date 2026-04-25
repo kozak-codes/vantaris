@@ -1,12 +1,10 @@
 import { GameState } from '../state/GameState';
 import { CityState } from '../state/CityState';
-import { CITY_TROOP_PRODUCTION_TICKS, CITY_TIER_XP_THRESHOLDS, PASSIVE_EXPANSION_TICKS, UNIT_PRODUCTION_COSTS, CITY_INITIAL_STOCKPILE, FOOD_VALUE, MATERIAL_VALUE } from '@vantaris/shared/constants';
+import { CFG, UNIT_PRODUCTION_COSTS, FOOD_VALUE, MATERIAL_VALUE } from '@vantaris/shared/constants';
 import type { ProductionItem } from '@vantaris/shared';
 import { initCityStockpile, getCityStockpileAmount, consumeFromCityStockpile } from './resources';
 
 let cityIdCounter = 0;
-
-export const ENGINEER_PRODUCTION_TICKS = 300;
 
 export function getProductionCost(unitType: string): { ticksCost: number; resourceCost: Record<string, number>; manpowerCost: number } {
   const cost = UNIT_PRODUCTION_COSTS.find(c => c.type === unitType);
@@ -257,8 +255,8 @@ export function clearPriorityQueue(city: CityState): void {
 export function awardCityXP(city: CityState, xp: number): void {
   city.xp += xp;
 
-  for (let i = CITY_TIER_XP_THRESHOLDS.length - 1; i >= 0; i--) {
-    if (city.xp >= CITY_TIER_XP_THRESHOLDS[i] && i + 1 > city.tier) {
+  for (let i = CFG.CITY.TIER_XP_THRESHOLDS.length - 1; i >= 0; i--) {
+    if (city.xp >= CFG.CITY.TIER_XP_THRESHOLDS[i] && i + 1 > city.tier) {
       city.tier = i + 1;
       break;
     }
@@ -270,7 +268,7 @@ export function tickPassiveExpansion(
   city: CityState,
   adjacencyMap: { [cellId: string]: string[] },
 ): string | null {
-  const interval = PASSIVE_EXPANSION_TICKS[city.tier] ?? 0;
+  const interval = CFG.CITY.PASSIVE_EXPANSION_TICKS[city.tier] ?? 0;
   if (interval === 0) return null;
 
   if (city.passiveExpandCooldown > 0) {
