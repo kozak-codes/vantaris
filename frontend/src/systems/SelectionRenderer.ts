@@ -136,6 +136,7 @@ export class SelectionRenderer {
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85 });
     const lineSegments = new THREE.LineSegments(geometry, material);
+    lineSegments.raycast = () => {};
     this.globe.add(lineSegments);
     return lineSegments;
   }
@@ -168,6 +169,7 @@ export class SelectionRenderer {
       linewidth: 2,
     });
     this.pathLines = new THREE.Line(geometry, material);
+    this.pathLines.raycast = () => {};
     this.globe.add(this.pathLines);
   }
 

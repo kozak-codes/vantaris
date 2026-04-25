@@ -168,7 +168,9 @@ export class UnitRenderer {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     const material = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
-    return new THREE.LineSegments(geometry, material);
+    const ring = new THREE.LineSegments(geometry, material);
+    ring.raycast = () => {};
+    return ring;
   }
 
   private updateSelectionRings(): void {

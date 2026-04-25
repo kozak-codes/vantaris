@@ -65,6 +65,7 @@ export function createInfantryIcon(color: string): THREE.Mesh {
 
   const mesh = new THREE.Mesh(geometry, material);
   mesh.renderOrder = 999;
+  mesh.raycast = () => {};
   mesh.userData = { type: 'unit' };
   return mesh;
 }
@@ -99,6 +100,7 @@ export function createCityIcon(color: string, tier: number): THREE.Mesh {
 
   const mesh = new THREE.Mesh(geometry, material);
   mesh.renderOrder = 998;
+  mesh.raycast = () => {};
   mesh.userData = { type: 'city' };
   return mesh;
 }
