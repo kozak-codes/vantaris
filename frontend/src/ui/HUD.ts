@@ -35,6 +35,7 @@ export class HUD {
   private wordmark: HTMLElement;
   private tickCounter: HTMLElement;
   private tilePanel: HTMLElement;
+  private suppressUpdate: boolean = false;
 
   constructor() {
     this.tooltip = document.getElementById('hud-tooltip')!;
@@ -86,7 +87,9 @@ export class HUD {
 
   private onStateUpdate(): void {
     this.updateTickCounter();
-    this.updateTilePanel();
+    if (!this.suppressUpdate) {
+      this.updateTilePanel();
+    }
   }
 
   private updateTickCounter(): void {
@@ -156,10 +159,13 @@ export class HUD {
 
     let commandsHtml = '';
     if (isMyUnit && unit.status === 'IDLE') {
+      const cellData = clientState.visibleCells.get(unit.cellId);
+      const alreadyOwnsTile = cellData && cellData.ownerId === clientState.myPlayerId;
       const moveActive = pendingCommand === 'move' ? ' active' : '';
+      const claimButton = alreadyOwnsTile ? '' : `<button class="panel-btn cmd-btn" id="cmd-claim" title="Claim the tile this unit is standing on">2 Claim<span class="cmd-key">2</span></button>`;
       commandsHtml = `<div class="panel-actions">
         <button class="panel-btn cmd-btn${moveActive}" id="cmd-move" title="Click a destination tile to move there">1 Move<span class="cmd-key">1</span></button>
-        <button class="panel-btn cmd-btn" id="cmd-claim" title="Claim the tile this unit is standing on">2 Claim<span class="cmd-key">2</span></button>
+        ${claimButton}
         <button class="panel-btn" id="cmd-stop" title="Stop unit / cancel">Stop</button>
       </div>`;
       if (pendingCommand === 'move') {
@@ -336,20 +342,31 @@ export class HUD {
     document.querySelectorAll('[data-unit-id]').forEach(el => {
       el.addEventListener('click', () => {
         const uid = (el as HTMLElement).dataset.unitId!;
-        clientState.selectedUnitId = uid;
-        clientState.selectedCityId = null;
-        clientState.pendingCommand = null;
-        notifySelectionChanged();
+        const unit = clientState.units.get(uid);
+        this.suppressUpdate = true;
+        try {
+          clientState.selectedUnitId = uid;
+          clientState.selectedCityId = null;
+          clientState.pendingCommand = (unit && unit.status === 'IDLE' && unit.ownerId === clientState.myPlayerId) ? 'move' : null;
+          notifySelectionChanged();
+        } finally {
+          this.suppressUpdate = false;
+        }
       });
     });
 
     document.querySelectorAll('[data-city-id]').forEach(el => {
       el.addEventListener('click', () => {
         const cid = (el as HTMLElement).dataset.cityId!;
-        clientState.selectedCityId = cid;
-        clientState.selectedUnitId = null;
-        clientState.pendingCommand = null;
-        notifySelectionChanged();
+        this.suppressUpdate = true;
+        try {
+          clientState.selectedCityId = cid;
+          clientState.selectedUnitId = null;
+          clientState.pendingCommand = null;
+          notifySelectionChanged();
+        } finally {
+          this.suppressUpdate = false;
+        }
       });
     });
   }
@@ -373,8 +390,13 @@ export class HUD {
     const moveBtn = document.getElementById('cmd-move');
     if (moveBtn) {
       moveBtn.addEventListener('click', () => {
-        clientState.pendingCommand = clientState.pendingCommand === 'move' ? null : 'move';
-        notifySelectionChanged();
+        this.suppressUpdate = true;
+        try {
+          clientState.pendingCommand = clientState.pendingCommand === 'move' ? null : 'move';
+          notifySelectionChanged();
+        } finally {
+          this.suppressUpdate = false;
+        }
       });
     }
 
@@ -383,6 +405,8 @@ export class HUD {
       claimBtn.addEventListener('click', () => {
         const u = clientState.units.get(unit.unitId);
         if (u && u.status === 'IDLE' && u.cellId === clientState.selectedTileId) {
+          const cellData = clientState.visibleCells.get(u.cellId);
+          if (cellData && cellData.ownerId === clientState.myPlayerId) return;
           sendClaimTerritory(unit.unitId);
           clientState.pendingCommand = null;
           notifySelectionChanged();

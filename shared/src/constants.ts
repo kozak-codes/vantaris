@@ -85,7 +85,7 @@ export const CITY_ENERGY_COST: Record<number, number> = {
   1: 1, 2: 2, 3: 5, 4: 12, 5: 30, 6: 80,
 };
 
-export const CLAIM_TICKS_UNCLAIMED = 500;
+export const CLAIM_TICKS_UNCLAIMED = 50;
 export const CLAIM_TICKS_ENEMY = 3000;
 
 export const VALID_CITY_SPAWN_TERRAIN = [TerrainType.PLAINS];

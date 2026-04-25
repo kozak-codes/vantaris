@@ -16,6 +16,7 @@ export class FogRenderer {
   private cellMeshes: Map<string, THREE.Mesh>;
   private targetColors: Map<string, THREE.Color> = new Map();
   private borderLines: THREE.LineSegments | null = null;
+  private ownerLines: THREE.LineSegments | null = null;
   private globe: THREE.Group;
   private grid: any;
   private lerpSpeed = 0.08;
@@ -37,6 +38,7 @@ export class FogRenderer {
   private onStateChange(): void {
     this.updateTargetColors();
     this.rebuildBorders();
+    this.rebuildOwnerBorders();
   }
 
   private updateTargetColors(): void {
@@ -139,6 +141,7 @@ export class FogRenderer {
         opacity: 0.4,
       });
       this.borderLines = new THREE.LineSegments(geom, mat);
+      this.borderLines.raycast = () => {};
       this.globe.add(this.borderLines);
     }
   }
@@ -153,6 +156,70 @@ export class FogRenderer {
         const mat = mesh.material as THREE.MeshStandardMaterial;
         mat.color.copy(target);
       }
+    }
+  }
+
+  private rebuildOwnerBorders(): void {
+    if (this.ownerLines) {
+      this.globe.remove(this.ownerLines);
+      this.ownerLines.geometry.dispose();
+      (this.ownerLines.material as THREE.Material).dispose();
+      this.ownerLines = null;
+    }
+
+    const positions: number[] = [];
+    const colors: number[] = [];
+    const offset = 0.016;
+    const radius = 5;
+
+    const visibleSet = new Set<string>();
+    for (const [cellId] of clientState.visibleCells) visibleSet.add(cellId);
+
+    for (const cell of this.grid.cells) {
+      const cellId = `cell_${cell.id}`;
+      if (!visibleSet.has(cellId)) continue;
+
+      const cellData = clientState.visibleCells.get(cellId);
+      const ownerId = cellData?.ownerId || null;
+      if (!ownerId) continue;
+
+      const player = clientState.players.get(ownerId);
+      const color = player ? new THREE.Color(player.color) : new THREE.Color('#888888');
+
+      const neighbors = this.grid.adjacency.get(cell.id) || [];
+      const hasDifferentNeighbor = neighbors.some((nId: number) => {
+        const nData = clientState.visibleCells.get(`cell_${nId}`);
+        return !nData || nData.ownerId !== ownerId;
+      });
+
+      if (!hasDifferentNeighbor) continue;
+
+      const dualVerts = cell.vertexIds.map((fi: number) => {
+        const dv = this.grid.vertices[fi];
+        return new THREE.Vector3(dv[0], dv[1], dv[2]);
+      });
+
+      for (let i = 0; i < dualVerts.length; i++) {
+        const a = dualVerts[i].clone().normalize().multiplyScalar(radius + offset);
+        const b = dualVerts[(i + 1) % dualVerts.length].clone().normalize().multiplyScalar(radius + offset);
+        positions.push(a.x, a.y, a.z, b.x, b.y, b.z);
+        colors.push(color.r, color.g, color.b, color.r, color.g, color.b);
+      }
+    }
+
+    if (positions.length > 0) {
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      const mat = new THREE.LineBasicMaterial({
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.9,
+        linewidth: 2,
+      });
+      this.ownerLines = new THREE.LineSegments(geom, mat);
+      this.ownerLines.raycast = () => {};
+      this.globe.add(this.ownerLines);
     }
   }
 

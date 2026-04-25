@@ -283,6 +283,9 @@ export class VantarisRoom extends Room<GameState> {
     const unit = this.state.units.get(data.unitId);
     if (!unit || unit.ownerId !== playerId || unit.status !== 'IDLE') return;
 
+    const cell = this.state.cells.get(unit.cellId);
+    if (cell && cell.ownerId === playerId) return;
+
     startClaiming(this.state, data.unitId);
   }
 

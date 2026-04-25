@@ -110,18 +110,15 @@ export function startClaiming(
   const unit = state.units.get(unitId);
   if (!unit) return;
 
+  const cell = state.cells.get(unit.cellId);
+  if (cell && cell.ownerId === unit.ownerId) return;
+
   unit.status = UnitStatus.CLAIMING;
 
-  const cell = state.cells.get(unit.cellId);
-  if (!cell) {
+  if (!cell || !cell.ownerId) {
     unit.claimTicksRemaining = CLAIM_TICKS_UNCLAIMED;
-    return;
-  }
-
-  if (cell.ownerId && cell.ownerId !== unit.ownerId) {
-    unit.claimTicksRemaining = CLAIM_TICKS_ENEMY;
   } else {
-    unit.claimTicksRemaining = CLAIM_TICKS_UNCLAIMED;
+    unit.claimTicksRemaining = CLAIM_TICKS_ENEMY;
   }
 }
 

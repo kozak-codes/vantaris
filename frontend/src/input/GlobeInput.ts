@@ -255,10 +255,10 @@ export class GlobeInput {
 
     if (index === 0) {
       for (const [unitId, unit] of clientState.units) {
-        if (unit.cellId === tileId) {
+        if (unit.cellId === tileId && unit.status === 'IDLE') {
           clientState.selectedUnitId = unitId;
           clientState.selectedCityId = null;
-          clientState.pendingCommand = null;
+          clientState.pendingCommand = unit.ownerId === clientState.myPlayerId ? 'move' : null;
           notifySelectionChanged();
           return;
         }
@@ -276,12 +276,12 @@ export class GlobeInput {
     } else {
       const unitsOnTile: string[] = [];
       for (const [unitId, unit] of clientState.units) {
-        if (unit.cellId === tileId) unitsOnTile.push(unitId);
+        if (unit.cellId === tileId && unit.status === 'IDLE') unitsOnTile.push(unitId);
       }
       if (unitsOnTile.length > index - 1) {
         clientState.selectedUnitId = unitsOnTile[index - 1];
         clientState.selectedCityId = null;
-        clientState.pendingCommand = null;
+        clientState.pendingCommand = 'move';
         notifySelectionChanged();
       }
     }
