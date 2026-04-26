@@ -3,7 +3,7 @@ import { storeReconnectionToken, getReconnectionToken, getStoredRoomId } from '.
 import { applyStateSlice, clearClientState, clientState } from '../state/ClientState';
 import type { ChatMessage } from '@vantaris/shared';
 
-const SERVER_URL = 'ws://localhost:2567';
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'ws://localhost:2567';
 
 let client: Client | null = null;
 let currentRoom: Room | null = null;

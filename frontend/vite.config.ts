@@ -12,4 +12,7 @@ export default defineConfig({
       '@vantaris/shared': path.resolve(__dirname, '../shared/src/index.ts'),
     },
   },
+  build: {
+    outDir: 'dist',
+  },
 });

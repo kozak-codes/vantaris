@@ -11,11 +11,17 @@ import { LobbyRoom } from './rooms/LobbyRoom';
 
 Encoder.BUFFER_SIZE = 128 * 1024;
 
-const PORT = 2567;
+const PORT = parseInt(process.env.PORT || '2567', 10);
+
+const ALLOWED_ORIGINS = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  ...(process.env.ALLOWED_ORIGIN ? [process.env.ALLOWED_ORIGIN] : []),
+];
 
 const app = express();
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174'],
+  origin: ALLOWED_ORIGINS,
   credentials: true,
 }));
 

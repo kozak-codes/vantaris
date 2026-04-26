@@ -1,0 +1,21 @@
+name = "vantaris-backend"
+main = "worker.ts"
+compatibility_date = "2026-04-25"
+
+routes = [
+  { pattern = "api.vantaris.gg", custom_domain = true }
+]
+
+[[containers]]
+class_name = "VantarisContainer"
+image = "../Dockerfile"
+max_instances = 5
+instance_type = "basic"
+
+[[durable_objects.bindings]]
+name = "VANTARIS_CONTAINER"
+class_name = "VantarisContainer"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["VantarisContainer"]
