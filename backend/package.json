@@ -2,6 +2,7 @@
   "name": "@vantaris/backend",
   "version": "0.1.0",
   "private": true,
+  "license": "CAL-1.0",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",

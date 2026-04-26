@@ -2,7 +2,7 @@
   "name": "@vantaris/frontend",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
+  "license": "CAL-1.0",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
