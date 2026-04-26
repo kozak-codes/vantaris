@@ -1,4 +1,4 @@
-import { RuinType, BiomeType } from '@vantaris/shared';
+import { RuinType, TerrainType } from '@vantaris/shared';
 import { SeededRandom } from './rng';
 import type { WorldCell } from './pipeline';
 
@@ -9,7 +9,7 @@ export function placeRuins(cells: WorldCell[], rng: SeededRandom, totalLandCells
   const hasOceanNeighbor = (cell: WorldCell, cellMap: Map<string, WorldCell>): boolean => {
     for (const nId of cell.neighborIds) {
       const n = cellMap.get(nId);
-      if (n && n.biome === BiomeType.Ocean) return true;
+      if (n && n.biome === TerrainType.OCEAN) return true;
     }
     return false;
   };
@@ -17,14 +17,14 @@ export function placeRuins(cells: WorldCell[], rng: SeededRandom, totalLandCells
   const nearMountain = (cell: WorldCell, cellMap: Map<string, WorldCell>): boolean => {
     for (const nId of cell.neighborIds) {
       const n = cellMap.get(nId);
-      if (n && n.biome === BiomeType.Mountain) return true;
+      if (n && n.biome === TerrainType.MOUNTAIN) return true;
     }
     for (const nId of cell.neighborIds) {
       const n = cellMap.get(nId);
       if (!n) continue;
       for (const nnId of n.neighborIds) {
         const nn = cellMap.get(nnId);
-        if (nn && nn.biome === BiomeType.Mountain) return true;
+        if (nn && nn.biome === TerrainType.MOUNTAIN) return true;
       }
     }
     return false;
@@ -41,22 +41,22 @@ export function placeRuins(cells: WorldCell[], rng: SeededRandom, totalLandCells
     const isCoastal = hasOceanNeighbor(cell, cellMap);
     const isNearMountain = nearMountain(cell, cellMap);
 
-    if (cell.biome === BiomeType.Plains && isCoastal) {
+    if (cell.biome === TerrainType.PLAINS && isCoastal) {
       candidates.push({ cell, ruin: RuinType.RUINED_CITY });
     }
-    if (isNearMountain && cell.biome !== BiomeType.Ocean) {
+    if (isNearMountain && cell.biome !== TerrainType.OCEAN) {
       candidates.push({ cell, ruin: RuinType.RUINED_FACTORY });
     }
-    if (isCoastal && cell.biome !== BiomeType.Ocean) {
+    if (isCoastal && cell.biome !== TerrainType.OCEAN) {
       candidates.push({ cell, ruin: RuinType.RUINED_PORT });
     }
-    if (cell.biome === BiomeType.Plains) {
+    if (cell.biome === TerrainType.PLAINS) {
       candidates.push({ cell, ruin: RuinType.RUINED_BARRACKS });
     }
-    if (cell.biome === BiomeType.Mountain) {
+    if (cell.biome === TerrainType.MOUNTAIN) {
       candidates.push({ cell, ruin: RuinType.COLLAPSED_MINE });
     }
-    if (cell.biome === BiomeType.Plains || cell.biome === BiomeType.Forest) {
+    if (cell.biome === TerrainType.PLAINS || cell.biome === TerrainType.FOREST) {
       candidates.push({ cell, ruin: RuinType.OVERGROWN_FARM });
     }
   }
@@ -97,9 +97,9 @@ export function placeRuins(cells: WorldCell[], rng: SeededRandom, totalLandCells
 
 function pickSecondaryRuin(cell: WorldCell, cellMap: Map<string, WorldCell>, rng: SeededRandom): RuinType | null {
   const options: RuinType[] = [];
-  if (cell.biome === BiomeType.Plains) options.push(RuinType.RUINED_BARRACKS, RuinType.OVERGROWN_FARM);
-  if (cell.biome === BiomeType.Mountain) options.push(RuinType.COLLAPSED_MINE);
-  if (cell.biome === BiomeType.Forest) options.push(RuinType.OVERGROWN_FARM);
+  if (cell.biome === TerrainType.PLAINS) options.push(RuinType.RUINED_BARRACKS, RuinType.OVERGROWN_FARM);
+  if (cell.biome === TerrainType.MOUNTAIN) options.push(RuinType.COLLAPSED_MINE);
+  if (cell.biome === TerrainType.FOREST) options.push(RuinType.OVERGROWN_FARM);
   if (options.length === 0) return null;
   return options[Math.floor(rng.next() * options.length)];
 }

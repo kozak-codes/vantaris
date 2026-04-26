@@ -1,4 +1,4 @@
-import { BiomeType } from '../types/index';
+import { TerrainType } from '../types/index';
 import { CFG } from '@vantaris/shared/constants';
 
 let _seed = 42;
@@ -12,12 +12,12 @@ export function resetBiomeSeed(seed: number): void {
   _seed = seed;
 }
 
-export function assignBiomes(cellIndex: number): BiomeType {
-  const totalWeight = CFG.BIOMES.reduce((s, b) => s + b.weight, 0);
+export function assignBiomes(cellIndex: number): TerrainType {
+  const totalWeight = (Object.values(CFG.TERRAIN) as { weight: number }[]).reduce((s, b) => s + b.weight, 0);
   let r = seededRandom() * totalWeight;
-  for (const config of CFG.BIOMES) {
+  for (const [key, config] of Object.entries(CFG.TERRAIN)) {
     r -= config.weight;
-    if (r <= 0) return config.type;
+    if (r <= 0) return key as TerrainType;
   }
-  return BiomeType.Ocean;
+  return TerrainType.OCEAN;
 }

@@ -1,5 +1,5 @@
 import { SeededRandom, vec3Normalize, vec3Dot, greatCircleDistance } from './rng';
-import { BoundaryType, BiomeType, ResourceType } from '@vantaris/shared';
+import { BoundaryType, TerrainType, ResourceType } from '@vantaris/shared';
 
 export interface Plate {
   plateId: string;
@@ -19,7 +19,7 @@ export interface WorldCell {
   elevation: number;
   temperature: number;
   moisture: number;
-  biome: BiomeType;
+  biome: TerrainType;
   resourceType: ResourceType;
   resourceAmount: number;
   ruin: string;
@@ -51,7 +51,7 @@ export function generateWorld(
     elevation: 0,
     temperature: 0,
     moisture: 0,
-    biome: BiomeType.Ocean,
+    biome: TerrainType.OCEAN,
     resourceType: ResourceType.NONE,
     resourceAmount: 0,
     ruin: '',
@@ -288,11 +288,11 @@ function computeClimate(cells: WorldCell[], cellMap: Map<string, WorldCell>, rng
 function assignBiomes(cells: WorldCell[]): void {
   for (const cell of cells) {
     if (cell.elevation < 0) {
-      cell.biome = BiomeType.Ocean;
+      cell.biome = TerrainType.OCEAN;
       continue;
     }
     if (cell.elevation > 0.5) {
-      cell.biome = BiomeType.Mountain;
+      cell.biome = TerrainType.MOUNTAIN;
       continue;
     }
 
@@ -300,29 +300,29 @@ function assignBiomes(cells: WorldCell[]): void {
     const m = cell.moisture;
 
     if (t < 0.3) {
-      cell.biome = BiomeType.Tundra;
+      cell.biome = TerrainType.TUNDRA;
     } else if (t < 0.5) {
-      cell.biome = m < 0.35 ? BiomeType.Tundra : m < 0.6 ? BiomeType.Plains : BiomeType.Forest;
+      cell.biome = m < 0.35 ? TerrainType.TUNDRA : m < 0.6 ? TerrainType.PLAINS : TerrainType.FOREST;
     } else if (t < 0.75) {
-      cell.biome = m < 0.3 ? BiomeType.Desert : m < 0.55 ? BiomeType.Plains : BiomeType.Forest;
+      cell.biome = m < 0.3 ? TerrainType.DESERT : m < 0.55 ? TerrainType.PLAINS : TerrainType.FOREST;
     } else {
-      cell.biome = m < 0.3 ? BiomeType.Desert : BiomeType.Plains;
+      cell.biome = m < 0.3 ? TerrainType.DESERT : TerrainType.PLAINS;
     }
   }
 }
 
 function assignResources(cells: WorldCell[]): void {
   for (const cell of cells) {
-    if (cell.biome === BiomeType.Ocean) {
+    if (cell.biome === TerrainType.OCEAN) {
       cell.resourceType = ResourceType.NONE;
       cell.resourceAmount = 0;
-    } else if (cell.biome === BiomeType.Mountain) {
+    } else if (cell.biome === TerrainType.MOUNTAIN) {
       cell.resourceType = ResourceType.ORE;
       cell.resourceAmount = 2;
-    } else if (cell.biome === BiomeType.Plains) {
+    } else if (cell.biome === TerrainType.PLAINS) {
       cell.resourceType = ResourceType.GRAIN;
       cell.resourceAmount = 2;
-    } else if (cell.biome === BiomeType.Forest) {
+    } else if (cell.biome === TerrainType.FOREST) {
       cell.resourceType = ResourceType.TIMBER;
       cell.resourceAmount = 2;
     } else {

@@ -1,9 +1,9 @@
 import { Schema, type } from '@colyseus/schema';
-import { BiomeType, RuinType, ResourceType } from '@vantaris/shared';
+import { TerrainType, RuinType, ResourceType } from '@vantaris/shared';
 
 export class CellState extends Schema {
   @type('string') cellId: string = '';
-  @type('string') biome: BiomeType = BiomeType.Ocean;
+  @type('string') biome: TerrainType = TerrainType.OCEAN;
   @type('string') ownerId: string = '';
   @type('boolean') hasCity: boolean = false;
   @type('string') cityId: string = '';

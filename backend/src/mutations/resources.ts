@@ -8,12 +8,16 @@ import {
   RAW_RESOURCES,
 } from '@vantaris/shared/constants';
 import { getBuildingStockpile, setBuildingStockpile, getBuildingStockpileAmount, addToBuildingStockpile } from './buildings';
-import type { AdjacencyMap } from '@vantaris/shared';
+import type { AdjacencyMap, ResourceInflowEntry } from '@vantaris/shared';
 
 const ROUND_PRECISION = 0.001;
 
 function roundValue(v: number): number {
   return Math.round(v / ROUND_PRECISION) * ROUND_PRECISION;
+}
+
+function roundDisplay(v: number): number {
+  return Math.round(v * 10) / 10;
 }
 
 export function getCityStockpile(city: CityState): Record<string, number> {
@@ -37,10 +41,11 @@ export function getCityStockpileAmount(city: CityState, resource: string): numbe
   return getCityStockpile(city)[resource] || 0;
 }
 
-export function addToCityStockpile(city: CityState, resource: string, amount: number): void {
+export function addToCityStockpile(city: CityState, resource: string, amount: number, source?: string): void {
   const sp = getCityStockpile(city);
   sp[resource] = (sp[resource] || 0) + amount;
   setCityStockpile(city, sp);
+  addCityInflow(city, resource, amount, source);
 }
 
 export function consumeFromCityStockpile(city: CityState, resource: string, amount: number): boolean {
@@ -58,6 +63,34 @@ export function initCityStockpile(city: CityState): void {
     sp[k] = v;
   }
   setCityStockpile(city, sp);
+}
+
+function getCityInflows(city: CityState): ResourceInflowEntry[] {
+  try {
+    return JSON.parse(city.resourceInflows);
+  } catch {
+    return [];
+  }
+}
+
+function setCityInflows(city: CityState, inflows: ResourceInflowEntry[]): void {
+  city.resourceInflows = JSON.stringify(inflows);
+}
+
+function addCityInflow(city: CityState, resource: string, amount: number, source?: string): void {
+  if (!source) return;
+  const inflows = getCityInflows(city);
+  const existing = inflows.find(i => i.resource === resource && i.source === source);
+  if (existing) {
+    existing.amount = roundDisplay(existing.amount + amount);
+  } else {
+    inflows.push({ resource, amount: roundDisplay(amount), source });
+  }
+  setCityInflows(city, inflows);
+}
+
+export function resetCityInflows(city: CityState): void {
+  setCityInflows(city, []);
 }
 
 function findNearestStorage(
@@ -125,7 +158,7 @@ export function tickExtractorOutput(state: GameState, adjacencyMap: AdjacencyMap
 
     if (target.type === 'city') {
       const city = state.cities.get(target.id);
-      if (city) addToCityStockpile(city, output.resource, delivered);
+      if (city) addToCityStockpile(city, output.resource, delivered, building.type);
     } else {
       const factory = state.buildings.get(target.id);
       if (factory) addToBuildingStockpile(factory, output.resource, delivered);
@@ -202,7 +235,7 @@ export function tickFactoryOutputToCities(state: GameState, adjacencyMap: Adjace
       newSp[res] = 0;
       setBuildingStockpile(building, newSp);
 
-      addToCityStockpile(city, res, delivered);
+      addToCityStockpile(city, res, delivered, 'FACTORY');
     }
   }
 }
@@ -211,6 +244,10 @@ export function tickCityResourceDrain(state: GameState): void {
   for (const [, city] of state.cities) {
     const sp = getCityStockpile(city);
     sp[ResourceType.GRAIN] = (sp[ResourceType.GRAIN] || 0) + CFG.CITY.BASE_GRAIN_RATE;
+    addCityInflow(city, ResourceType.GRAIN, CFG.CITY.BASE_GRAIN_RATE, 'BASE');
+
+    sp[ResourceType.POWER] = (sp[ResourceType.POWER] || 0) + CFG.CITY.BASE_POWER_RATE;
+    addCityInflow(city, ResourceType.POWER, CFG.CITY.BASE_POWER_RATE, 'BASE');
 
     const pop = city.population;
     if (pop <= 0) {
@@ -221,7 +258,7 @@ export function tickCityResourceDrain(state: GameState): void {
     }
 
     const breadDrain = pop * CFG.CITY.FOOD_DRAIN_PER_POP;
-    const powerDrain = CFG.CITY.POWER_DRAIN_BASE + (city.tier - 1) * 0.3;
+    const powerDrain = CFG.CITY.POWER_DRAIN_BASE + (city.tier - 1) * 0.3 + pop * CFG.CITY.ENERGY_DRAIN_PER_POP;
 
     const breadAvailable = sp[ResourceType.BREAD] || 0;
 
@@ -240,8 +277,8 @@ export function tickCityResourceDrain(state: GameState): void {
     sp[ResourceType.POWER] = Math.max(0, (sp[ResourceType.POWER] || 0) - powerConsumed);
 
     const foodSatisfaction = breadDrain > 0 ? breadConsumed / breadDrain : 0;
-    city.foodPerTick = foodSatisfaction;
-    city.energyPerTick = powerDrain > 0 ? powerConsumed / powerDrain : 1;
+    city.foodPerTick = roundDisplay(foodSatisfaction);
+    city.energyPerTick = powerDrain > 0 ? roundDisplay(powerConsumed / powerDrain) : 1;
 
     setCityStockpile(city, sp);
   }
@@ -292,6 +329,15 @@ function getPopulationCap(tier: number): number {
   return CFG.CITY.POPULATION_CAP[tier] ?? 50;
 }
 
+export function tickInflowResets(state: GameState): void {
+  for (const [, city] of state.cities) {
+    if (state.tick - city.lastInflowResetTick >= CFG.CITY.INFLOW_WINDOW_TICKS) {
+      resetCityInflows(city);
+      city.lastInflowResetTick = state.tick;
+    }
+  }
+}
+
 export function computePlayerResourceSummary(state: GameState, playerId: string): {
   food: number; energy: number; manpower: number;
   foodPerTick: number; energyPerTick: number; manpowerPerTick: number;
@@ -302,6 +348,9 @@ export function computePlayerResourceSummary(state: GameState, playerId: string)
   let totalFood = 0;
   let totalEnergy = 0;
   let manpower = 0;
+  let totalFoodSatisfaction = 0;
+  let totalEnergySatisfaction = 0;
+  let cityCount = 0;
 
   for (const [, city] of state.cities) {
     if (city.ownerId !== playerId) continue;
@@ -311,6 +360,9 @@ export function computePlayerResourceSummary(state: GameState, playerId: string)
     totalEnergy += sp[ResourceType.POWER] || 0;
     const tier = city.tier;
     manpower += CFG.CITY.TIER_MANPOWER[tier] ?? 2;
+    totalFoodSatisfaction += city.foodPerTick;
+    totalEnergySatisfaction += city.energyPerTick;
+    cityCount++;
   }
 
   for (const [, building] of state.buildings) {
@@ -323,8 +375,8 @@ export function computePlayerResourceSummary(state: GameState, playerId: string)
     food: Math.floor(totalFood),
     energy: Math.floor(totalEnergy),
     manpower,
-    foodPerTick: 0,
-    energyPerTick: 0,
+    foodPerTick: roundDisplay(cityCount > 0 ? totalFoodSatisfaction / cityCount : 0),
+    energyPerTick: roundDisplay(cityCount > 0 ? totalEnergySatisfaction / cityCount : 0),
     manpowerPerTick: 0,
     totalPopulation,
     factoryCount,

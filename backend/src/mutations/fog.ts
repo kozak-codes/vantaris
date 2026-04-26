@@ -2,7 +2,7 @@ import { FogVisibility, RuinType, ResourceType } from '@vantaris/shared';
 import { GameState } from '../state/GameState';
 import { CFG } from '@vantaris/shared/constants';
 import type { AdjacencyMap } from '@vantaris/shared';
-import type { PlayerStateSlice, VisibleCellData, RevealedCellData, UnitData, CityData, PlayerSummary, RuinMarkerData, BuildingData, PlayerResourceData, StockpileEntry, ProductionItem } from '@vantaris/shared';
+import type { PlayerStateSlice, VisibleCellData, RevealedCellData, UnitData, CityData, PlayerSummary, RuinMarkerData, BuildingData, PlayerResourceData, StockpileEntry, ProductionItem, ResourceInflowEntry } from '@vantaris/shared';
 import { getCityStockpile } from './resources';
 import { getBuildingStockpile, getCellBuildingCapacity, countBuildingsOnCell, getResourcesInvested } from './buildings';
 import { getRepeatQueue, getPriorityQueue, getCurrentProduction } from './cities';
@@ -30,7 +30,7 @@ export function computeVisibilityForPlayer(
   state: GameState,
   playerId: string,
   adjacencyMap: AdjacencyMap,
-  visionRange: number = CFG.TROOP_VISION_RANGE,
+  visionRange: number = CFG.UNITS.INFANTRY.visionRange,
 ): void {
   const player = state.players.get(playerId);
   if (!player) return;
@@ -216,36 +216,42 @@ export function buildPlayerSlice(
     }
   }
 
-  const cities: CityData[] = [];
-  for (const [, city] of state.cities) {
-    if (visibleCellIds.has(city.cellId)) {
-      const nextThreshold = city.tier < CFG.CITY.TIER_XP_THRESHOLDS.length
-        ? CFG.CITY.TIER_XP_THRESHOLDS[city.tier]
-        : CFG.CITY.TIER_XP_THRESHOLDS[CFG.CITY.TIER_XP_THRESHOLDS.length - 1];
-      const citySp = getCityStockpile(city);
-      const repeatQ = getRepeatQueue(city);
-      const priorityQ = getPriorityQueue(city);
-      const currentProd = getCurrentProduction(city);
-      cities.push({
-        cityId: city.cityId,
-        ownerId: city.ownerId,
-        cellId: city.cellId,
-        tier: city.tier,
-        xp: city.xp,
-        xpToNext: nextThreshold,
-        population: Math.floor(city.population),
-        repeatQueue: repeatQ,
-        priorityQueue: priorityQ,
-        currentProduction: currentProd,
-        productionTicksRemaining: city.productionTicksRemaining,
-        productionTicksTotal: city.productionTicksTotal,
-        foodPerTick: city.foodPerTick,
-        energyPerTick: city.energyPerTick,
-        manpowerPerTick: city.manpowerPerTick,
-        stockpile: stockpileMapToEntries(citySp),
-      });
+    const cities: CityData[] = [];
+    for (const [, city] of state.cities) {
+      if (visibleCellIds.has(city.cellId)) {
+        const nextThreshold = city.tier < CFG.CITY.TIER_XP_THRESHOLDS.length
+          ? CFG.CITY.TIER_XP_THRESHOLDS[city.tier]
+          : CFG.CITY.TIER_XP_THRESHOLDS[CFG.CITY.TIER_XP_THRESHOLDS.length - 1];
+        const citySp = getCityStockpile(city);
+        const repeatQ = getRepeatQueue(city);
+        const priorityQ = getPriorityQueue(city);
+        const currentProd = getCurrentProduction(city);
+        let productionResourcesInvested: Record<string, number> = {};
+        try { productionResourcesInvested = JSON.parse(city.productionResourcesInvested); } catch {}
+        let resourceInflows: ResourceInflowEntry[] = [];
+        try { resourceInflows = JSON.parse(city.resourceInflows); } catch {}
+        cities.push({
+          cityId: city.cityId,
+          ownerId: city.ownerId,
+          cellId: city.cellId,
+          tier: city.tier,
+          xp: city.xp,
+          xpToNext: nextThreshold,
+          population: Math.floor(city.population),
+          repeatQueue: repeatQ,
+          priorityQueue: priorityQ,
+          currentProduction: currentProd,
+          productionTicksRemaining: city.productionTicksRemaining,
+          productionTicksTotal: city.productionTicksTotal,
+          productionResourcesInvested: productionResourcesInvested,
+          foodPerTick: city.foodPerTick,
+          energyPerTick: city.energyPerTick,
+          manpowerPerTick: city.manpowerPerTick,
+          stockpile: stockpileMapToEntries(citySp),
+          resourceInflows: resourceInflows,
+        });
+      }
     }
-  }
 
   const buildings: BuildingData[] = [];
   for (const [, building] of state.buildings) {

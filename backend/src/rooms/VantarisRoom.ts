@@ -1,13 +1,13 @@
 import { Room, Client } from '@colyseus/core';
 import { GameState } from '../state/GameState';
-import { GamePhase, BiomeType, ResourceType, BuildingType, UnitType, UnitStatus } from '@vantaris/shared';
+import { GamePhase, TerrainType, ResourceType, BuildingType, UnitType, UnitStatus } from '@vantaris/shared';
 import type { ProductionItem } from '@vantaris/shared';
 import { CFG, MATCHMAKING_CFG, BUILDING_TICKS, BUILDING_COSTS } from '@vantaris/shared/constants';
 import { AdjacencyMap, buildAdjacencyMap } from '@vantaris/shared';
 import { generateGlobe } from '../globe';
 import { computeVisibilityForPlayer, buildPlayerSlice } from '../mutations/fog';
 import { completeClaim } from '../mutations/units';
-import { createCity, tickCityProduction, tickPassiveExpansion, addToRepeatQueue, removeFromRepeatQueue, addPriorityItem, clearPriorityQueue, canCityAffordProduction, consumeProductionCosts, getRepeatQueue } from '../mutations/cities';
+import { createCity, tickCityProduction, tickPassiveExpansion, addToRepeatQueue, removeFromRepeatQueue, addPriorityItem, clearPriorityQueue, canCityAffordProduction, consumeProductionCosts, investProductionTick, getRepeatQueue } from '../mutations/cities';
 import { CellState } from '../state/CellState';
 import { PlayerState } from '../state/PlayerState';
 import { UnitState } from '../state/UnitState';
@@ -17,7 +17,7 @@ import { findPath, buildUnitsByCellId } from '../systems/Pathfinding';
 import { spawnUnit, assignPath, stepUnit, startClaiming } from '../mutations/units';
 import type { StepResult } from '../mutations/units';
 import { createBuilding, tickBuildingProduction, canPlaceBuilding, cancelBuilding, getAvailableBuildTypes, countBuildingsOnCell, canAffordBuildingCost, tickBuildingConstruction, getResourcesInvested } from '../mutations/buildings';
-import { tickExtractorOutput, tickFactoryProcessing, tickFactoryOutputToCities, tickCityResourceDrain, tickPopulation, tickCityXP } from '../mutations/resources';
+import { tickExtractorOutput, tickFactoryProcessing, tickFactoryOutputToCities, tickCityResourceDrain, tickPopulation, tickCityXP, tickInflowResets } from '../mutations/resources';
 import { claimCell, loseCell } from '../mutations/territory';
 
 interface CreateOptions {
@@ -202,7 +202,7 @@ export class VantarisRoom extends Room<GameState> {
 
     completeClaim(this.state, spawnCellId, playerId);
 
-      computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.TROOP_VISION_RANGE);
+      computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.INFANTRY.visionRange);
 
     const slice = buildPlayerSlice(this.state, playerId);
     client.send('stateUpdate', slice);
@@ -211,10 +211,10 @@ export class VantarisRoom extends Room<GameState> {
   async onLeave(client: Client, consented: boolean): Promise<void> {
     if (consented) return;
     try {
-      await this.allowReconnection(client, MATCHMAKING_CFG.RECONNECTION_WINDOW);
+      await this.allowReconnection(client, MATCHMAKING_CFG.RECONNECTION_WINDOW_MS);
       const player = this.state.players.get(client.sessionId);
       if (player) {
-        computeVisibilityForPlayer(this.state, client.sessionId, this.adjacencyMap, CFG.TROOP_VISION_RANGE);
+        computeVisibilityForPlayer(this.state, client.sessionId, this.adjacencyMap, CFG.UNITS.INFANTRY.visionRange);
         const slice = buildPlayerSlice(this.state, client.sessionId);
         client.send('stateUpdate', slice);
       }
@@ -239,6 +239,7 @@ export class VantarisRoom extends Room<GameState> {
     this.processCityResourceDrain();
     this.processPopulation();
     this.processCityXP();
+    this.processInflowResets();
     this.checkElimination();
     this.broadcastPlayerSlices();
     this.state.tick = tick;
@@ -278,6 +279,8 @@ export class VantarisRoom extends Room<GameState> {
   private processCityProduction(): void {
     for (const [, city] of this.state.cities) {
       if (!canCityAffordProduction(city)) continue;
+
+      investProductionTick(city);
 
       const completed = tickCityProduction(city);
       if (completed) {
@@ -333,7 +336,7 @@ export class VantarisRoom extends Room<GameState> {
 
       const owner = this.state.players.get(claim.ownerId);
       if (owner) {
-        computeVisibilityForPlayer(this.state, claim.ownerId, this.adjacencyMap, CFG.TROOP_VISION_RANGE);
+        computeVisibilityForPlayer(this.state, claim.ownerId, this.adjacencyMap, CFG.UNITS.INFANTRY.visionRange);
       }
     }
   }
@@ -347,7 +350,7 @@ export class VantarisRoom extends Room<GameState> {
         completeClaim(this.state, targetCellId, city.ownerId);
         const owner = this.state.players.get(city.ownerId);
         if (owner) {
-          computeVisibilityForPlayer(this.state, city.ownerId, this.adjacencyMap, CFG.TROOP_VISION_RANGE);
+          computeVisibilityForPlayer(this.state, city.ownerId, this.adjacencyMap, CFG.UNITS.INFANTRY.visionRange);
         }
       }
     }
@@ -377,10 +380,14 @@ export class VantarisRoom extends Room<GameState> {
     tickCityXP(this.state);
   }
 
+  private processInflowResets(): void {
+    tickInflowResets(this.state);
+  }
+
   private broadcastPlayerSlices(): void {
     for (const client of this.clients) {
       const playerId = client.sessionId;
-computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.TROOP_VISION_RANGE);
+computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.INFANTRY.visionRange);
       const slice = buildPlayerSlice(this.state, playerId);
       client.send('stateUpdate', slice);
     }
@@ -404,7 +411,7 @@ computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.TROOP_VI
     if (!unit || unit.ownerId !== playerId) return;
 
     const targetCell = this.state.cells.get(data.targetCellId);
-    if (!targetCell || targetCell.biome === BiomeType.Ocean) {
+    if (!targetCell || targetCell.biome === TerrainType.OCEAN) {
       client.send('error', { type: 'error', code: 'NO_PATH' });
       return;
     }
@@ -588,7 +595,7 @@ computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.TROOP_VI
   }
 
   private findAvailableSpawnCell(): string | null {
-    const terrainPriority = [BiomeType.Plains, BiomeType.Desert, BiomeType.Tundra];
+    const terrainPriority = [TerrainType.PLAINS, TerrainType.DESERT, TerrainType.TUNDRA];
 
     for (const terrain of terrainPriority) {
       for (const [cellId, cell] of this.state.cells) {

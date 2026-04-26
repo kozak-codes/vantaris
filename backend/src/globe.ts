@@ -1,4 +1,4 @@
-import { BiomeType } from '@vantaris/shared';
+import { TerrainType } from '@vantaris/shared';
 import { CFG } from '@vantaris/shared/constants';
 import { generateWorld } from './worldgen/pipeline';
 import { placeRuins } from './worldgen/ruins';
@@ -27,7 +27,7 @@ export interface ServerHexCell {
   id: string;
   center: [number, number, number];
   neighborIds: string[];
-  biome: BiomeType;
+  biome: TerrainType;
   isPentagon: boolean;
   elevation: number;
   moisture: number;

@@ -1,12 +1,3 @@
-export enum BiomeType {
-  Ocean = 'OCEAN',
-  Plains = 'PLAINS',
-  Forest = 'FOREST',
-  Mountain = 'MOUNTAIN',
-  Desert = 'DESERT',
-  Tundra = 'TUNDRA',
-}
-
 export enum FogVisibility {
   VISIBLE = 'VISIBLE',
   REVEALED = 'REVEALED',
@@ -102,6 +93,12 @@ export interface StockpileEntry {
   amount: number;
 }
 
+export interface ResourceInflowEntry {
+  resource: string;
+  amount: number;
+  source: string;
+}
+
 export interface BuildingData {
   buildingId: string;
   ownerId: string;
@@ -160,7 +157,7 @@ export enum BoundaryType {
 
 export interface CellSnapshot {
   ownerId: string | null;
-  biome: BiomeType;
+  biome: TerrainType;
   ruin: RuinType | null;
 }
 
@@ -172,7 +169,7 @@ export interface HexCell {
   id: number;
   center: [number, number, number];
   vertexIds: number[];
-  biome: BiomeType;
+  biome: TerrainType;
   fog: FogVisibility;
   isPentagon: boolean;
 }
@@ -185,15 +182,9 @@ export interface HexGrid {
 
 export interface CellRenderData {
   id: number;
-  biome: BiomeType;
+  biome: string;
   fog: FogVisibility;
   isPentagon: boolean;
-}
-
-export interface BiomeConfig {
-  type: BiomeType;
-  color: string;
-  weight: number;
 }
 
 export interface FogConfig {
@@ -294,10 +285,12 @@ export interface CityData {
   currentProduction: ProductionItem | null;
   productionTicksRemaining: number;
   productionTicksTotal: number;
+  productionResourcesInvested: Record<string, number>;
   foodPerTick: number;
   energyPerTick: number;
   manpowerPerTick: number;
   stockpile: StockpileEntry[];
+  resourceInflows: ResourceInflowEntry[];
 }
 
 export interface PlayerSummary {

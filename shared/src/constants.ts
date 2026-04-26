@@ -1,20 +1,22 @@
-import { BiomeType, ResourceType, type BiomeConfig, type FogConfig, type GlobeConfig, type CameraConfig, TerrainType } from './types';
+import { TerrainType, ResourceType, type FogConfig, type GlobeConfig, type CameraConfig } from './types';
 
 // ──────────────────────────────────────────────
 // Interfaces
 // ──────────────────────────────────────────────
 
 export interface TerrainConfig {
+  color: string;
+  weight: number;
   passable: boolean;
   cost: number;
   capacity: number;
-  buildable: string[];
 }
 
 export interface UnitConfig {
   ticksCost: number;
   resourceCost: Record<string, number>;
   manpowerCost: number;
+  visionRange: number;
   buildable?: Record<string, { minLevel: number }>;
 }
 
@@ -29,6 +31,7 @@ export interface ResourceConfig {
   tier: 'raw' | 'processed';
   foodValue?: number;
   materialValue?: number;
+  category?: string;
   recipe?: {
     building: string;
     input: { resource: ResourceType; amount: number }[];
@@ -48,20 +51,14 @@ export interface FactoryRecipeDef {
 }
 
 export interface ICFG {
-  BIOMES: BiomeConfig[];
+  TERRAIN: Record<string, TerrainConfig>;
   GLOBE: GlobeConfig;
   FOG: FogConfig;
   CAMERA: CameraConfig;
-  CELL_COLOR_LERP: number;
-  TERRAIN: Record<string, TerrainConfig>;
   TICK_RATE_MS: number;
-  STARTING_TERRITORY_SIZE: number;
-  VISION_RANGE: number;
-  TROOP_VISION_RANGE: number;
   CLAIM: { TICKS_UNCLAIMED: number; TICKS_ENEMY: number };
   UNITS: Record<string, UnitConfig>;
   MAX_PER_HEX: number;
-  ENGINEER_BUILD_TICKS: number;
   BUILDINGS: Record<string, BuildingConfig>;
   RESOURCES: Record<string, ResourceConfig>;
   CITY: {
@@ -75,9 +72,12 @@ export interface ICFG {
     POPULATION_STARVATION_THRESHOLD: number;
     POPULATION_STARVATION_RATE: number;
     BASE_GRAIN_RATE: number;
+    BASE_POWER_RATE: number;
     FOOD_DRAIN_PER_POP: number;
+    ENERGY_DRAIN_PER_POP: number;
     POWER_DRAIN_BASE: number;
     BREAD_EMERGENCY_GRAIN_RATIO: number;
+    INFLOW_WINDOW_TICKS: number;
     TIER_XP_THRESHOLDS: number[];
     TIER_MANPOWER: Record<number, number>;
     XP_PER_POP_PER_10: number;
@@ -97,6 +97,7 @@ export interface ICFG {
     TIER_THRESHOLDS: number[];
     BASE_XP: number;
   };
+  RESOURCE_CATEGORIES: Record<string, { label: string; resources: ResourceType[] }>;
   DAY_NIGHT: {
     CYCLE_TICKS: number;
     SUN_INTENSITY: number;
@@ -108,27 +109,9 @@ export interface ICFG {
   };
   STOCKPILE_RAID_FRACTION: number;
   ENERGY_CREDITS_INITIAL: number;
+  PLAYER_COLORS: string[];
+  RUIN_TYPE_TO_BUILDING: Record<string, string>;
 }
-
-export interface IMATCHMAKING_CFG {
-  MIN_PLAYERS: number;
-  MAX_PLAYERS: number;
-  SUBDIVIDE_LEVEL: number;
-  COUNTDOWN_SECONDS: number;
-  RECONNECTION_WINDOW: number;
-}
-
-// ──────────────────────────────────────────────
-// MATCHMAKING_CFG — separate, room-level config
-// ──────────────────────────────────────────────
-
-export const MATCHMAKING_CFG: IMATCHMAKING_CFG = {
-  MIN_PLAYERS: 1,
-  MAX_PLAYERS: 8,
-  SUBDIVIDE_LEVEL: 3,
-  COUNTDOWN_SECONDS: 5,
-  RECONNECTION_WINDOW: 60,
-};
 
 // ──────────────────────────────────────────────
 // CFG — Single configuration dictionary
@@ -136,14 +119,16 @@ export const MATCHMAKING_CFG: IMATCHMAKING_CFG = {
 
 export const CFG: ICFG = {
 
-  BIOMES: [
-    { type: BiomeType.Ocean, color: '#2299cc', weight: 0.35 },
-    { type: BiomeType.Plains, color: '#6aad4f', weight: 0.25 },
-    { type: BiomeType.Forest, color: '#3d7a2a', weight: 0.18 },
-    { type: BiomeType.Mountain, color: '#998877', weight: 0.10 },
-    { type: BiomeType.Desert, color: '#ddbb6a', weight: 0.07 },
-    { type: BiomeType.Tundra, color: '#bbdde6', weight: 0.05 },
-  ],
+  // ─── Terrain (merged biome + terrain config) ──
+  TERRAIN: {
+    OCEAN:    { color: '#2299cc', weight: 0.35, passable: false, cost: Infinity, capacity: 0 },
+    PLAINS:   { color: '#6aad4f', weight: 0.25, passable: true,  cost: 30,   capacity: 6 },
+    FOREST:   { color: '#3d7a2a', weight: 0.18, passable: true,  cost: 60,   capacity: 5 },
+    MOUNTAIN: { color: '#998877', weight: 0.10, passable: true,  cost: 90,   capacity: 3 },
+    DESERT:   { color: '#ddbb6a', weight: 0.07, passable: true,  cost: 30,   capacity: 4 },
+    TUNDRA:   { color: '#bbdde6', weight: 0.05, passable: true,  cost: 60,   capacity: 4 },
+    PENTAGON: { color: '#557788', weight: 0,    passable: true,  cost: 30,   capacity: 5 },
+  } as Record<string, TerrainConfig>,
 
   GLOBE: {
     radius: 5,
@@ -168,41 +153,26 @@ export const CFG: ICFG = {
     keyboardRotateSpeed: 2.5,
   },
 
-  CELL_COLOR_LERP: 0.08,
-
   TICK_RATE_MS: 100,
-
-  // ─── Terrain (dictionary per terrain type) ──
-  TERRAIN: {
-    PLAINS:   { passable: true,  cost: 30,   capacity: 6, buildable: ['FARM', 'FACTORY', 'CITY'] },
-    FOREST:   { passable: true,  cost: 60,   capacity: 5, buildable: ['FARM', 'LUMBER_CAMP'] },
-    MOUNTAIN: { passable: true,  cost: 90,   capacity: 3, buildable: ['MINE'] },
-    DESERT:   { passable: true,  cost: 30,   capacity: 4, buildable: ['MINE', 'OIL_WELL', 'FACTORY', 'CITY'] },
-    TUNDRA:   { passable: true,  cost: 60,   capacity: 4, buildable: ['OIL_WELL', 'LUMBER_CAMP', 'FACTORY'] },
-    OCEAN:    { passable: false, cost: Infinity, capacity: 0, buildable: [] },
-    PENTAGON: { passable: true,  cost: 30,   capacity: 5, buildable: ['FARM', 'MINE', 'OIL_WELL', 'LUMBER_CAMP', 'FACTORY'] },
-  } as Record<string, TerrainConfig>,
-
-  STARTING_TERRITORY_SIZE: 1,
-  VISION_RANGE: 1,
-  TROOP_VISION_RANGE: 1,
 
   CLAIM: {
     TICKS_UNCLAIMED: 50,
     TICKS_ENEMY: 3000,
   },
 
-  // ─── Units (dictionary per unit type, buildable on engineer) ──
+  // ─── Units (dictionary per unit type) ──
   UNITS: {
     INFANTRY: {
       ticksCost: 100,
       resourceCost: { FOOD: 20 } as Record<string, number>,
       manpowerCost: 1,
+      visionRange: 1,
     },
     ENGINEER: {
       ticksCost: 300,
       resourceCost: { FOOD: 30 } as Record<string, number>,
       manpowerCost: 2,
+      visionRange: 1,
       buildable: {
         FARM:        { minLevel: 1 },
         MINE:        { minLevel: 1 },
@@ -216,7 +186,6 @@ export const CFG: ICFG = {
   },
 
   MAX_PER_HEX: 3,
-  ENGINEER_BUILD_TICKS: 200,
 
   // ─── Buildings (dictionary per building type) ──
   BUILDINGS: {
@@ -231,19 +200,19 @@ export const CFG: ICFG = {
 
   // ─── Resources (flat dictionary per resource type) ──
   RESOURCES: {
-    GRAIN:  { tier: 'raw',       foodValue: 0.67 },
-    ORE:    { tier: 'raw',       materialValue: 1.0 },
-    OIL:    { tier: 'raw',       foodValue: 0.5 },
-    TIMBER: { tier: 'raw' },
-    BREAD:  { tier: 'processed', foodValue: 1.0,  recipe: { building: 'FACTORY', input: [{ resource: ResourceType.GRAIN,  amount: 3 }], output: [{ resource: ResourceType.BREAD, amount: 2 }], ticksPerCycle: 50, minFactoryTier: 1 } },
-    STEEL:  { tier: 'processed', materialValue: 1.5, recipe: { building: 'FACTORY', input: [{ resource: ResourceType.ORE,    amount: 3 }], output: [{ resource: ResourceType.STEEL, amount: 2 }], ticksPerCycle: 60, minFactoryTier: 1 } },
-    POWER:  { tier: 'processed', recipe: { building: 'FACTORY', input: [{ resource: ResourceType.OIL,    amount: 2 }], output: [{ resource: ResourceType.POWER, amount: 2 }], ticksPerCycle: 70, minFactoryTier: 1 } },
-    LUMBER: { tier: 'processed', recipe: { building: 'FACTORY', input: [{ resource: ResourceType.TIMBER, amount: 3 }], output: [{ resource: ResourceType.LUMBER, amount: 2 }], ticksPerCycle: 45, minFactoryTier: 1 } },
+    GRAIN:  { tier: 'raw',       foodValue: 0.67,  category: 'FOOD' },
+    ORE:    { tier: 'raw',       materialValue: 1.0, category: 'INDUSTRY' },
+    OIL:    { tier: 'raw',       foodValue: 0.5,   category: 'ENERGY' },
+    TIMBER: { tier: 'raw',                          category: 'INDUSTRY' },
+    BREAD:  { tier: 'processed', foodValue: 1.0,   category: 'FOOD',    recipe: { building: 'FACTORY', input: [{ resource: ResourceType.GRAIN,  amount: 3 }], output: [{ resource: ResourceType.BREAD, amount: 2 }], ticksPerCycle: 50, minFactoryTier: 1 } },
+    STEEL:  { tier: 'processed', materialValue: 1.5, category: 'INDUSTRY', recipe: { building: 'FACTORY', input: [{ resource: ResourceType.ORE,    amount: 3 }], output: [{ resource: ResourceType.STEEL, amount: 2 }], ticksPerCycle: 60, minFactoryTier: 1 } },
+    POWER:  { tier: 'processed',                    category: 'ENERGY',  recipe: { building: 'FACTORY', input: [{ resource: ResourceType.OIL,    amount: 2 }], output: [{ resource: ResourceType.POWER, amount: 2 }], ticksPerCycle: 70, minFactoryTier: 1 } },
+    LUMBER: { tier: 'processed',                    category: 'INDUSTRY', recipe: { building: 'FACTORY', input: [{ resource: ResourceType.TIMBER, amount: 3 }], output: [{ resource: ResourceType.LUMBER, amount: 2 }], ticksPerCycle: 45, minFactoryTier: 1 } },
   } as Record<string, ResourceConfig>,
 
   // ─── City / Settlement ────────────────────
   CITY: {
-    INITIAL_STOCKPILE: { [ResourceType.BREAD]: 60, [ResourceType.GRAIN]: 40, [ResourceType.ORE]: 30, [ResourceType.STEEL]: 10, [ResourceType.POWER]: 10 } as Record<string, number>,
+    INITIAL_STOCKPILE: { [ResourceType.BREAD]: 80, [ResourceType.GRAIN]: 60, [ResourceType.ORE]: 30, [ResourceType.STEEL]: 10, [ResourceType.POWER]: 20 } as Record<string, number>,
     POPULATION_INITIAL: 10,
     POPULATION_CAP: { 1: 50, 2: 150, 3: 400, 4: 1000, 5: 3000, 6: 10000 } as Record<number, number>,
     POPULATION_GROWTH_BASE: 0.002,
@@ -252,10 +221,13 @@ export const CFG: ICFG = {
     POPULATION_DECLINE_RATE: 0.001,
     POPULATION_STARVATION_THRESHOLD: 0,
     POPULATION_STARVATION_RATE: 0.01,
-    BASE_GRAIN_RATE: 0.5,
-    FOOD_DRAIN_PER_POP: 0.1,
-    POWER_DRAIN_BASE: 0.5,
+    BASE_GRAIN_RATE: 2.0,
+    BASE_POWER_RATE: 0.5,
+    FOOD_DRAIN_PER_POP: 0.08,
+    ENERGY_DRAIN_PER_POP: 0.03,
+    POWER_DRAIN_BASE: 0.3,
     BREAD_EMERGENCY_GRAIN_RATIO: 1.5,
+    INFLOW_WINDOW_TICKS: 100,
     TIER_XP_THRESHOLDS: [0, 5000, 15000, 40000, 100000, 250000],
     TIER_MANPOWER: { 1: 2, 2: 6, 3: 15, 4: 35, 5: 90, 6: 250 } as Record<number, number>,
     XP_PER_POP_PER_10: 1,
@@ -264,6 +236,13 @@ export const CFG: ICFG = {
     VALID_SPAWN_TERRAIN: [TerrainType.PLAINS] as TerrainType[],
     PASSIVE_EXPANSION_TICKS: { 1: 0, 2: 120, 3: 60, 4: 30, 5: 15, 6: 5 } as Record<number, number>,
   },
+
+  // ─── Resource Categories ──────────────────
+  RESOURCE_CATEGORIES: {
+    FOOD:     { label: 'Food',     resources: [ResourceType.BREAD, ResourceType.GRAIN, ResourceType.OIL] },
+    INDUSTRY: { label: 'Industry',  resources: [ResourceType.ORE, ResourceType.STEEL, ResourceType.TIMBER, ResourceType.LUMBER] },
+    ENERGY:   { label: 'Energy',   resources: [ResourceType.POWER] },
+  } as Record<string, { label: string; resources: ResourceType[] }>,
 
   // ─── Supply Chain ─────────────────────────
   SUPPLY_CHAIN: {
@@ -299,6 +278,30 @@ export const CFG: ICFG = {
   // ─── Misc ─────────────────────────────────
   STOCKPILE_RAID_FRACTION: 0.5,
   ENERGY_CREDITS_INITIAL: 50,
+  PLAYER_COLORS: [
+    '#4488ff',
+    '#ff4444',
+    '#44cc44',
+    '#ffaa00',
+    '#cc44cc',
+    '#44cccc',
+    '#ff8844',
+    '#8844ff',
+  ],
+  RUIN_TYPE_TO_BUILDING: {
+    RUINED_FACTORY: 'FACTORY',
+    COLLAPSED_MINE: 'MINE',
+    OVERGROWN_FARM: 'FARM',
+    RUINED_BARRACKS: 'FARM',
+    RUINED_PORT: 'FACTORY',
+    RUINED_CITY: 'CITY',
+  },
+};
+
+export const MATCHMAKING_CFG = {
+  MAX_PLAYERS: 8,
+  COUNTDOWN_SECONDS: 5,
+  RECONNECTION_WINDOW_MS: 60000,
 };
 
 // ──────────────────────────────────────────────
@@ -311,16 +314,14 @@ export const PASSABLE_TERRAIN = (Object.entries(CFG.TERRAIN) as [string, Terrain
 
 export const MOVEMENT_COST: Record<string, number> = {};
 export const CELL_BUILDING_CAPACITY: Record<string, number> = {};
-export const BUILDING_PLACEMENT_RULES: Record<string, string[]> = {};
-export const TERRAIN_BUILDABLE: Record<string, string[]> = {};
 for (const [key, t] of Object.entries(CFG.TERRAIN) as [string, TerrainConfig][]) {
   MOVEMENT_COST[key] = t.cost;
   CELL_BUILDING_CAPACITY[key] = t.capacity;
-  TERRAIN_BUILDABLE[key] = t.buildable;
 }
 
 export const BUILDING_TICKS: Record<string, number> = {};
 export const BUILDING_COSTS: Record<string, { food: number; material: number; consumesEngineer: boolean }> = {};
+export const BUILDING_PLACEMENT_RULES: Record<string, string[]> = {};
 for (const [key, val] of Object.entries(CFG.BUILDINGS) as [string, BuildingConfig][]) {
   BUILDING_TICKS[key] = val.ticks;
   BUILDING_COSTS[key] = { food: val.cost.food, material: val.cost.material, consumesEngineer: val.cost.consumesEngineer };
@@ -342,11 +343,13 @@ export const FOOD_VALUE: Record<string, number> = {};
 export const MATERIAL_VALUE: Record<string, number> = {};
 export const RAW_RESOURCES: ResourceType[] = [];
 export const PROCESSED_RESOURCES: ResourceType[] = [];
+export const RESOURCE_CATEGORY_MAP: Record<string, string> = {};
 for (const [key, val] of Object.entries(CFG.RESOURCES) as [string, ResourceConfig][]) {
   if (val.foodValue !== undefined && val.foodValue > 0) FOOD_VALUE[key] = val.foodValue;
   if (val.materialValue !== undefined && val.materialValue > 0) MATERIAL_VALUE[key] = val.materialValue;
   if (val.tier === 'raw') RAW_RESOURCES.push(key as ResourceType);
   if (val.tier === 'processed') PROCESSED_RESOURCES.push(key as ResourceType);
+  if (val.category) RESOURCE_CATEGORY_MAP[key] = val.category;
 }
 
 export const UNIT_PRODUCTION_COSTS: { type: string; ticksCost: number; resourceCost: Record<string, number>; manpowerCost: number }[] = [];

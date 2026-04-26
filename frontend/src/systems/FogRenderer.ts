@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { clientState } from '../state/ClientState';
 import { onStateUpdate } from '../state/ClientState';
-import { BiomeType } from '../types/index';
-import { BIOME_CONFIGS } from '../constants';
+import { TerrainType } from '../types/index';
+import { TERRAIN_CONFIGS } from '../constants';
 
 const biomeColorMap = new Map<string, THREE.Color>(
-  BIOME_CONFIGS.map(b => [b.type, new THREE.Color(b.color)]),
+  (Object.entries(TERRAIN_CONFIGS) as [string, { color: string }][]).map(([key, val]) => [key, new THREE.Color(val.color)]),
 );
 
 const VISIBLE_COLOR_FACTOR = 1.0;

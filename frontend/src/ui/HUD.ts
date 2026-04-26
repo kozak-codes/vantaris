@@ -1,6 +1,6 @@
 import { clientState, onStateUpdate, notifySelectionChanged, getUnitActions, getCityActions } from '../state/ClientState';
 import { sendMoveUnit, sendSetUnitIdle, sendCityQueueAddPriority, sendCityQueueAddRepeat, sendCityQueueRemoveRepeat, sendCityQueueClearPriority, sendClaimTerritory, sendBuildStructure, sendRestoreRuin } from '../network/ColyseusClient';
-import { PASSABLE_TERRAIN, BUILDING_COSTS, BUILDING_PLACEMENT_RULES, UNIT_PRODUCTION_COSTS, FOOD_VALUE, MATERIAL_VALUE, getEngineerBuildableTypes } from '@vantaris/shared/constants';
+import { PASSABLE_TERRAIN, BUILDING_COSTS, BUILDING_PLACEMENT_RULES, UNIT_PRODUCTION_COSTS, FOOD_VALUE, MATERIAL_VALUE, getEngineerBuildableTypes, CFG, RESOURCE_CATEGORY_MAP } from '@vantaris/shared/constants';
 import { TerrainType, CityData, ProductionItem } from '@vantaris/shared';
 
 const TIER_NAMES: Record<number, string> = {
@@ -235,12 +235,14 @@ export class HUD {
         if (prodTicks) prodTicks.textContent = `${selectedCity.productionTicksRemaining} ticks`;
       }
 
+      const roundDyn = (v: number) => Math.round(v * 10) / 10;
+
       const foodEl = document.getElementById('panel-dynamic-food');
-      if (foodEl) foodEl.textContent = `+${selectedCity.foodPerTick}`;
+      if (foodEl) foodEl.textContent = `+${roundDyn(selectedCity.foodPerTick)}`;
       const energyEl = document.getElementById('panel-dynamic-energy');
-      if (energyEl) energyEl.textContent = `+${selectedCity.energyPerTick}`;
+      if (energyEl) energyEl.textContent = `+${roundDyn(selectedCity.energyPerTick)}`;
       const manpowerEl = document.getElementById('panel-dynamic-manpower');
-      if (manpowerEl) manpowerEl.textContent = `+${selectedCity.manpowerPerTick}`;
+      if (manpowerEl) manpowerEl.textContent = `+${roundDyn(selectedCity.manpowerPerTick)}`;
     }
   }
 
@@ -611,6 +613,57 @@ export class HUD {
 
     const typeLabel = (t: string) => t === 'ENGINEER' ? 'Engineer' : t === 'INFANTRY' ? 'Infantry' : t;
 
+    const round1 = (v: number) => Math.round(v * 10) / 10;
+
+    const CATEGORY_ORDER = ['FOOD', 'INDUSTRY', 'ENERGY'];
+    const CATEGORY_LABELS: Record<string, string> = { FOOD: 'Food', INDUSTRY: 'Industry', ENERGY: 'Energy' };
+    const CATEGORY_ICONS: Record<string, string> = { FOOD: '🌾', INDUSTRY: '⚒', ENERGY: '⚡' };
+
+    const categoryStockpile: Record<string, { resources: { resource: string; amount: number; label: string }[]; total: number }> = {};
+    const inflowMap: Record<string, { total: number; sources: { source: string; amount: number }[] }> = {};
+    for (const cat of CATEGORY_ORDER) {
+      categoryStockpile[cat] = { resources: [], total: 0 };
+      inflowMap[cat] = { total: 0, sources: [] };
+    }
+    for (const entry of city.stockpile) {
+      const cat = RESOURCE_CATEGORY_MAP[entry.resource] || 'INDUSTRY';
+      const label = RESOURCE_LABELS[entry.resource] || entry.resource;
+      categoryStockpile[cat].resources.push({ resource: entry.resource, amount: round1(entry.amount), label });
+      categoryStockpile[cat].total += entry.amount;
+    }
+    for (const inflow of (city.resourceInflows || [])) {
+      const cat = RESOURCE_CATEGORY_MAP[inflow.resource] || 'INDUSTRY';
+      const existing = inflowMap[cat].sources.find(s => s.source === inflow.source);
+      if (existing) {
+        existing.amount = round1(existing.amount + inflow.amount);
+      } else {
+        inflowMap[cat].sources.push({ source: inflow.source, amount: round1(inflow.amount) });
+      }
+      inflowMap[cat].total = round1(inflowMap[cat].total + inflow.amount);
+    }
+
+    let stockpileHtml = '<div class="panel-section"><div class="panel-subtitle">Stockpile</div>';
+    for (const cat of CATEGORY_ORDER) {
+      const data = categoryStockpile[cat];
+      if (data.resources.length === 0) continue;
+      const inflow = inflowMap[cat];
+      const inflowTooltip = inflow.sources.length > 0
+        ? inflow.sources.map(s => `${s.source}: +${round1(s.amount)}`).join('\\n')
+        : '';
+      const inflowLabel = inflow.total > 0 ? ` (+${round1(inflow.total)}/100t)` : '';
+      stockpileHtml += `<div class="panel-row stockpile-category" ${inflowTooltip ? `title="${inflowTooltip}"` : ''}>`;
+      stockpileHtml += `<span class="label">${CATEGORY_ICONS[cat]} ${CATEGORY_LABELS[cat]}</span>`;
+      stockpileHtml += `<span>${round1(data.total)}${inflowLabel}</span>`;
+      stockpileHtml += `</div>`;
+      for (const r of data.resources) {
+        stockpileHtml += `<div class="panel-row stockpile-resource">`;
+        stockpileHtml += `<span class="label resource-indent">${r.label}</span>`;
+        stockpileHtml += `<span>${r.amount}</span>`;
+        stockpileHtml += `</div>`;
+      }
+    }
+    stockpileHtml += '</div>';
+
     let productionHtml = '';
     if (city.currentProduction) {
       const pct = city.productionTicksTotal > 0 ? Math.round(((city.productionTicksTotal - city.productionTicksRemaining) / city.productionTicksTotal) * 100) : 0;
@@ -691,11 +744,12 @@ export class HUD {
         <div class="progress-bar small"><div class="progress-fill" id="panel-dynamic-xp-fill" style="width: ${xpPct}%"></div></div>
       </div>
       <div class="panel-section">
-        <div class="panel-subtitle">Resources/tick</div>
-        <div class="panel-row"><span class="label">Food</span><span id="panel-dynamic-food">+${city.foodPerTick}</span></div>
-        <div class="panel-row"><span class="label">Energy</span><span id="panel-dynamic-energy">+${city.energyPerTick}</span></div>
-        <div class="panel-row"><span class="label">Manpower</span><span id="panel-dynamic-manpower">+${city.manpowerPerTick}</span></div>
+        <div class="panel-subtitle">Rates</div>
+        <div class="panel-row"><span class="label">Food</span><span id="panel-dynamic-food">+${round1(city.foodPerTick)}</span></div>
+        <div class="panel-row"><span class="label">Energy</span><span id="panel-dynamic-energy">+${round1(city.energyPerTick)}</span></div>
+        <div class="panel-row"><span class="label">Manpower</span><span id="panel-dynamic-manpower">+${round1(city.manpowerPerTick)}</span></div>
       </div>
+      ${stockpileHtml}
       ${productionHtml}
       ${queueHtml}
       ${buildingsHtml}

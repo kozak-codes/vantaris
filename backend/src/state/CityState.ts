@@ -13,6 +13,7 @@ export class CityState extends Schema {
   @type('string') currentProduction: string = '';
   @type('number') productionTicksRemaining: number = 0;
   @type('number') productionTicksTotal: number = 0;
+  @type('string') productionResourcesInvested: string = '{}';
 
   @type('number') energyCredits: number = 0;
   @type('string') factoryRecipe: string = '';
@@ -24,4 +25,6 @@ export class CityState extends Schema {
   @type('number') manpowerPerTick: number = 0;
 
   @type('string') stockpile: string = '[]';
+  @type('string') resourceInflows: string = '[]';
+  @type('number') lastInflowResetTick: number = 0;
 }

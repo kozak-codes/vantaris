@@ -182,6 +182,7 @@ See `docs/README.md` for the full index. Key docs:
 - `docs/territory.md` — Claiming, passive expansion, borders
 - `docs/units.md` — Infantry, movement, pathfinding, claim timers
 - `docs/cities.md` — City tiers, production, growth
+- `docs/storage-production.md` — Stockpile, resource categories, production investment
 - `docs/hud.md` — Broadcast-tone UI, panels, tooltips
 - `docs/multiplayer.md` — Colyseus rooms, matchmaking, reconnection
 - `docs/stages.md` — Phase completion tracker

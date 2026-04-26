@@ -1,5 +1,5 @@
 export {
-  BiomeType,
+  TerrainType,
   FogVisibility,
   GamePhase,
   QueueType,
@@ -7,7 +7,6 @@ export {
   UnitStatus,
   BuildingType,
   CityTier,
-  TerrainType,
 } from '@vantaris/shared';
 
 export type {
@@ -16,7 +15,6 @@ export type {
   HexCell,
   HexGrid,
   CellRenderData,
-  BiomeConfig,
   FogConfig,
   GlobeConfig,
   CameraConfig,

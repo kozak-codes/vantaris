@@ -2,7 +2,8 @@
   "name": "@vantaris/shared",
   "version": "0.1.0",
   "private": true,
-  "license": "CAL-1.0", "src/index.ts",
+  "license": "CAL-1.0",
+  "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
     "build": "echo 'shared package has no build step'"

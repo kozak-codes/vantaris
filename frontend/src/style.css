@@ -618,6 +618,25 @@ html, body {
   font-size: 12px;
 }
 
+.panel-row .resource-indent {
+  padding-left: 14px;
+  font-size: 11px;
+}
+
+.stockpile-category {
+  cursor: default;
+  font-weight: 600;
+}
+
+.stockpile-resource .label {
+  color: #667788;
+}
+
+.stockpile-category:hover {
+  background: rgba(255,255,255,0.04);
+  border-radius: 3px;
+}
+
 .panel-actions {
   margin-top: 10px;
   display: flex;

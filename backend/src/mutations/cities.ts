@@ -2,7 +2,7 @@ import { GameState } from '../state/GameState';
 import { CityState } from '../state/CityState';
 import { CFG, UNIT_PRODUCTION_COSTS, FOOD_VALUE, MATERIAL_VALUE } from '@vantaris/shared/constants';
 import type { ProductionItem } from '@vantaris/shared';
-import { initCityStockpile, getCityStockpileAmount, consumeFromCityStockpile } from './resources';
+import { initCityStockpile, getCityStockpileAmount, consumeFromCityStockpile, getCityStockpile, setCityStockpile } from './resources';
 
 let cityIdCounter = 0;
 
@@ -37,10 +37,20 @@ export function setCurrentProduction(city: CityState, item: ProductionItem | nul
   if (item) {
     city.productionTicksRemaining = item.ticksCost;
     city.productionTicksTotal = item.ticksCost;
+    city.productionResourcesInvested = JSON.stringify({});
   } else {
     city.productionTicksRemaining = 0;
     city.productionTicksTotal = 0;
+    city.productionResourcesInvested = JSON.stringify({});
   }
+}
+
+function getResourcesInvested(city: CityState): Record<string, number> {
+  try { return JSON.parse(city.productionResourcesInvested); } catch { return {}; }
+}
+
+function setResourcesInvested(city: CityState, invested: Record<string, number>): void {
+  city.productionResourcesInvested = JSON.stringify(invested);
 }
 
 export function createCity(
@@ -54,7 +64,7 @@ export function createCity(
   city.cellId = cellId;
   city.tier = 1;
   city.xp = 0;
-  city.population = 0;
+  city.population = CFG.CITY.POPULATION_INITIAL;
   city.passiveExpandCooldown = 0;
 
   setRepeatQueue(city, []);
@@ -130,49 +140,7 @@ export function tickCityProduction(city: CityState): ProductionItem | null {
   return null;
 }
 
-export function canCityAffordProduction(city: CityState): boolean {
-  const current = getCurrentProduction(city);
-  if (!current) return true;
-  if (city.population < current.manpowerCost + 1) return false;
-
-  for (const [resource, amount] of Object.entries(current.resourceCost)) {
-    if (resource === 'FOOD') {
-      let foodAvailable = 0;
-      for (const [res, value] of Object.entries(FOOD_VALUE)) {
-        if (value > 0) foodAvailable += getCityStockpileAmount(city, res) * value;
-      }
-      if (foodAvailable < amount) return false;
-    } else if (resource === 'MATERIAL') {
-      let matAvailable = 0;
-      for (const [res, value] of Object.entries(MATERIAL_VALUE)) {
-        if (value > 0) matAvailable += getCityStockpileAmount(city, res) * value;
-      }
-      if (matAvailable < amount) return false;
-    } else {
-      if (getCityStockpileAmount(city, resource) < amount) return false;
-    }
-  }
-  return true;
-}
-
-export function consumeProductionCosts(city: CityState, item: ProductionItem): boolean {
-  if (city.population < item.manpowerCost + 1) return false;
-  city.population -= item.manpowerCost;
-
-  for (const [resource, amount] of Object.entries(item.resourceCost)) {
-    if (resource === 'FOOD') {
-      deductFoodFromCity(city, amount);
-    } else if (resource === 'MATERIAL') {
-      deductMaterialFromCity(city, amount);
-    } else {
-      consumeFromCityStockpile(city, resource, amount);
-    }
-  }
-
-  return true;
-}
-
-function deductFoodFromCity(city: CityState, amount: number): void {
+function deductFoodFromCity(city: CityState, amount: number): boolean {
   let remaining = amount;
   const foodOrder = Object.entries(FOOD_VALUE)
     .filter(([, v]) => v > 0)
@@ -184,16 +152,15 @@ function deductFoodFromCity(city: CityState, amount: number): void {
     if (available <= 0) continue;
     const foodFromThis = available * value;
     const foodToTake = Math.min(foodFromThis, remaining);
-    const unitsToTake = Math.ceil(foodToTake / value);
-    const actualTaken = Math.min(available, unitsToTake);
-    if (actualTaken > 0) {
-      consumeFromCityStockpile(city, res, actualTaken);
-      remaining -= actualTaken * value;
-    }
+    const unitsToTake = Math.min(available, foodToTake / value);
+    consumeFromCityStockpile(city, res, unitsToTake);
+    remaining -= unitsToTake * value;
   }
+
+  return remaining <= 0.01;
 }
 
-function deductMaterialFromCity(city: CityState, amount: number): void {
+function deductMaterialFromCity(city: CityState, amount: number): boolean {
   let remaining = amount;
   const matOrder = Object.entries(MATERIAL_VALUE)
     .filter(([, v]) => v > 0)
@@ -205,13 +172,132 @@ function deductMaterialFromCity(city: CityState, amount: number): void {
     if (available <= 0) continue;
     const matFromThis = available * value;
     const matToTake = Math.min(matFromThis, remaining);
-    const unitsToTake = Math.ceil(matToTake / value);
-    const actualTaken = Math.min(available, unitsToTake);
-    if (actualTaken > 0) {
-      consumeFromCityStockpile(city, res, actualTaken);
-      remaining -= actualTaken * value;
+    const unitsToTake = Math.min(available, matToTake / value);
+    consumeFromCityStockpile(city, res, unitsToTake);
+    remaining -= unitsToTake * value;
+  }
+
+  return remaining <= 0.01;
+}
+
+export function canCityAffordProduction(city: CityState): boolean {
+  const current = getCurrentProduction(city);
+  if (!current) return true;
+  if (city.population < current.manpowerCost + 1) return false;
+
+  for (const [resource, amount] of Object.entries(current.resourceCost)) {
+    if (resource === 'FOOD') {
+      let foodAvailable = 0;
+      for (const [res, value] of Object.entries(FOOD_VALUE)) {
+        if (value > 0) foodAvailable += getCityStockpileAmount(city, res) * value;
+      }
+      const invested = getResourcesInvested(city);
+      const foodInvested = invested['FOOD'] || 0;
+      if (foodAvailable - foodInvested < amount) return false;
+    } else if (resource === 'MATERIAL') {
+      let matAvailable = 0;
+      for (const [res, value] of Object.entries(MATERIAL_VALUE)) {
+        if (value > 0) matAvailable += getCityStockpileAmount(city, res) * value;
+      }
+      const invested = getResourcesInvested(city);
+      const matInvested = invested['MATERIAL'] || 0;
+      if (matAvailable - matInvested < amount) return false;
+    } else {
+      const available = getCityStockpileAmount(city, resource);
+      const invested = getResourcesInvested(city);
+      const resInvested = invested[resource] || 0;
+      if (available - resInvested < amount) return false;
     }
   }
+  return true;
+}
+
+export function investProductionTick(city: CityState): void {
+  const current = getCurrentProduction(city);
+  if (!current) return;
+  if (city.productionTicksTotal <= 0) return;
+
+  const fraction = 1 / city.productionTicksTotal;
+  const invested = getResourcesInvested(city);
+
+  for (const [resource, totalAmount] of Object.entries(current.resourceCost)) {
+    const perTick = totalAmount * fraction;
+    if (resource === 'FOOD') {
+      let remaining = perTick;
+      const foodOrder = Object.entries(FOOD_VALUE)
+        .filter(([, v]) => v > 0)
+        .sort(([, a], [, b]) => b - a);
+
+      for (const [res, value] of foodOrder) {
+        if (remaining <= 0.001) break;
+        const sp = getCityStockpile(city);
+        const available = (sp[res] || 0) - (invested[`${res}_FOOD`] || 0);
+        if (available <= 0) continue;
+        const foodFromThis = available * value;
+        const foodToTake = Math.min(foodFromThis, remaining);
+        const unitsToTake = Math.min(available, foodToTake / value);
+        invested[`${res}_FOOD`] = (invested[`${res}_FOOD`] || 0) + unitsToTake;
+        remaining -= unitsToTake * value;
+      }
+      invested['FOOD'] = (invested['FOOD'] || 0) + (perTick - remaining);
+    } else if (resource === 'MATERIAL') {
+      let remaining = perTick;
+      const matOrder = Object.entries(MATERIAL_VALUE)
+        .filter(([, v]) => v > 0)
+        .sort(([, a], [, b]) => b - a);
+
+      for (const [res, value] of matOrder) {
+        if (remaining <= 0.001) break;
+        const sp = getCityStockpile(city);
+        const available = (sp[res] || 0) - (invested[`${res}_MATERIAL`] || 0);
+        if (available <= 0) continue;
+        const matFromThis = available * value;
+        const matToTake = Math.min(matFromThis, remaining);
+        const unitsToTake = Math.min(available, matToTake / value);
+        invested[`${res}_MATERIAL`] = (invested[`${res}_MATERIAL`] || 0) + unitsToTake;
+        remaining -= unitsToTake * value;
+      }
+      invested['MATERIAL'] = (invested['MATERIAL'] || 0) + (perTick - remaining);
+    } else {
+      const sp = getCityStockpile(city);
+      const available = (sp[resource] || 0) - (invested[resource] || 0);
+      const toInvest = Math.min(perTick, available);
+      invested[resource] = (invested[resource] || 0) + toInvest;
+    }
+  }
+
+  setResourcesInvested(city, invested);
+}
+
+export function consumeProductionCosts(city: CityState, item: ProductionItem): boolean {
+  if (city.population < item.manpowerCost + 1) return false;
+  city.population -= item.manpowerCost;
+
+  const invested = getResourcesInvested(city);
+
+  for (const [resource, amount] of Object.entries(item.resourceCost)) {
+    if (resource === 'FOOD') {
+      for (const [key, value] of Object.entries(invested)) {
+        if (key.endsWith('_FOOD')) {
+          const res = key.replace('_FOOD', '');
+          consumeFromCityStockpile(city, res, value);
+        }
+      }
+    } else if (resource === 'MATERIAL') {
+      for (const [key, value] of Object.entries(invested)) {
+        if (key.endsWith('_MATERIAL')) {
+          const res = key.replace('_MATERIAL', '');
+          consumeFromCityStockpile(city, res, value);
+        }
+      }
+    } else {
+      const resInvested = invested[resource] || 0;
+      consumeFromCityStockpile(city, resource, resInvested);
+    }
+  }
+
+  setResourcesInvested(city, {});
+  return true;
 }
 
 export function addToRepeatQueue(city: CityState, unitType: string): void {

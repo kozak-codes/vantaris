@@ -4,7 +4,7 @@ import { CellState } from '../state/CellState';
 import { PlayerState } from '../state/PlayerState';
 import { CityState } from '../state/CityState';
 import { BuildingState } from '../state/BuildingState';
-import { BiomeType, ResourceType } from '@vantaris/shared';
+import { TerrainType, ResourceType } from '@vantaris/shared';
 import { createBuilding, canPlaceBuilding, tickBuildingProduction, countBuildingsOnCell, getCellBuildingCapacity, getAvailableBuildTypes, getBuildingStockpile, addToBuildingStockpile, getBuildingStockpileAmount, canAffordBuildingCost, tickBuildingConstruction, getResourcesInvested } from '../mutations/buildings';
 import { tickExtractorOutput, tickFactoryProcessing, tickCityResourceDrain, tickPopulation, tickCityXP, getCityStockpile, setCityStockpile, addToCityStockpile, getCityStockpileAmount, initCityStockpile, consumeFromCityStockpile } from '../mutations/resources';
 
@@ -17,7 +17,7 @@ function makeTestState(): GameState {
 
   const c0 = new CellState();
   c0.cellId = 'cell_0';
-  c0.biome = BiomeType.Plains;
+  c0.biome = TerrainType.PLAINS;
   c0.ownerId = 'p1';
   c0.elevation = 0.3;
   c0.resourceType = ResourceType.GRAIN;
@@ -27,7 +27,7 @@ function makeTestState(): GameState {
 
   const c1 = new CellState();
   c1.cellId = 'cell_1';
-  c1.biome = BiomeType.Mountain;
+  c1.biome = TerrainType.MOUNTAIN;
   c1.ownerId = 'p1';
   c1.elevation = 0.7;
   c1.resourceType = ResourceType.ORE;
@@ -37,14 +37,14 @@ function makeTestState(): GameState {
 
   const c2 = new CellState();
   c2.cellId = 'cell_2';
-  c2.biome = BiomeType.Ocean;
+  c2.biome = TerrainType.OCEAN;
   c2.elevation = -0.5;
   c2.isPentagon = false;
   state.cells.set('cell_2', c2);
 
   const c3 = new CellState();
   c3.cellId = 'cell_3';
-  c3.biome = BiomeType.Forest;
+  c3.biome = TerrainType.FOREST;
   c3.ownerId = '';
   c3.elevation = 0.2;
   c3.isPentagon = false;
@@ -52,7 +52,7 @@ function makeTestState(): GameState {
 
   const c4 = new CellState();
   c4.cellId = 'cell_4';
-  c4.biome = BiomeType.Desert;
+  c4.biome = TerrainType.DESERT;
   c4.ownerId = 'p1';
   c4.elevation = 0.2;
   c4.isPentagon = false;
@@ -97,7 +97,7 @@ describe('Cell Building Capacity', () => {
 
   it('should return 5 for pentagons', () => {
     const cell = new CellState();
-    cell.biome = BiomeType.Plains;
+    cell.biome = TerrainType.PLAINS;
     cell.isPentagon = true;
     expect(getCellBuildingCapacity(cell)).toBe(5);
   });
@@ -188,19 +188,19 @@ describe('City Stockpile', () => {
   it('should initialize with starting resources', () => {
     const state = makeTestState();
     const city = makeTestCity(state, 'cell_0');
-    expect(getCityStockpileAmount(city, ResourceType.BREAD)).toBe(60);
+    expect(getCityStockpileAmount(city, ResourceType.BREAD)).toBe(80);
     expect(getCityStockpileAmount(city, ResourceType.STEEL)).toBe(10);
-    expect(getCityStockpileAmount(city, ResourceType.POWER)).toBe(10);
+    expect(getCityStockpileAmount(city, ResourceType.POWER)).toBe(20);
   });
 
   it('should add and consume resources', () => {
     const state = makeTestState();
     const city = makeTestCity(state, 'cell_0');
     addToCityStockpile(city, ResourceType.BREAD, 20);
-    expect(getCityStockpileAmount(city, ResourceType.BREAD)).toBe(80);
+    expect(getCityStockpileAmount(city, ResourceType.BREAD)).toBe(100);
     const result = consumeFromCityStockpile(city, ResourceType.BREAD, 15);
     expect(result).toBe(true);
-    expect(getCityStockpileAmount(city, ResourceType.BREAD)).toBe(65);
+    expect(getCityStockpileAmount(city, ResourceType.BREAD)).toBe(85);
   });
 
   it('should fail to consume when insufficient', () => {
