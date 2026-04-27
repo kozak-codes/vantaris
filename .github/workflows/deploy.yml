@@ -43,6 +43,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Clean previous build output
+        run: rm -rf frontend/dist
+
       - run: npm run build --workspace=frontend
         env:
           VITE_SERVER_URL: wss://api.vantaris.gg
