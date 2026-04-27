@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { HexGrid as HexGridData } from '../types/index';
 import type { GlobeRenderer } from '../globe/GlobeRenderer';
-import type { CameraControls } from '../camera/CameraControls';
+import type { CameraControls } from './CameraControls';
 import { clientState } from '../state/ClientState';
 
 export interface DebugAPI {

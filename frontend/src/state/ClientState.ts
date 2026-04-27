@@ -14,6 +14,7 @@ import {
   type BuildingData,
   type PlayerResourceData,
 } from '@vantaris/shared';
+import { syncFromClientState, addChatMessageToSignals } from './signals';
 
 const BUILDING_PLACEMENT_RULES = getBuildingPlacementRules(CFG);
 
@@ -122,11 +123,13 @@ export function addChatMessage(msg: ChatMessage): void {
       }
     }
   }
+  addChatMessageToSignals(msg);
   notifyRenderers();
 }
 
 export function notifySelectionChanged(): void {
   validateSelections();
+  syncFromClientState(clientState);
   notifyRenderers();
 }
 
@@ -245,6 +248,8 @@ export function applyStateSlice(slice: PlayerStateSlice): void {
       }
     }
   }
+
+  syncFromClientState(clientState);
 }
 
 function validateSelections(): void {

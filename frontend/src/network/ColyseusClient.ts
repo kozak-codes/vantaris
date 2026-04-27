@@ -1,6 +1,7 @@
 import { Client, Room } from 'colyseus.js';
 import { storeReconnectionToken, getReconnectionToken, getStoredRoomId } from './RoomPersistence';
 import { applyStateSlice, clearClientState, clientState } from '../state/ClientState';
+import { eliminationEvent, gameWonEvent } from '../state/signals';
 import type { ChatMessage } from '@vantaris/shared';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'ws://localhost:2567';
@@ -60,10 +61,12 @@ export async function joinGame(roomId: string, displayName?: string): Promise<Ro
 
   room.onMessage('playerEliminated', (data: { playerId: string; displayName: string; color: string; eliminatedTick: number }) => {
     clientState.eliminationEvent = data;
+    eliminationEvent.value = data;
   });
 
   room.onMessage('gameWon', (data: { playerId: string; displayName: string; color: string }) => {
     clientState.gameWonEvent = data;
+    gameWonEvent.value = data;
   });
 
   room.onMessage('chatMessage', (data: ChatMessage) => {
@@ -94,10 +97,12 @@ export async function reconnectToGame(roomId: string): Promise<Room> {
 
   room.onMessage('playerEliminated', (data: { playerId: string; displayName: string; color: string; eliminatedTick: number }) => {
     clientState.eliminationEvent = data;
+    eliminationEvent.value = data;
   });
 
   room.onMessage('gameWon', (data: { playerId: string; displayName: string; color: string }) => {
     clientState.gameWonEvent = data;
+    gameWonEvent.value = data;
   });
 
   room.onMessage('chatMessage', (data: ChatMessage) => {

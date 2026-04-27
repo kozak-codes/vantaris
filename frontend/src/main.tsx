@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { render } from 'preact';
 import { generateHexGrid } from './globe/HexGrid';
 import { GlobeRenderer } from './globe/GlobeRenderer';
 import { FogRenderer } from './systems/FogRenderer';
@@ -8,15 +9,14 @@ import { SelectionRenderer } from './systems/SelectionRenderer';
 import { RuinRenderer } from './systems/RuinRenderer';
 import { BuildingRenderer } from './systems/BuildingRenderer';
 import { DayNightRenderer } from './systems/DayNightRenderer';
-import { ChatPanel } from './ui/ChatPanel';
-import { CameraControls } from './camera/CameraControls';
-import { HUD } from './ui/HUD';
+import { CameraControls } from './systems/CameraControls';
 import { LobbyUI } from './ui/LobbyUI';
-import { GlobeInput } from './input/GlobeInput';
-import { createDebugAPI } from './debug/DebugAPI';
+import { GlobeInput } from './systems/GlobeInput';
+import { createDebugAPI } from './systems/DebugAPI';
 import { getRoomIdFromURL, setRoomIdInURL, clearRoomFromURL, getStoredRoomId, getDisplayName } from './network/RoomPersistence';
 import { joinGame, reconnectToGame, leaveGame, sendUpdateCamera } from './network/ColyseusClient';
 import { clientState, clearClientState, onFirstSpawn } from './state/ClientState';
+import { App } from './ui/App';
 
 const canvas = document.getElementById('globe-canvas') as HTMLCanvasElement;
 
@@ -57,11 +57,7 @@ const dayNightRenderer = new DayNightRenderer(ambientLight, globeRenderer.getGlo
 const leaveBtn = document.getElementById('hud-leave')!;
 leaveBtn.addEventListener('click', handleLeaveGame);
 
-const hud = new HUD();
-const chatPanel = new ChatPanel();
-const chatToggle = document.getElementById('hud-chat-toggle')!;
-chatToggle.addEventListener('click', () => chatPanel.toggle());
-hud.setOnDirectMessage((playerId: string) => chatPanel.openDirectMessage(playerId));
+render(<App />, document.getElementById('hud-root')!);
 const cameraControls = new CameraControls(camera, canvas, pivot);
 const globeInput = new GlobeInput(canvas, camera, globeRenderer.getGlobeGroup());
 
@@ -116,8 +112,6 @@ async function handleGameJoin(newRoomId: string): Promise<void> {
 function handleGameRoom(room: any): void {
   useServerState = true;
   leaveBtn.classList.remove('hidden');
-  document.getElementById('hud-player-list')?.classList.remove('hidden');
-  document.getElementById('hud-resources')?.classList.remove('hidden');
   pivot.quaternion.identity();
 
   onFirstSpawn((_playerId: string, cityCellId: string) => {
@@ -130,8 +124,6 @@ function handleGameRoom(room: any): void {
   room.onLeave(() => {
     useServerState = false;
     leaveBtn.classList.add('hidden');
-    document.getElementById('hud-player-list')?.classList.add('hidden');
-    document.getElementById('hud-resources')?.classList.add('hidden');
   });
 }
 
@@ -141,8 +133,6 @@ function handleLeaveGame(): void {
   localStorage.removeItem('vantaris_currentRoom');
   useServerState = false;
   leaveBtn.classList.add('hidden');
-  document.getElementById('hud-player-list')?.classList.add('hidden');
-  document.getElementById('hud-resources')?.classList.add('hidden');
   pivot.quaternion.identity();
   showLobby();
 }
