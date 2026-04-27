@@ -4,12 +4,11 @@ import type { CityData } from '@vantaris/shared';
 import {
   myPlayerId, selectedUnitId, selectedCityId, pendingCommand,
   players, unitsOnSelectedTile, buildingsOnSelectedTile,
-  selectTile,
+  selectTile, selectedBuildingId,
 } from '../state/signals';
-import { sendCityQueueAddPriority, sendCityQueueAddRepeat, sendCityQueueRemoveRepeat, sendCityQueueClearPriority } from '../network/ColyseusClient';
+import { sendCityQueueAddPriority, sendCityQueueAddRepeat, sendCityQueueRemoveRepeat, sendCityQueueClearPriority, sendRenameCity } from '../network/ColyseusClient';
 import { BIOME_TRAVEL_NAMES, BUILDING_DISPLAY, TIER_NAMES, RESOURCE_LABELS, typeLabel } from './hud-shared';
 import { StockpileSection } from './StockpileSection';
-import { BuildMenu } from './BuildMenu';
 
 const UNIT_PRODUCTION_COSTS = getUnitProductionCosts(CFG);
 
@@ -25,6 +24,7 @@ interface CityPanelProps {
 export const CityPanel: FunctionalComponent<CityPanelProps> = ({ city, tileId, biome, ownerName, ownerColor }) => {
   const isMyCity = city.ownerId === myPlayerId.value;
   const tierName = TIER_NAMES[city.tier] || 'Settlement';
+  const cityName = city.name || tierName;
   const player = players.value.get(city.ownerId);
   const cityColor = player ? player.color : '#888';
   const maxUnits = city.tier + 1;
@@ -91,7 +91,7 @@ export const CityPanel: FunctionalComponent<CityPanelProps> = ({ city, tileId, b
         {bOnTile.map(b => {
           const label = BUILDING_DISPLAY[b.type] || b.type;
           const status = b.productionTicksRemaining > 0 ? ` (${b.productionTicksRemaining}t)` : 'Active';
-          return <div class="panel-row"><span class="label">{label}</span><span>{status}</span></div>;
+          return <button class="panel-row panel-row-btn" data-building-id={b.buildingId} onClick={() => { selectedBuildingId.value = b.buildingId; }}><span class="label">{label}</span><span>{status}</span></button>;
         })}
       </div>
     );
@@ -100,10 +100,19 @@ export const CityPanel: FunctionalComponent<CityPanelProps> = ({ city, tileId, b
   return (
     <div id="hud-tile-panel" class="panel">
       <div class="panel-header">
-        <span class="panel-title" style={{ color: cityColor }}>⌂ {tierName}</span>
+        <span class="panel-title" style={{ color: cityColor }}>⌂ {cityName}</span>
         <button class="panel-close" onClick={() => selectTile(null)}>&times;</button>
       </div>
       <div class="panel-section">
+        {isMyCity && (
+          <div class="panel-row">
+            <span class="label">Name</span>
+            <input class="city-name-input" type="text" value={cityName} maxLength={24}
+              onBlur={(e: any) => { const v = e.target.value.trim(); if (v && v !== city.name) sendRenameCity(city.cityId, v); }}
+              onKeyDown={(e: any) => { if (e.key === 'Enter') e.target.blur(); }}
+            />
+          </div>
+        )}
         <div class="panel-row"><span class="label">Owner</span><span style={{ color: ownerColor }}>{ownerName}{isMyCity ? ' (You)' : ''}</span></div>
         <div class="panel-row"><span class="label">Tier</span><span>{tierName} (Lv.{city.tier})</span></div>
         <div class="panel-row"><span class="label">Population</span><span>{city.population}</span></div>

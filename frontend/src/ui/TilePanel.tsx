@@ -1,7 +1,7 @@
 import { FunctionalComponent } from 'preact';
 import {
   myPlayerId, visibleCells, units, cities, buildings, players,
-  selectTile, selectUnit, selectCity,
+  selectTile, selectUnit, selectCity, selectedBuildingId,
 } from '../state/signals';
 import { BIOME_TRAVEL_NAMES, BUILDING_DISPLAY, TIER_NAMES, STATUS_DISPLAY } from './hud-shared';
 
@@ -24,10 +24,10 @@ export const TilePanel: FunctionalComponent<TilePanelProps> = ({ tileId, biome, 
     }
   }
 
-  let cityOnTile: { cityId: string; tier: number; producing: boolean; isMyCity: boolean } | null = null;
+  let cityOnTile: { cityId: string; name: string; tier: number; producing: boolean; isMyCity: boolean } | null = null;
   for (const [cityId, city] of cities.value) {
     if (city.cellId === tileId) {
-      cityOnTile = { cityId, tier: city.tier, producing: city.repeatQueue.length > 0 || city.currentProduction !== null, isMyCity: city.ownerId === myPlayerId.value };
+      cityOnTile = { cityId, name: city.name, tier: city.tier, producing: city.repeatQueue.length > 0 || city.currentProduction !== null, isMyCity: city.ownerId === myPlayerId.value };
       break;
     }
   }
@@ -60,18 +60,18 @@ export const TilePanel: FunctionalComponent<TilePanelProps> = ({ tileId, biome, 
       </div>
       {cityOnTile && (
         <div class="panel-section">
-          <div class="panel-subtitle">Building</div>
-          <div class="panel-row" onClick={() => selectCity(cityOnTile!.cityId)}>
-            <span>{TIER_NAMES[cityOnTile.tier] || 'Settlement'}</span>
-            {cityOnTile.isMyCity && <span class="label owned-label">Yours</span>}
-          </div>
+          <div class="panel-subtitle">City</div>
+          <button class="panel-row panel-row-btn" onClick={() => selectCity(cityOnTile!.cityId)}>
+            <span class="label">{cityOnTile.name || TIER_NAMES[cityOnTile.tier] || 'Settlement'}</span>
+            {cityOnTile.isMyCity && <span class="owned-label">Yours</span>}
+          </button>
         </div>
       )}
       {bOnTile.length > 0 && (
         <div class="panel-section">
           <div class="panel-subtitle">Structures</div>
           {bOnTile.map(b => (
-            <button class="panel-row panel-row-btn" data-building-id={b.buildingId}>
+            <button class="panel-row panel-row-btn" data-building-id={b.buildingId} onClick={() => { selectedBuildingId.value = b.buildingId; }}>
               <span>{BUILDING_DISPLAY[b.type] || b.type}</span>
               {b.isMine && <span class="label owned-label">Yours</span>}
             </button>

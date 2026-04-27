@@ -38,3 +38,22 @@ export const RUIN_LABELS: Record<string, string> = {
 export const RUIN_TYPE_TO_BUILDING: Record<string, string> = CFG.RUIN_TYPE_TO_BUILDING;
 
 export const typeLabel = (t: string) => t === 'ENGINEER' ? 'Engineer' : t === 'INFANTRY' ? 'Infantry' : t;
+
+export const EXTRACTOR_OUTPUT: Record<string, { resource: string; amount: number } | null> = {};
+for (const [k, v] of Object.entries(CFG.BUILDINGS)) {
+  EXTRACTOR_OUTPUT[k] = v.extractorOutput ? { resource: v.extractorOutput.resource, amount: v.extractorOutput.amount } : null;
+}
+
+export const FACTORY_RECIPES: { id: string; name: string; input: { resource: string; amount: number }[]; output: { resource: string; amount: number }[]; ticksPerCycle: number; minFactoryTier: number }[] = [];
+for (const v of Object.values(CFG.RESOURCES)) {
+  if (v.recipe) {
+    FACTORY_RECIPES.push({
+      id: v.recipe.id!,
+      name: v.recipe.name!,
+      input: v.recipe.input,
+      output: v.recipe.output,
+      ticksPerCycle: v.recipe.ticksPerCycle,
+      minFactoryTier: v.recipe.minFactoryTier,
+    });
+  }
+}

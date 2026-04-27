@@ -33,6 +33,7 @@ export function spawnUnit(
   unit.claimTicksRemaining = 0;
   unit.buildTicksRemaining = 0;
   unit.engineerLevel = unitType === 'ENGINEER' ? engineerLevel : 0;
+  unit.buildExhaustion = 0;
 
   state.units.set(unit.unitId, unit);
   return unit;

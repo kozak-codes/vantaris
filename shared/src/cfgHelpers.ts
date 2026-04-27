@@ -87,10 +87,10 @@ export function getBuildingTicks(cfg: ICFG): Record<string, number> {
   return result;
 }
 
-export function getBuildingCosts(cfg: ICFG): Record<string, { food: number; material: number; consumesBuilder: boolean }> {
-  const result: Record<string, { food: number; material: number; consumesBuilder: boolean }> = {};
+export function getBuildingCosts(cfg: ICFG): Record<string, { food: number; material: number; exhaustionCost: number }> {
+  const result: Record<string, { food: number; material: number; exhaustionCost: number }> = {};
   for (const [key, val] of Object.entries(cfg.BUILDINGS) as [string, BuildingConfig][]) {
-    result[key] = { food: val.cost.food, material: val.cost.material, consumesBuilder: val.cost.consumesBuilder };
+    result[key] = { food: val.cost.food, material: val.cost.material, exhaustionCost: val.exhaustionCost };
   }
   return result;
 }

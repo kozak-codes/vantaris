@@ -12,4 +12,5 @@ export class UnitState extends Schema {
   @type('number') claimTicksRemaining: number = 0;
   @type('number') buildTicksRemaining: number = 0;
   @type('number') engineerLevel: number = 1;
+  @type('number') buildExhaustion: number = 0;
 }

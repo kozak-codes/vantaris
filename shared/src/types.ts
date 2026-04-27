@@ -261,6 +261,7 @@ export interface UnitData {
   claimTicksRemaining: number;
   buildTicksRemaining: number;
   engineerLevel: number;
+  buildExhaustion: number;
 }
 
 export interface ProductionItem {
@@ -274,6 +275,7 @@ export interface CityData {
   cityId: string;
   ownerId: string;
   cellId: string;
+  name: string;
   tier: number;
   xp: number;
   xpToNext: number;

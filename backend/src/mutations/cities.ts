@@ -1,5 +1,6 @@
 import { GameState } from '../state/GameState';
 import { CityState } from '../state/CityState';
+import { getNextCityName } from './cityNames';
 import {
   CFG,
   getUnitProductionCosts,
@@ -71,10 +72,10 @@ export function createCity(
   city.cityId = `city_${cityIdCounter++}`;
   city.ownerId = ownerId;
   city.cellId = cellId;
+  city.name = getNextCityName();
   city.tier = 1;
   city.xp = 0;
   city.population = CFG.CITY.POPULATION_INITIAL;
-  city.passiveExpandCooldown = 0;
 
   setRepeatQueue(city, []);
   const cost = getProductionCost('INFANTRY');
@@ -362,54 +363,3 @@ export function awardCityXP(city: CityState, xp: number): void {
   }
 }
 
-export function tickPassiveExpansion(
-  state: GameState,
-  city: CityState,
-  adjacencyMap: { [cellId: string]: string[] },
-): string | null {
-  const interval = CFG.CITY.PASSIVE_EXPANSION_TICKS[city.tier] ?? 0;
-  if (interval === 0) return null;
-
-  if (city.passiveExpandCooldown > 0) {
-    city.passiveExpandCooldown--;
-    return null;
-  }
-
-  const neighbors = adjacencyMap[city.cellId] ?? [];
-  for (const nId of neighbors) {
-    const nCell = state.cells.get(nId);
-    if (nCell && !nCell.ownerId && nCell.biome !== 'OCEAN') {
-      return nId;
-    }
-  }
-
-  const frontier: string[] = [];
-  const visited = new Set<string>([city.cellId, ...neighbors]);
-  let current = [...neighbors];
-  for (let depth = 0; depth < 3; depth++) {
-    const next: string[] = [];
-    for (const cid of current) {
-      const cell = state.cells.get(cid);
-      if (cell && cell.ownerId === city.ownerId) {
-        for (const adjId of (adjacencyMap[cid] ?? [])) {
-          if (!visited.has(adjId)) {
-            visited.add(adjId);
-            const adjCell = state.cells.get(adjId);
-            if (adjCell && !adjCell.ownerId && adjCell.biome !== 'OCEAN') {
-              frontier.push(adjId);
-            } else if (adjCell && adjCell.ownerId === city.ownerId) {
-              next.push(adjId);
-            }
-          }
-        }
-      }
-    }
-    if (frontier.length > 0) break;
-    current = next;
-  }
-
-  if (frontier.length > 0) return frontier[0];
-
-  city.passiveExpandCooldown = interval;
-  return null;
-}

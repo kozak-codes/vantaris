@@ -4,6 +4,7 @@ export class CityState extends Schema {
   @type('string') cityId: string = '';
   @type('string') ownerId: string = '';
   @type('string') cellId: string = '';
+  @type('string') name: string = '';
   @type('number') tier: number = 1;
   @type('number') xp: number = 0;
   @type('number') population: number = 10;
@@ -18,7 +19,6 @@ export class CityState extends Schema {
   @type('number') energyCredits: number = 0;
   @type('string') factoryRecipe: string = '';
   @type('string') factoryXPMap: string = '{}';
-  @type('number') passiveExpandCooldown: number = 0;
 
   @type('number') foodPerTick: number = 0;
   @type('number') energyPerTick: number = 0;

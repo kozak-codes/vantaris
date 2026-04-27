@@ -288,18 +288,24 @@ export function tickPopulation(state: GameState): void {
     const popCap = getPopulationCap(city.tier);
 
     if (foodSatisfaction >= 1.0 && city.population < popCap) {
-      const growth = CFG.CITY.POPULATION_GROWTH_BASE + CFG.CITY.POPULATION_GROWTH_FOOD_BONUS * foodSatisfaction;
-      city.population = Math.min(popCap, city.population + growth);
+      const capacityRatio = city.population / popCap;
+      const growthFactor = (1 - capacityRatio) * (foodSatisfaction - 1);
+      const growth = CFG.CITY.POPULATION_GROWTH_RATE * city.population * growthFactor;
+      city.population = Math.min(popCap, city.population + Math.max(0, growth));
     } else if (foodSatisfaction < CFG.CITY.POPULATION_DECLINE_THRESHOLD && city.population > 0) {
       if (foodSatisfaction <= CFG.CITY.POPULATION_STARVATION_THRESHOLD) {
-        city.population = Math.max(0, city.population - CFG.CITY.POPULATION_STARVATION_RATE);
+        city.population = Math.max(0, city.population - CFG.CITY.POPULATION_STARVATION_RATE * city.population);
       } else {
-        city.population = Math.max(0, city.population - CFG.CITY.POPULATION_DECLINE_RATE);
+        city.population = Math.max(0, city.population - CFG.CITY.POPULATION_DECLINE_RATE * city.population);
       }
     }
 
     if (city.population >= popCap) {
       city.population = Math.floor(popCap);
+    }
+
+    if (city.population < 1) {
+      city.population = 0;
     }
   }
 }
@@ -330,7 +336,11 @@ function getPopulationCap(tier: number): number {
 export function tickInflowResets(state: GameState): void {
   for (const [, city] of state.cities) {
     if (state.tick - city.lastInflowResetTick >= CFG.CITY.INFLOW_WINDOW_TICKS) {
-      resetCityInflows(city);
+      const inflows = getCityInflows(city);
+      for (const entry of inflows) {
+        entry.amount = Math.round(entry.amount / CFG.CITY.INFLOW_WINDOW_TICKS * 10) / 10;
+      }
+      setCityInflows(city, inflows);
       city.lastInflowResetTick = state.tick;
     }
   }

@@ -8,7 +8,7 @@ const BUILDING_COSTS = getBuildingCosts(CFG);
 import { generateGlobe } from '../globe';
 import { computeVisibilityForPlayer, buildPlayerSlice } from '../mutations/fog';
 import { completeClaim } from '../mutations/units';
-import { createCity, tickCityProduction, tickPassiveExpansion, addToRepeatQueue, removeFromRepeatQueue, addPriorityItem, clearPriorityQueue, canCityAffordProduction, consumeProductionCosts, investProductionTick, getRepeatQueue } from '../mutations/cities';
+import { createCity, tickCityProduction, addToRepeatQueue, removeFromRepeatQueue, addPriorityItem, clearPriorityQueue, canCityAffordProduction, consumeProductionCosts, investProductionTick } from '../mutations/cities';
 import { CellState } from '../state/CellState';
 import { PlayerState } from '../state/PlayerState';
 import { UnitState } from '../state/UnitState';
@@ -119,6 +119,10 @@ export class VantarisRoom extends Room<GameState> {
       this.handleSetFactoryRecipe(client, data);
     });
 
+    this.onMessage('renameCity', (client, data: { cityId: string; name: string }) => {
+      this.handleRenameCity(client, data);
+    });
+
     this.onMessage('revealRuin', (client, data: { cellId: string }) => {
       const cell = this.state.cells.get(data.cellId);
       if (cell && cell.ruin && !cell.ruinRevealed) {
@@ -209,7 +213,6 @@ export class VantarisRoom extends Room<GameState> {
     this.processCityProduction();
     this.processUnitMovement();
     this.processClaimTimers();
-    this.processPassiveExpansion();
     this.processExtractorOutput();
     this.processFactoryProcessing();
     this.processFactoryOutput();
@@ -227,12 +230,12 @@ export class VantarisRoom extends Room<GameState> {
 
     for (const [, unit] of this.state.units) {
       if (unit.status === 'BUILDING') {
-        const cell = this.state.cells.get(unit.cellId);
-        const buildingOnCell = cell ? this.findConsumableBuildingOnCell(unit.cellId, unit.ownerId) : null;
+        const unitConfig = CFG.UNITS[unit.type];
+        const exhaustionBudget = unitConfig?.buildExhaustion ?? 1;
 
         unit.buildTicksRemaining--;
         if (unit.buildTicksRemaining <= 0) {
-          if (buildingOnCell && BUILDING_COSTS[buildingOnCell.type]?.consumesBuilder) {
+          if (unit.buildExhaustion >= exhaustionBudget) {
             consumedBuilders.push(unit.unitId);
           } else {
             unit.status = 'IDLE';
@@ -318,21 +321,6 @@ export class VantarisRoom extends Room<GameState> {
     }
   }
 
-  private processPassiveExpansion(): void {
-    for (const [, city] of this.state.cities) {
-      if (getRepeatQueue(city).length === 0) continue;
-
-      const targetCellId = tickPassiveExpansion(this.state, city, this.adjacencyMap);
-      if (targetCellId) {
-        completeClaim(this.state, targetCellId, city.ownerId);
-        const owner = this.state.players.get(city.ownerId);
-        if (owner) {
-          computeVisibilityForPlayer(this.state, city.ownerId, this.adjacencyMap, CFG.UNITS.INFANTRY.visionRange);
-        }
-      }
-    }
-  }
-
   private processExtractorOutput(): void {
     tickExtractorOutput(this.state, this.adjacencyMap);
   }
@@ -380,6 +368,17 @@ computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.IN
     if (building.factoryTier < recipe.minFactoryTier) return;
 
     building.recipe = data.recipeId;
+  }
+
+  private handleRenameCity(client: Client, data: { cityId: string; name: string }): void {
+    const playerId = client.sessionId;
+    const city = this.state.cities.get(data.cityId);
+    if (!city || city.ownerId !== playerId) return;
+
+    const trimmed = data.name.trim().slice(0, 24);
+    if (trimmed.length === 0) return;
+
+    city.name = trimmed;
   }
 
   private handleMoveUnit(client: Client, data: { unitId: string; targetCellId: string }): void {
@@ -474,6 +473,15 @@ computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.IN
     const buildingConfig = CFG.BUILDINGS[data.buildingType];
     if (!buildingConfig) return;
 
+    const unitConfig = CFG.UNITS[unit.type];
+    if (!unitConfig) return;
+    const exhaustionBudget = unitConfig.buildExhaustion;
+    const exhaustionCost = buildingConfig.exhaustionCost;
+    if (unit.buildExhaustion + exhaustionCost > exhaustionBudget) {
+      client.send('error', { type: 'error', code: 'INSUFFICIENT_EXHAUSTION' });
+      return;
+    }
+
     const allowedBuilders = getUnitBuildableTypes(CFG, unit.type, unit.type === 'ENGINEER' ? unit.engineerLevel : 1);
     if (!allowedBuilders.includes(data.buildingType)) return;
 
@@ -499,22 +507,18 @@ computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.IN
       return;
     }
 
-    const cost = BUILDING_COSTS[data.buildingType];
+    unit.buildExhaustion += exhaustionCost;
+
+    const buildTicks = BUILDING_TICKS[data.buildingType] ?? 200;
 
     if (data.buildingType === 'CITY') {
       this.state.buildings.delete(building.buildingId);
       const city = createCity(this.state, playerId, data.cellId);
       city.population = CFG.CITY.POPULATION_INITIAL;
-      unit.status = 'BUILDING';
-      unit.buildTicksRemaining = BUILDING_TICKS[data.buildingType] ?? 500;
-    } else {
-      unit.status = 'BUILDING';
-      unit.buildTicksRemaining = BUILDING_TICKS[data.buildingType] ?? 200;
     }
 
-    if (cost && cost.consumesBuilder) {
-      unit.buildTicksRemaining = 1;
-    }
+    unit.status = 'BUILDING';
+    unit.buildTicksRemaining = buildTicks;
   }
 
   private isAdjacentToTerritory(cellId: string, playerId: string): boolean {
@@ -672,14 +676,4 @@ computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.IN
     }
   }
 
-  private findConsumableBuildingOnCell(cellId: string, ownerId: string): BuildingState | null {
-    for (const [, building] of this.state.buildings) {
-      if (building.cellId === cellId && building.ownerId === ownerId) {
-        if (BUILDING_COSTS[building.type]?.consumesBuilder) {
-          return building;
-        }
-      }
-    }
-    return null;
-  }
 }

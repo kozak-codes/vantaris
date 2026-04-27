@@ -8,7 +8,6 @@ import {
 } from '../state/signals';
 import { sendClaimTerritory, sendSetUnitIdle, sendBuildStructure } from '../network/ColyseusClient';
 import { BIOME_TRAVEL_NAMES, STATUS_DISPLAY, BUILDING_DISPLAY, typeLabel } from './hud-shared';
-import { BuildMenu } from './BuildMenu';
 
 const BUILDING_COSTS = getBuildingCosts(CFG);
 const BUILDING_PLACEMENT_RULES = getBuildingPlacementRules(CFG);
@@ -64,40 +63,10 @@ export const UnitPanel: FunctionalComponent<UnitPanelProps> = ({ unit, tileId, b
       ? <button class="panel-btn cmd-btn" onClick={() => { sendClaimTerritory(unit.unitId); pendingCommand.value = null; }} title="Claim the tile this unit is standing on">2 Claim<span class="cmd-key">2</span></button>
       : <></>;
 
-    let buildButton = <></>;
-    if (cellData && cellData.ownerId === myPlayerId.value) {
-      const canBuildTypes = unit.type === 'ENGINEER'
-        ? getUnitBuildableTypes(CFG, 'ENGINEER', (unit as any).engineerLevel ?? 1)
-        : getUnitBuildableTypes(CFG, 'INFANTRY', 1);
-      const placeableTypes = canBuildTypes.filter((bt: string) => {
-        const allowedBiomes = BUILDING_PLACEMENT_RULES[bt];
-        if (allowedBiomes && !allowedBiomes.includes(cellData.biome)) return false;
-        if (bt === 'CITY') {
-          let cellHasCity = false;
-          for (const [, c] of cities.value) { if (c.cellId === unit.cellId) { cellHasCity = true; break; } }
-          return !cellHasCity;
-        }
-        return cellData.buildings.length < cellData.buildingCapacity;
-      });
-      if (placeableTypes.length > 0) {
-        buildButton = <button class="panel-btn cmd-btn" onClick={() => {
-          const freeExtractor = placeableTypes.find((bt: string) => {
-            const cost = BUILDING_COSTS[bt];
-            return cost && cost.food === 0 && cost.material === 0;
-          });
-          if (freeExtractor) {
-            sendBuildStructure(unit.unitId, freeExtractor, unit.cellId);
-            pendingCommand.value = null;
-          }
-        }} title="Build a structure on this hex">3 Build<span class="cmd-key">3</span></button>;
-      }
-    }
-
     commandsHtml = (
       <div class="panel-actions">
         <button class={`panel-btn cmd-btn${moveActive}`} onClick={() => { pendingCommand.value = cmd === 'move' ? null : 'move'; }} title="Click a destination tile to move there">1 Move<span class="cmd-key">1</span></button>
         {claimButton}
-        {buildButton}
         <button class="panel-btn" onClick={() => { sendSetUnitIdle(unit.unitId); pendingCommand.value = null; }} title="Stop unit / cancel">Stop</button>
       </div>
     );
@@ -124,6 +93,10 @@ export const UnitPanel: FunctionalComponent<UnitPanelProps> = ({ unit, tileId, b
   if (isMyUnit && unit.status === 'IDLE') {
     const cellData = visibleCells.value.get(unit.cellId);
     if (cellData && cellData.ownerId === myPlayerId.value) {
+      const unitConfig = CFG.UNITS[unit.type];
+      const exhaustionBudget = unitConfig?.buildExhaustion ?? (unit.type === 'ENGINEER' ? 3 : 1);
+      const remainingExhaustion = exhaustionBudget - (unit.buildExhaustion ?? 0);
+
       const canBuildTypes = unit.type === 'ENGINEER'
         ? getUnitBuildableTypes(CFG, 'ENGINEER', (unit as any).engineerLevel ?? 1)
         : getUnitBuildableTypes(CFG, 'INFANTRY', 1);
@@ -143,9 +116,13 @@ export const UnitPanel: FunctionalComponent<UnitPanelProps> = ({ unit, tileId, b
         } else {
           capacityOk = cellData.buildings.length < cellData.buildingCapacity;
         }
-        if (!(canBuildByLevel && biomeOk && capacityOk)) continue;
 
         const cost = BUILDING_COSTS[bt];
+        const exhaustionCost = cost?.exhaustionCost ?? 1;
+        if (remainingExhaustion < exhaustionCost) continue;
+
+        if (!(canBuildByLevel && biomeOk && capacityOk)) continue;
+
         const isFree = !cost || (cost.food === 0 && cost.material === 0);
         let costLabel = 'Free';
         if (cost && (cost.food > 0 || cost.material > 0)) {
@@ -154,20 +131,18 @@ export const UnitPanel: FunctionalComponent<UnitPanelProps> = ({ unit, tileId, b
           if (cost.material > 0) parts.push(`\u{1FAA8} ${cost.material}`);
           costLabel = parts.join(' ');
         }
-        const consumesNote = cost?.consumesBuilder ? ' \u26A0 Consumes unit' : '';
+        const exhaustLabel = exhaustionCost >= exhaustionBudget ? '\u26A0 Consumes unit' : `\u26A1 ${exhaustionCost}/${exhaustionBudget}`;
         const displayName = BUILDING_DISPLAY[bt] || bt;
 
         buildOptionsHtml.push(
-          <div class="build-option" onClick={() => { sendBuildStructure(unit.unitId, bt, unit.cellId); pendingCommand.value = null; }} title={`${costLabel}${consumesNote}`}>
+          <div class="build-option" onClick={() => { sendBuildStructure(unit.unitId, bt, unit.cellId); pendingCommand.value = null; }} title={`${costLabel} ${exhaustLabel}`}>
             <span class="build-option-name">{displayName}</span>
-            <span class="build-option-cost">{isFree ? '\u2713 Free' : costLabel}{consumesNote}</span>
+            <span class="build-option-cost">{isFree ? '' : costLabel + ' '}{exhaustLabel}</span>
           </div>
         );
       }
     }
   }
-
-  const cellDataForMenu = visibleCells.value.get(unit.cellId);
 
   return (
     <div id="hud-tile-panel" class="panel">
@@ -179,6 +154,11 @@ export const UnitPanel: FunctionalComponent<UnitPanelProps> = ({ unit, tileId, b
         <div class="panel-row"><span class="label">Status</span><span>{statusText}</span></div>
         <div class="panel-row"><span class="label">Owner</span><span style={{ color: ownerColor }}>{ownerName}{isMyUnit ? ' (You)' : ''}</span></div>
         <div class="panel-row"><span class="label">Terrain</span><span>{BIOME_TRAVEL_NAMES[biome] || biome}</span></div>
+        {isMyUnit && unit.buildExhaustion > 0 && (() => {
+          const unitConfig = CFG.UNITS[unit.type];
+          const budget = unitConfig?.buildExhaustion ?? (unit.type === 'ENGINEER' ? 3 : 1);
+          return <div class="panel-row"><span class="label">Build</span><span>{budget - unit.buildExhaustion}/{budget}</span></div>;
+        })()}
         {showStack && <div class="panel-row"><span class="label">Stack</span><span>{unitsHere.length} units</span></div>}
       </div>
       {progressHtml}
@@ -189,7 +169,6 @@ export const UnitPanel: FunctionalComponent<UnitPanelProps> = ({ unit, tileId, b
           {buildOptionsHtml}
         </div>
       )}
-      {cellDataForMenu && <BuildMenu cellData={cellDataForMenu} tileId={unit.cellId} />}
       <div class="panel-section panel-back-link">
         <button class="panel-btn panel-btn-secondary" onClick={() => { selectedUnitId.value = null; selectedCityId.value = null; pendingCommand.value = null; }}>← Tile info</button>
       </div>

@@ -34,6 +34,10 @@ export const chatTab = signal<string>('global');
 export const chatUnreadGlobal = signal<number>(0);
 export const chatUnreadDirect = signal<Map<string, number>>(new Map());
 
+export const connected = signal<boolean>(false);
+export const lastTickTime = signal<number>(0);
+export const selectedBuildingId = signal<string | null>(null);
+
 export const selectedCellData = computed(() => {
   const tileId = selectedTileId.value;
   if (!tileId) return null;
@@ -125,12 +129,14 @@ export function selectTile(tileId: string | null) {
   clientState.selectedUnitId = null;
   clientState.selectedCityId = null;
   clientState.pendingCommand = null;
+  selectedBuildingId.value = null;
   notifySelectionChanged();
 }
 
 export function selectUnit(unitId: string | null) {
   clientState.selectedUnitId = unitId;
   if (unitId) clientState.pendingCommand = null;
+  selectedBuildingId.value = null;
   notifySelectionChanged();
 }
 
@@ -138,6 +144,7 @@ export function selectCity(cityId: string | null) {
   clientState.selectedCityId = cityId;
   clientState.selectedUnitId = null;
   clientState.pendingCommand = null;
+  selectedBuildingId.value = null;
   notifySelectionChanged();
 }
 
@@ -190,6 +197,7 @@ export function syncFromClientState(cs: {
 }): void {
   myPlayerId.value = cs.myPlayerId;
   currentTick.value = cs.currentTick;
+  lastTickTime.value = Date.now();
   sunAngle.value = cs.sunAngle;
   dayNightCycleTicks.value = cs.dayNightCycleTicks;
   visibleCells.value = new Map(cs.visibleCells);

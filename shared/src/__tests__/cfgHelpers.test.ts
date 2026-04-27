@@ -69,9 +69,9 @@ describe('getBuildingTicks', () => {
 describe('getBuildingCosts', () => {
   it('returns costs for each building', () => {
     const costs = getBuildingCosts(CFG);
-    expect(costs.FARM).toEqual({ food: 0, material: 0, consumesBuilder: true });
-    expect(costs.CITY).toEqual({ food: 80, material: 40, consumesBuilder: true });
-    expect(costs.LUMBER_CAMP.consumesBuilder).toBe(true);
+    expect(costs.FARM).toEqual({ food: 0, material: 0, exhaustionCost: 1 });
+    expect(costs.CITY).toEqual({ food: 80, material: 40, exhaustionCost: 3 });
+    expect(costs.FACTORY.exhaustionCost).toBe(3);
   });
 });
 

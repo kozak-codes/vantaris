@@ -229,6 +229,7 @@ export function buildPlayerSlice(
         claimTicksRemaining: unit.claimTicksRemaining,
         buildTicksRemaining: unit.buildTicksRemaining,
         engineerLevel: unit.engineerLevel,
+        buildExhaustion: unit.buildExhaustion,
       });
     }
   }
@@ -251,6 +252,7 @@ export function buildPlayerSlice(
           cityId: city.cityId,
           ownerId: city.ownerId,
           cellId: city.cellId,
+          name: city.name,
           tier: city.tier,
           xp: city.xp,
           xpToNext: nextThreshold,

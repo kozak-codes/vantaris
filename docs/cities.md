@@ -4,7 +4,7 @@
 
 ## City Tiers
 
-| Tier | Name | XP Required | Pop Cap | Manpower |
+| Tier | Name | XP Required | Pop Cap | Garrison |
 |---|---|---|---|---|
 | 1 | Settlement | 0 | 50 | 2 |
 | 2 | Village | 5,000 | 150 | 6 |
@@ -13,7 +13,7 @@
 | 5 | Metropolis | 100,000 | 3,000 | 90 |
 | 6 | Megacity | 250,000 | 10,000 | 250 |
 
-Constants: `CFG.CITY.TIER_XP_THRESHOLDS`, `CFG.CITY.TIER_MANPOWER` in [`shared/src/constants.ts`](../shared/src/constants.ts)
+Constants: `CFG.CITY.TIER_XP_THRESHOLDS`, `CFG.CITY.GARRISON_CAPACITY` in [`shared/src/CFG.ts`](../shared/src/CFG.ts)
 
 ## Unit Production
 
@@ -22,7 +22,7 @@ Cities produce units via a priority/repeat queue system. Resources are invested 
 - **Priority queue**: one-shot items, processed first
 - **Repeat queue**: cycles infinitely; rotates after completion
 - Production starts automatically; if city can't afford remaining cost, it stalls
-- When complete: invested resources deducted, manpower deducted from population, unit spawns
+- When complete: invested resources deducted, pop cost deducted from population, unit spawns
 
 Source: [`backend/src/mutations/cities.ts`](../backend/src/mutations/cities.ts) — `tickCityProduction()`, `investProductionTick()`, `consumeProductionCosts()`
 
@@ -37,30 +37,17 @@ interface CityData {
   currentProduction: ProductionItem | null;
   productionTicksRemaining: number; productionTicksTotal: number;
   productionResourcesInvested: Record<string, number>;
-  foodPerTick: number; energyPerTick: number; manpowerPerTick: number;
+  foodPerTick: number; energyPerTick: number;
   stockpile: StockpileEntry[];
   resourceInflows: ResourceInflowEntry[];
-}
-
-// backend/src/state/CityState.ts — Colyseus schema (server state)
-class CityState extends Schema {
-  cityId, ownerId, cellId, tier, xp, population;
-  repeatQueue, priorityQueue, currentProduction: string (JSON);
-  productionTicksRemaining, productionTicksTotal: number;
-  productionResourcesInvested: string (JSON Record<string, number>);
-  foodPerTick, energyPerTick, manpowerPerTick: number;
-  stockpile: string (JSON);
-  resourceInflows: string (JSON ResourceInflowEntry[]);
-  lastInflowResetTick: number;
-  // ... other fields
 }
 ```
 
 ## Resource Accrual
 
 Cities generate base resources every tick:
-- **Grain**: `CFG.CITY.BASE_GRAIN_RATE` (1.0) per tick
-- **Power**: `CFG.CITY.BASE_POWER_RATE` (0.3) per tick
+- **Grain**: `CFG.CITY.BASE_GRAIN_RATE` (2.0) per tick
+- **Power**: `CFG.CITY.BASE_POWER_RATE` (0.5) per tick
 
 Extractors (FARM, MINE, OIL_WELL, LUMBER_CAMP) produce raw resources → shipped to nearest city via supply chain (BFS, max 6 hops, 15% penalty per hop).
 
@@ -72,13 +59,31 @@ Source: [`backend/src/mutations/resources.ts`](../backend/src/mutations/resource
 
 ## Population Growth
 
-Population grows every tick based on food satisfaction:
-- Growth: `POPULATION_GROWTH_BASE + POPULATION_GROWTH_FOOD_BONUS * foodSatisfaction` (when food ≥ 100%)
-- Decline: `-POPULATION_DECLINE_RATE` when food < 50% satisfaction
-- Starvation: `-POPULATION_STARVATION_RATE` when food = 0%
-- Population capped by tier
+Population grows via a logistic (bell curve) formula:
+- **Growth**: `rate * population * (1 - population/cap) * (foodSatisfaction - 1)` when food ≥ 100%
+  - Growth is proportional to current population, scaled by room remaining and excess food
+  - This creates a natural S-curve: rapid growth at mid-pop, slowing as it approaches cap
+- **Decline**: `-rate * population` when food < 50% satisfaction
+- **Starvation**: `-0.01 * population` when food = 0%
+- Population hard-capped by tier
+
+Constants: `CFG.CITY.POPULATION_GROWTH_RATE` (0.005), `CFG.CITY.POPULATION_CAP`, `CFG.CITY.POPULATION_DECLINE_THRESHOLD`
 
 Source: [`backend/src/mutations/resources.ts`](../backend/src/mutations/resources.ts) — `tickPopulation()`
+
+## Build Exhaustion
+
+Each unit has a build exhaustion budget:
+- **Infantry**: 1 point — can build 1 raw extractor (FARM/MINE/LUMBER_CAMP)
+- **Engineer**: 3 points — can build 3 raw extractors or 1 city/factory
+
+Building costs:
+- Raw extractors (FARM, MINE, OIL_WELL, LUMBER_CAMP): 1 exhaustion point
+- City/Factory: 3 exhaustion points
+
+When a unit's exhaustion reaches its budget, it is consumed (removed from the game). Engineers can build multiple cheap buildings before being consumed.
+
+Constants: `CFG.UNITS.INFANTRY.buildExhaustion` (1), `CFG.UNITS.ENGINEER.buildExhaustion` (3), `CFG.BUILDINGS.*.exhaustionCost`
 
 ## City XP
 
@@ -92,9 +97,9 @@ Source: [`backend/src/mutations/resources.ts`](../backend/src/mutations/resource
 
 ## Stockpile Display
 
-The city panel shows stockpile resources grouped by category (Food, Industry, Energy) with category totals. Hovering on a category shows inflow details — sources and amounts added in the last 100 ticks. Values rounded to 1 decimal.
+The city panel shows stockpile resources grouped by category (Food, Industry, Energy) with category totals. Inflow values show rolling per-tick averages (computed over the last 100 ticks), not cumulative totals. All values shown as integers.
 
-Source: [`frontend/src/ui/HUD.ts`](../frontend/src/ui/HUD.ts) — `renderCityPanel()`
+Source: [`frontend/src/ui/StockpileSection.tsx`](../frontend/src/ui/StockpileSection.tsx)
 
 ## Rendering
 

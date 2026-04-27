@@ -1,7 +1,7 @@
 import { Client, Room } from 'colyseus.js';
 import { storeReconnectionToken, getReconnectionToken, getStoredRoomId } from './RoomPersistence';
 import { applyStateSlice, clearClientState, clientState } from '../state/ClientState';
-import { eliminationEvent, gameWonEvent } from '../state/signals';
+import { eliminationEvent, gameWonEvent, connected, lastTickTime } from '../state/signals';
 import type { ChatMessage } from '@vantaris/shared';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'ws://localhost:2567';
@@ -46,6 +46,7 @@ export async function joinGame(roomId: string, displayName?: string): Promise<Ro
   const c = getClient();
   const room = await c.joinById(roomId, { displayName: displayName || '' });
   currentRoom = room;
+  connected.value = true;
   if (room.reconnectionToken) {
     storeReconnectionToken(roomId, room.reconnectionToken);
   }
@@ -86,6 +87,7 @@ export async function reconnectToGame(roomId: string): Promise<Room> {
   }
   const room = await c.reconnect(token);
   currentRoom = room;
+  connected.value = true;
 
   room.onMessage('stateUpdate', (slice: any) => {
     applyStateSlice(slice);
@@ -141,6 +143,12 @@ export function sendBuildStructure(unitId: string, buildingType: string, cellId:
 export function sendSetFactoryRecipe(buildingId: string, recipeId: string): void {
   if (currentRoom) {
     currentRoom.send('setFactoryRecipe', { buildingId, recipeId });
+  }
+}
+
+export function sendRenameCity(cityId: string, name: string): void {
+  if (currentRoom) {
+    currentRoom.send('renameCity', { cityId, name });
   }
 }
 
@@ -201,5 +209,6 @@ export function leaveGame(): void {
     currentRoom.leave(true);
     currentRoom = null;
   }
+  connected.value = false;
   clearClientState();
 }

@@ -7,8 +7,8 @@ export const ResourceBar: FunctionalComponent = () => {
   const r = resources.value;
   return (
     <div id="hud-resources" class="hud-resources">
-      <div class="res-item"><span class="res-icon food-icon">☘</span><span class="res-val">{r.food}</span><span class="res-rate">+{r.foodPerTick}/t</span></div>
-      <div class="res-item"><span class="res-icon energy-icon">⚡</span><span class="res-val">{r.energy}</span><span class="res-rate">+{r.energyPerTick}/t</span></div>
+      <div class="res-item"><span class="res-icon food-icon">☘</span><span class="res-val">{Math.round(r.food)}</span><span class="res-rate">+{Math.round(r.foodPerTick)}/t</span></div>
+      <div class="res-item"><span class="res-icon energy-icon">⚡</span><span class="res-val">{Math.round(r.energy)}</span><span class="res-rate">+{Math.round(r.energyPerTick)}/t</span></div>
       <div class="res-sep"></div>
       <div class="res-item"><span class="res-icon pop-icon">⚑</span><span class="res-val">{r.totalPopulation}</span></div>
       <div class="res-item"><span class="res-icon factory-icon">⚙</span><span class="res-val">{r.factoryCount}</span></div>

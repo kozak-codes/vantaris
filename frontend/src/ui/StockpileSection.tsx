@@ -13,7 +13,10 @@ const RESOURCE_LABELS: Record<string, string> = {
   OIL: 'Oil', POWER: 'Power', TIMBER: 'Timber', LUMBER: 'Lumber',
 };
 
-const round1 = (v: number) => Math.round(v * 10) / 10;
+const round1 = (v: number) => Math.round(v);
+
+const POP_CAP: Record<number, number> = CFG.CITY.POPULATION_CAP;
+function getPopCap(tier: number): number { return POP_CAP[tier] ?? 50; }
 
 interface StockpileSectionProps {
   city: CityData;
@@ -36,18 +39,20 @@ export const StockpileSection: FunctionalComponent<StockpileSectionProps> = ({ c
     const cat = RESOURCE_CATEGORY_MAP[inflow.resource] || 'INDUSTRY';
     const existing = inflowMap[cat].sources.find(s => s.source === inflow.source);
     if (existing) {
-      existing.amount = round1(existing.amount + inflow.amount);
+      existing.amount = existing.amount + inflow.amount;
     } else {
-      inflowMap[cat].sources.push({ source: inflow.source, amount: round1(inflow.amount) });
+      inflowMap[cat].sources.push({ source: inflow.source, amount: inflow.amount });
     }
-    inflowMap[cat].total = round1(inflowMap[cat].total + inflow.amount);
+    inflowMap[cat].total = inflowMap[cat].total + inflow.amount;
   }
 
   const foodSatPct = Math.round(city.foodPerTick * 100);
   const energySatPct = Math.round(city.energyPerTick * 100);
   const popGrowthRate = city.foodPerTick >= 1.0
-    ? CFG.CITY.POPULATION_GROWTH_BASE + CFG.CITY.POPULATION_GROWTH_FOOD_BONUS * city.foodPerTick
-    : 0;
+    ? CFG.CITY.POPULATION_GROWTH_RATE * city.population * (1 - city.population / getPopCap(city.tier)) * (city.foodPerTick - 1)
+    : city.foodPerTick < CFG.CITY.POPULATION_DECLINE_THRESHOLD
+      ? -CFG.CITY.POPULATION_DECLINE_RATE * city.population
+      : 0;
 
   return (
     <div class="panel-section">
@@ -71,9 +76,9 @@ export const StockpileSection: FunctionalComponent<StockpileSectionProps> = ({ c
 
         const inflow = inflowMap[cat];
         const inflowTooltip = inflow.sources.length > 0
-          ? inflow.sources.map(s => `${s.source}: +${round1(s.amount)}`).join('\n')
+          ? inflow.sources.map(s => `${s.source}: +${s.amount.toFixed(1)}/t`).join('\n')
           : '';
-        const inflowLabel = inflow.total > 0 ? ` (+${round1(inflow.total)}/100t)` : '';
+        const inflowLabel = inflow.total > 0 ? ` (+${inflow.total.toFixed(1)}/t)` : '';
 
         const rows = [
           <div class="panel-row stockpile-category" title={inflowTooltip}>

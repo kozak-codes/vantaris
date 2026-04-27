@@ -1,11 +1,12 @@
 import { FunctionalComponent } from 'preact';
-import { selectedTileId, selectedCellData, selectedRevealedData, selectedUnit, selectedCity, players } from '../state/signals';
+import { selectedTileId, selectedCellData, selectedRevealedData, selectedUnit, selectedCity, selectedBuildingId, buildings, players } from '../state/signals';
 import { TickCounter } from './TickCounter';
 import { ResourceBar } from './ResourceBar';
 import { Tooltip } from './Tooltip';
 import { UnitPanel } from './UnitPanel';
 import { CityPanel } from './CityPanel';
 import { TilePanel } from './TilePanel';
+import { BuildingPanel } from './BuildingPanel';
 import { PlayerList } from './PlayerList';
 import { EliminationOverlay } from './EliminationOverlay';
 import { ChatPanel } from './ChatPanel';
@@ -28,8 +29,12 @@ const TilePanelContainer: FunctionalComponent = () => {
 
   const unit = selectedUnit.value;
   const city = selectedCity.value;
+  const selBuildingId = selectedBuildingId.value;
+  const selBuilding = selBuildingId ? buildings.value.get(selBuildingId) : null;
 
-  if (unit) {
+  if (selBuilding) {
+    return <BuildingPanel building={selBuilding} />;
+  } else if (unit) {
     return <UnitPanel unit={unit} tileId={tileId} biome={biome} ownerName={ownerName} ownerColor={ownerColor} isRevealed={isRevealed} />;
   } else if (city) {
     return <CityPanel city={city} tileId={tileId} biome={biome} ownerName={ownerName} ownerColor={ownerColor} isRevealed={isRevealed} />;
