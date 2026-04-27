@@ -26,17 +26,6 @@ interface CreateOptions {
   dayNightCycleTicks?: number;
 }
 
-const PLAYER_COLORS = [
-  '#4488ff',
-  '#ff4444',
-  '#44cc44',
-  '#ffaa00',
-  '#cc44cc',
-  '#44cccc',
-  '#ff8844',
-  '#8844ff',
-];
-
 export class VantarisRoom extends Room<GameState> {
   maxClients = 8;
   private adjacencyMap: AdjacencyMap = {};
@@ -172,7 +161,7 @@ export class VantarisRoom extends Room<GameState> {
     const player = new PlayerState();
     player.playerId = playerId;
     player.displayName = options?.displayName || `Player ${this.state.players.size + 1}`;
-    player.color = PLAYER_COLORS[this.state.players.size % PLAYER_COLORS.length];
+    player.color = CFG.PLAYER_COLORS[this.state.players.size % CFG.PLAYER_COLORS.length];
     player.territoryCellCount = 0;
 
     const spawnCellId = this.findAvailableSpawnCell();

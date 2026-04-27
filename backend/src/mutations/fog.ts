@@ -144,6 +144,7 @@ export function buildPlayerSlice(
   const visibleCells: VisibleCellData[] = [];
   const revealedCells: RevealedCellData[] = [];
   const visibleCellIds = new Set<string>();
+  const revealedCellIds = new Set<string>();
   const ruinMarkers: RuinMarkerData[] = [];
 
   for (const [cellId, fogValue] of player.fog.visibility) {
@@ -197,12 +198,13 @@ export function buildPlayerSlice(
           lastKnownOwnerId: data.ownerId || '',
           lastKnownRuin: data.ruin || null,
         });
+        revealedCellIds.add(cellId);
       }
     }
   }
 
   for (const [, cell] of state.cells) {
-    if (cell.ruin && !visibleCellIds.has(cell.cellId)) {
+    if (cell.ruin && revealedCellIds.has(cell.cellId) && !visibleCellIds.has(cell.cellId)) {
       ruinMarkers.push({ cellId: cell.cellId, ruin: cell.ruin as RuinType });
     }
   }
