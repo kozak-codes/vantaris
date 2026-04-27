@@ -1,8 +1,23 @@
-import { FogVisibility, RuinType, ResourceType } from '@vantaris/shared';
+import {
+  FogVisibility,
+  RuinType,
+  ResourceType,
+  CFG,
+  type AdjacencyMap,
+  type PlayerStateSlice,
+  type VisibleCellData,
+  type RevealedCellData,
+  type UnitData,
+  type CityData,
+  type PlayerSummary,
+  type RuinMarkerData,
+  type BuildingData,
+  type PlayerResourceData,
+  type StockpileEntry,
+  type ProductionItem,
+  type ResourceInflowEntry,
+} from '@vantaris/shared';
 import { GameState } from '../state/GameState';
-import { CFG } from '@vantaris/shared/constants';
-import type { AdjacencyMap } from '@vantaris/shared';
-import type { PlayerStateSlice, VisibleCellData, RevealedCellData, UnitData, CityData, PlayerSummary, RuinMarkerData, BuildingData, PlayerResourceData, StockpileEntry, ProductionItem, ResourceInflowEntry } from '@vantaris/shared';
 import { getCityStockpile } from './resources';
 import { getBuildingStockpile, getCellBuildingCapacity, countBuildingsOnCell, getResourcesInvested } from './buildings';
 import { getRepeatQueue, getPriorityQueue, getCurrentProduction } from './cities';

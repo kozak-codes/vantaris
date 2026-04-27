@@ -1,8 +1,15 @@
 import { MapSchema } from '@colyseus/schema';
 import { CellState } from '../state/CellState';
 import { UnitState } from '../state/UnitState';
-import { MOVEMENT_COST, PASSABLE_TERRAIN } from '@vantaris/shared/constants';
-import type { AdjacencyMap } from '@vantaris/shared';
+import {
+  CFG,
+  getMovementCost,
+  getPassableTerrain,
+  type AdjacencyMap,
+} from '@vantaris/shared';
+
+const MOVEMENT_COST = getMovementCost(CFG);
+const PASSABLE_TERRAIN = getPassableTerrain(CFG);
 
 interface CellPosition {
   x: number;

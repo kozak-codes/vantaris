@@ -5,7 +5,7 @@ import {
   type GlobeConfig,
   type CameraConfig,
 } from './types/index';
-import { CFG, type TerrainConfig } from '@vantaris/shared/constants';
+import { CFG, type TerrainConfig } from '@vantaris/shared';
 
 export const TERRAIN_CONFIGS: Record<string, TerrainConfig> = CFG.TERRAIN;
 export const GLOBE_CONFIG: GlobeConfig = CFG.GLOBE;

@@ -15,8 +15,7 @@
     "outDir": "./dist",
     "types": ["vite/client"],
     "paths": {
-      "@vantaris/shared": ["../shared/src/index.ts"],
-      "@vantaris/shared/constants": ["../shared/src/constants.ts"]
+      "@vantaris/shared": ["../shared/src/index.ts"]
     }
   },
   "include": ["src/**/*.ts", "vite.config.ts"],

@@ -1,5 +1,21 @@
-import type { PlayerStateSlice, VisibleCellData, RevealedCellData, UnitData, CityData, PlayerSummary, RuinMarkerData, ChatMessage, BuildingData, PlayerResourceData } from '@vantaris/shared';
-import { BUILDING_PLACEMENT_RULES, getEngineerBuildableTypes } from '@vantaris/shared/constants';
+import {
+  CFG,
+  getBuildingPlacementRules,
+  getEngineerBuildableTypes,
+  getInfantryBuildableTypes,
+  type PlayerStateSlice,
+  type VisibleCellData,
+  type RevealedCellData,
+  type UnitData,
+  type CityData,
+  type PlayerSummary,
+  type RuinMarkerData,
+  type ChatMessage,
+  type BuildingData,
+  type PlayerResourceData,
+} from '@vantaris/shared';
+
+const BUILDING_PLACEMENT_RULES = getBuildingPlacementRules(CFG);
 
 export type CommandAction = 'move' | 'claim' | 'build' | 'restore';
 
@@ -123,28 +139,31 @@ export function getUnitActions(unitId: string): CommandableAction[] {
 
   if (unit.status === 'IDLE') {
     actions.push({ id: 'move', label: 'Move To', key: '1', targetRequired: true });
-    actions.push({ id: 'claim', label: 'Claim', key: '2', targetRequired: false });
 
-    if (unit.type === 'ENGINEER') {
-      const cellData = clientState.visibleCells.get(unit.cellId);
-      if (cellData && cellData.ownerId === clientState.myPlayerId) {
-        if (cellData.ruin && cellData.ruinRevealed) {
-          actions.push({ id: 'restore', label: 'Restore Ruin', key: '3', targetRequired: false });
-        } else {
-          const allowedTypes = getEngineerBuildableTypes(unit.engineerLevel);
-          const canBuildSomething = allowedTypes.some((bt: string) => {
-            const allowedBiomes = BUILDING_PLACEMENT_RULES[bt];
-            if (allowedBiomes && !allowedBiomes.includes(cellData.biome)) return false;
-            if (bt === 'CITY') {
-              let cellHasCity = false;
-              for (const [, c] of clientState.cities) { if (c.cellId === unit.cellId) { cellHasCity = true; break; } }
-              return !cellHasCity;
-            }
-            return cellData.buildings.length < cellData.buildingCapacity;
-          });
-          if (canBuildSomething) {
-            actions.push({ id: 'build', label: 'Build', key: '3', targetRequired: false });
+    if (unit.type === 'INFANTRY') {
+      actions.push({ id: 'claim', label: 'Claim', key: '2', targetRequired: false });
+    }
+
+    const cellData = clientState.visibleCells.get(unit.cellId);
+    if (cellData && cellData.ownerId === clientState.myPlayerId) {
+      if (cellData.ruin && cellData.ruinRevealed) {
+        actions.push({ id: 'restore', label: 'Restore Ruin', key: '3', targetRequired: false });
+      } else {
+        const canBuildTypes = unit.type === 'ENGINEER'
+          ? getEngineerBuildableTypes(CFG, unit.engineerLevel)
+          : getInfantryBuildableTypes(CFG);
+        const canBuildSomething = canBuildTypes.some((bt: string) => {
+          const allowedBiomes = BUILDING_PLACEMENT_RULES[bt];
+          if (allowedBiomes && !allowedBiomes.includes(cellData.biome)) return false;
+          if (bt === 'CITY') {
+            let cellHasCity = false;
+            for (const [, c] of clientState.cities) { if (c.cellId === unit.cellId) { cellHasCity = true; break; } }
+            return !cellHasCity;
           }
+          return cellData.buildings.length < cellData.buildingCapacity;
+        });
+        if (canBuildSomething) {
+          actions.push({ id: 'build', label: 'Build', key: '3', targetRequired: false });
         }
       }
     }

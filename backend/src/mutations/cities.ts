@@ -1,8 +1,17 @@
 import { GameState } from '../state/GameState';
 import { CityState } from '../state/CityState';
-import { CFG, UNIT_PRODUCTION_COSTS, FOOD_VALUE, MATERIAL_VALUE } from '@vantaris/shared/constants';
-import type { ProductionItem } from '@vantaris/shared';
+import {
+  CFG,
+  getUnitProductionCosts,
+  getFoodValue,
+  getMaterialValue,
+  type ProductionItem,
+} from '@vantaris/shared';
 import { initCityStockpile, getCityStockpileAmount, consumeFromCityStockpile, getCityStockpile, setCityStockpile } from './resources';
+
+const UNIT_PRODUCTION_COSTS = getUnitProductionCosts(CFG);
+const FOOD_VALUE = getFoodValue(CFG);
+const MATERIAL_VALUE = getMaterialValue(CFG);
 
 let cityIdCounter = 0;
 
@@ -79,6 +88,10 @@ export function createCity(
   if (cell) {
     cell.hasCity = true;
     cell.cityId = city.cityId;
+    if (cell.ruin) {
+      cell.ruin = '';
+      cell.ruinRevealed = false;
+    }
   }
 
   state.cities.set(city.cityId, city);

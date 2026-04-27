@@ -1,9 +1,10 @@
 import { Room, Client } from '@colyseus/core';
 import { GameState } from '../state/GameState';
-import { GamePhase, TerrainType, ResourceType, BuildingType, UnitType, UnitStatus } from '@vantaris/shared';
+import { GamePhase, TerrainType, ResourceType, BuildingType, UnitType, UnitStatus, CFG, MATCHMAKING_CFG, getUnitBuildableTypes, getInfantryBuildableTypes, getBuildingTicks, getBuildingCosts, getFactoryRecipes, AdjacencyMap, buildAdjacencyMap } from '@vantaris/shared';
 import type { ProductionItem } from '@vantaris/shared';
-import { CFG, MATCHMAKING_CFG, BUILDING_TICKS, BUILDING_COSTS } from '@vantaris/shared/constants';
-import { AdjacencyMap, buildAdjacencyMap } from '@vantaris/shared';
+
+const BUILDING_TICKS = getBuildingTicks(CFG);
+const BUILDING_COSTS = getBuildingCosts(CFG);
 import { generateGlobe } from '../globe';
 import { computeVisibilityForPlayer, buildPlayerSlice } from '../mutations/fog';
 import { completeClaim } from '../mutations/units';
@@ -246,7 +247,7 @@ export class VantarisRoom extends Room<GameState> {
   }
 
   private processBuildTimers(): void {
-    const consumedEngineers: string[] = [];
+    const consumedBuilders: string[] = [];
 
     for (const [, unit] of this.state.units) {
       if (unit.status === 'BUILDING') {
@@ -255,8 +256,8 @@ export class VantarisRoom extends Room<GameState> {
 
         unit.buildTicksRemaining--;
         if (unit.buildTicksRemaining <= 0) {
-          if (buildingOnCell && BUILDING_COSTS[buildingOnCell.type]?.consumesEngineer) {
-            consumedEngineers.push(unit.unitId);
+          if (buildingOnCell && BUILDING_COSTS[buildingOnCell.type]?.consumesBuilder) {
+            consumedBuilders.push(unit.unitId);
           } else {
             unit.status = 'IDLE';
             unit.buildTicksRemaining = 0;
@@ -265,7 +266,7 @@ export class VantarisRoom extends Room<GameState> {
       }
     }
 
-    for (const unitId of consumedEngineers) {
+    for (const unitId of consumedBuilders) {
       this.state.units.delete(unitId);
     }
 
@@ -299,7 +300,7 @@ export class VantarisRoom extends Room<GameState> {
         const result = stepUnit(this.state, unit.unitId, this.adjacencyMap);
         if (result && result.arrived) {
           const cell = this.state.cells.get(result.cellId);
-          if (cell && !cell.ownerId && this.isAdjacentToTerritory(result.cellId, unit.ownerId)) {
+          if (cell && !cell.ownerId && this.isAdjacentToTerritory(result.cellId, unit.ownerId) && unit.type === 'INFANTRY') {
             startClaiming(this.state, unit.unitId);
           }
           if (cell && cell.ruin && !cell.ruinRevealed) {
@@ -398,7 +399,7 @@ computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.IN
     const building = this.state.buildings.get(data.buildingId);
     if (!building || building.ownerId !== playerId || building.type !== 'FACTORY') return;
 
-    const recipe = CFG.FACTORY.RECIPES.find(r => r.id === data.recipeId);
+    const recipe = getFactoryRecipes(CFG).find(r => r.id === data.recipeId);
     if (!recipe) return;
     if (building.factoryTier < recipe.minFactoryTier) return;
 
@@ -478,7 +479,7 @@ computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.IN
   private handleClaimTerritory(client: Client, data: { unitId: string }): void {
     const playerId = client.sessionId;
     const unit = this.state.units.get(data.unitId);
-    if (!unit || unit.ownerId !== playerId || unit.status !== 'IDLE') return;
+    if (!unit || unit.ownerId !== playerId || unit.type !== 'INFANTRY' || unit.status !== 'IDLE') return;
 
     const cell = this.state.cells.get(unit.cellId);
     if (!cell) return;
@@ -492,15 +493,21 @@ computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.IN
   private handleBuildStructure(client: Client, data: { unitId: string; buildingType: string; cellId: string }): void {
     const playerId = client.sessionId;
     const unit = this.state.units.get(data.unitId);
-    if (!unit || unit.ownerId !== playerId || unit.type !== 'ENGINEER') return;
-    if (unit.status !== 'IDLE') return;
+    if (!unit || unit.ownerId !== playerId || unit.status !== 'IDLE') return;
+
+    const buildingConfig = CFG.BUILDINGS[data.buildingType];
+    if (!buildingConfig) return;
+
+    const allowedBuilders = getUnitBuildableTypes(CFG, unit.type, unit.type === 'ENGINEER' ? unit.engineerLevel : 1);
+    if (!allowedBuilders.includes(data.buildingType)) return;
 
     const cell = this.state.cells.get(data.cellId);
     if (!cell) return;
 
     if (unit.cellId !== data.cellId) return;
 
-    if (!canPlaceBuilding(this.state, data.cellId, data.buildingType, playerId, unit.engineerLevel)) {
+    const engineerLevel = unit.type === 'ENGINEER' ? unit.engineerLevel : 1;
+    if (!canPlaceBuilding(this.state, data.cellId, data.buildingType, playerId, engineerLevel, unit.type)) {
       client.send('error', { type: 'error', code: 'INVALID_BUILD' });
       return;
     }
@@ -529,7 +536,7 @@ computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.IN
       unit.buildTicksRemaining = BUILDING_TICKS[data.buildingType] ?? 200;
     }
 
-    if (cost && cost.consumesEngineer) {
+    if (cost && cost.consumesBuilder) {
       unit.buildTicksRemaining = 1;
     }
   }
@@ -537,8 +544,7 @@ computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.IN
   private handleRestoreRuin(client: Client, data: { unitId: string; cellId: string }): void {
     const playerId = client.sessionId;
     const unit = this.state.units.get(data.unitId);
-    if (!unit || unit.ownerId !== playerId || unit.type !== 'ENGINEER') return;
-    if (unit.status !== 'IDLE') return;
+    if (!unit || unit.ownerId !== playerId || unit.status !== 'IDLE') return;
 
     const cell = this.state.cells.get(data.cellId);
     if (!cell || !cell.ruin) return;
@@ -549,7 +555,12 @@ computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.IN
     const ruinType = cell.ruin;
     const buildingType = RUIN_TYPE_TO_BUILDING[ruinType] ?? 'FARM';
 
-    if (!canPlaceBuilding(this.state, data.cellId, buildingType, playerId, unit.engineerLevel)) {
+    const ruinConfig = CFG.BUILDINGS[buildingType];
+    const allowedBuilders = getUnitBuildableTypes(CFG, unit.type, unit.type === 'ENGINEER' ? unit.engineerLevel : 1);
+    if (ruinConfig && !allowedBuilders.includes(buildingType)) return;
+
+    const engineerLevel = unit.type === 'ENGINEER' ? unit.engineerLevel : 1;
+    if (!canPlaceBuilding(this.state, data.cellId, buildingType, playerId, engineerLevel, unit.type)) {
       client.send('error', { type: 'error', code: 'INVALID_BUILD' });
       return;
     }
@@ -570,7 +581,7 @@ computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.IN
       city.population = CFG.CITY.POPULATION_INITIAL;
       unit.status = 'BUILDING';
       unit.buildTicksRemaining = BUILDING_TICKS.RUIN_RESTORE;
-      if (cost?.consumesEngineer) {
+      if (cost?.consumesBuilder) {
         unit.buildTicksRemaining = 1;
       }
     } else {
@@ -578,7 +589,7 @@ computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.IN
       if (building) {
         unit.status = 'BUILDING';
         unit.buildTicksRemaining = BUILDING_TICKS.RUIN_RESTORE;
-        if (cost?.consumesEngineer) {
+        if (cost?.consumesBuilder) {
           unit.buildTicksRemaining = 1;
         }
       }
@@ -743,7 +754,7 @@ computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.IN
   private findConsumableBuildingOnCell(cellId: string, ownerId: string): BuildingState | null {
     for (const [, building] of this.state.buildings) {
       if (building.cellId === cellId && building.ownerId === ownerId) {
-        if (BUILDING_COSTS[building.type]?.consumesEngineer) {
+        if (BUILDING_COSTS[building.type]?.consumesBuilder) {
           return building;
         }
       }

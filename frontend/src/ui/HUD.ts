@@ -1,7 +1,28 @@
 import { clientState, onStateUpdate, notifySelectionChanged, getUnitActions, getCityActions } from '../state/ClientState';
 import { sendMoveUnit, sendSetUnitIdle, sendCityQueueAddPriority, sendCityQueueAddRepeat, sendCityQueueRemoveRepeat, sendCityQueueClearPriority, sendClaimTerritory, sendBuildStructure, sendRestoreRuin } from '../network/ColyseusClient';
-import { PASSABLE_TERRAIN, BUILDING_COSTS, BUILDING_PLACEMENT_RULES, UNIT_PRODUCTION_COSTS, FOOD_VALUE, MATERIAL_VALUE, getEngineerBuildableTypes, CFG, RESOURCE_CATEGORY_MAP } from '@vantaris/shared/constants';
-import { TerrainType, CityData, ProductionItem } from '@vantaris/shared';
+import {
+  CFG,
+  getPassableTerrain,
+  getBuildingCosts,
+  getBuildingPlacementRules,
+  getUnitProductionCosts,
+  getFoodValue,
+  getMaterialValue,
+  getEngineerBuildableTypes,
+  getInfantryBuildableTypes,
+  getResourceCategoryMap,
+  TerrainType,
+  CityData,
+  ProductionItem,
+} from '@vantaris/shared';
+
+const PASSABLE_TERRAIN = getPassableTerrain(CFG);
+const BUILDING_COSTS = getBuildingCosts(CFG);
+const BUILDING_PLACEMENT_RULES = getBuildingPlacementRules(CFG);
+const UNIT_PRODUCTION_COSTS = getUnitProductionCosts(CFG);
+const FOOD_VALUE = getFoodValue(CFG);
+const MATERIAL_VALUE = getMaterialValue(CFG);
+const RESOURCE_CATEGORY_MAP = getResourceCategoryMap(CFG);
 
 const TIER_NAMES: Record<number, string> = {
   1: 'Settlement',
@@ -165,7 +186,7 @@ export class HUD {
     if (selectedUnit) {
       parts.push(`u:${selectedUnit.unitId},${selectedUnit.type},${selectedUnit.status},${selectedUnit.ownerId},${selectedUnit.engineerLevel},${clientState.pendingCommand}`);
     } else if (selectedCity) {
-      parts.push(`c:${selectedCity.cityId},${selectedCity.tier},${selectedCity.repeatQueue.join(',')},${selectedCity.priorityQueue.length},${selectedCity.currentProduction?.type},${selectedCity.ownerId}`);
+      parts.push(`c:${selectedCity.cityId},${selectedCity.tier},${selectedCity.repeatQueue.join(',')},${selectedCity.priorityQueue.map((p: any) => p.type).join(',')},${selectedCity.currentProduction?.type},${selectedCity.ownerId}`);
     } else {
       parts.push('t');
       for (const [uid, u] of clientState.units) {
@@ -235,15 +256,85 @@ export class HUD {
         if (prodTicks) prodTicks.textContent = `${selectedCity.productionTicksRemaining} ticks`;
       }
 
-      const roundDyn = (v: number) => Math.round(v * 10) / 10;
-
-      const foodEl = document.getElementById('panel-dynamic-food');
-      if (foodEl) foodEl.textContent = `+${roundDyn(selectedCity.foodPerTick)}`;
-      const energyEl = document.getElementById('panel-dynamic-energy');
-      if (energyEl) energyEl.textContent = `+${roundDyn(selectedCity.energyPerTick)}`;
-      const manpowerEl = document.getElementById('panel-dynamic-manpower');
-      if (manpowerEl) manpowerEl.textContent = `+${roundDyn(selectedCity.manpowerPerTick)}`;
+      const stockpileEl = document.getElementById('panel-dynamic-stockpile');
+      if (stockpileEl && selectedCity) {
+        stockpileEl.innerHTML = this.buildStockpileHtml(selectedCity);
+      }
     }
+  }
+
+  private buildStockpileHtml(city: any): string {
+    const round1 = (v: number) => Math.round(v * 10) / 10;
+    const CATEGORY_ORDER = ['FOOD', 'INDUSTRY', 'ENERGY', 'POPULATION'];
+    const CATEGORY_LABELS: Record<string, string> = { FOOD: 'Food', INDUSTRY: 'Industry', ENERGY: 'Energy', POPULATION: 'Population' };
+    const CATEGORY_ICONS: Record<string, string> = { FOOD: '\u{1F33E}', INDUSTRY: '\u2692', ENERGY: '\u26A1', POPULATION: '\u{1F465}' };
+
+    const categoryStockpile: Record<string, { resources: { resource: string; amount: number; label: string }[]; total: number }> = {};
+    const inflowMap: Record<string, { total: number; sources: { source: string; amount: number }[] }> = {};
+    for (const cat of CATEGORY_ORDER) {
+      categoryStockpile[cat] = { resources: [], total: 0 };
+      inflowMap[cat] = { total: 0, sources: [] };
+    }
+    for (const entry of city.stockpile) {
+      const cat = RESOURCE_CATEGORY_MAP[entry.resource] || 'INDUSTRY';
+      const label = RESOURCE_LABELS[entry.resource] || entry.resource;
+      categoryStockpile[cat].resources.push({ resource: entry.resource, amount: round1(entry.amount), label });
+      categoryStockpile[cat].total += entry.amount;
+    }
+    for (const inflow of (city.resourceInflows || [])) {
+      const cat = RESOURCE_CATEGORY_MAP[inflow.resource] || 'INDUSTRY';
+      const existing = inflowMap[cat].sources.find((s: any) => s.source === inflow.source);
+      if (existing) {
+        existing.amount = round1(existing.amount + inflow.amount);
+      } else {
+        inflowMap[cat].sources.push({ source: inflow.source, amount: round1(inflow.amount) });
+      }
+      inflowMap[cat].total = round1(inflowMap[cat].total + inflow.amount);
+    }
+
+    const foodSatPct = Math.round(city.foodPerTick * 100);
+    const energySatPct = Math.round(city.energyPerTick * 100);
+    const manPower = city.tier ? (CFG.CITY.TIER_MANPOWER[city.tier] ?? 2) : 2;
+    const popGrowthRate = city.foodPerTick >= 1.0
+      ? CFG.CITY.POPULATION_GROWTH_BASE + CFG.CITY.POPULATION_GROWTH_FOOD_BONUS * city.foodPerTick
+      : 0;
+
+    let html = '<div class="panel-subtitle">Stockpile</div>';
+    for (const cat of CATEGORY_ORDER) {
+      if (cat === 'POPULATION') {
+        const popLabel = popGrowthRate > 0 ? `${city.population} (${popGrowthRate > 0 ? '+' : ''}${round1(popGrowthRate)}/t)` : `${city.population}`;
+        html += `<div class="panel-row stockpile-category">`;
+        html += `<span class="label">${CATEGORY_ICONS[cat]} ${CATEGORY_LABELS[cat]}</span>`;
+        html += `<span>${popLabel}</span>`;
+        html += `</div>`;
+        html += `<div class="panel-row stockpile-resource"><span class="label resource-indent">Manpower</span><span>${manPower}</span></div>`;
+        continue;
+      }
+      const data = categoryStockpile[cat];
+      if (data.resources.length === 0 && cat !== 'ENERGY') continue;
+
+      let satLabel = '';
+      if (cat === 'FOOD') satLabel = foodSatPct !== 100 ? ` (${foodSatPct}%)` : '';
+      if (cat === 'ENERGY') satLabel = energySatPct !== 100 ? ` (${energySatPct}%)` : '';
+
+      const inflow = inflowMap[cat];
+      const inflowTooltip = inflow.sources.length > 0
+        ? inflow.sources.map((s: any) => `${s.source}: +${round1(s.amount)}`).join('\\n')
+        : '';
+      const inflowLabel = inflow.total > 0 ? ` (+${round1(inflow.total)}/100t)` : '';
+
+      html += `<div class="panel-row stockpile-category" ${inflowTooltip ? `title="${inflowTooltip}"` : ''}>`;
+      html += `<span class="label">${CATEGORY_ICONS[cat]} ${CATEGORY_LABELS[cat]}${satLabel}</span>`;
+      html += `<span>${round1(data.total)}${inflowLabel}</span>`;
+      html += `</div>`;
+      for (const r of data.resources) {
+        html += `<div class="panel-row stockpile-resource">`;
+        html += `<span class="label resource-indent">${r.label}</span>`;
+        html += `<span>${r.amount}</span>`;
+        html += `</div>`;
+      }
+    }
+    return html;
   }
 
   private updateTooltip(): void {
@@ -487,15 +578,18 @@ export class HUD {
       const cellData = clientState.visibleCells.get(unit.cellId);
       const alreadyOwnsTile = cellData && cellData.ownerId === clientState.myPlayerId;
       const moveActive = pendingCommand === 'move' ? ' active' : '';
-      const claimButton = alreadyOwnsTile ? '' : `<button class="panel-btn cmd-btn" id="cmd-claim" title="Claim the tile this unit is standing on">2 Claim<span class="cmd-key">2</span></button>`;
+      const claimButton = (alreadyOwnsTile || unit.type !== 'INFANTRY') ? '' : `<button class="panel-btn cmd-btn" id="cmd-claim" title="Claim the tile this unit is standing on">2 Claim<span class="cmd-key">2</span></button>`;
 
       let buildButton = '';
-      if (unit.type === 'ENGINEER' && cellData && cellData.ownerId === clientState.myPlayerId) {
+      if (cellData && cellData.ownerId === clientState.myPlayerId) {
+        const canBuildTypes = unit.type === 'ENGINEER'
+          ? getEngineerBuildableTypes(CFG,unit.engineerLevel)
+          : getInfantryBuildableTypes(CFG);
+
         if (cellData.ruin && cellData.ruinRevealed) {
           buildButton = `<button class="panel-btn cmd-btn" id="cmd-restore" title="Restore this ruin">3 Restore<span class="cmd-key">3</span></button>`;
-        } else {
-          const allowedTypes = getEngineerBuildableTypes(unit.engineerLevel);
-          const placeableTypes = allowedTypes.filter((bt: string) => {
+        } else if (canBuildTypes.length > 0) {
+          const placeableTypes = canBuildTypes.filter((bt: string) => {
             const allowedBiomes = BUILDING_PLACEMENT_RULES[bt];
             if (allowedBiomes && !allowedBiomes.includes(cellData.biome)) return false;
             if (bt === 'CITY') {
@@ -527,17 +621,23 @@ export class HUD {
     }
 
     let buildOptionsHtml = '';
-    if (isMyUnit && unit.type === 'ENGINEER' && unit.status === 'IDLE') {
+    if (isMyUnit && unit.status === 'IDLE') {
       const cellData = clientState.visibleCells.get(unit.cellId);
-      if (cellData && cellData.ownerId === clientState.myPlayerId && !cellData.ruin) {
-        const allowedTypes = getEngineerBuildableTypes(unit.engineerLevel);
-        const allBuildable = ['FARM', 'MINE', 'OIL_WELL', 'LUMBER_CAMP', 'FACTORY', 'CITY'];
-        const nextLevelTypes = getEngineerBuildableTypes(unit.engineerLevel + 1).filter((bt: string) => !allowedTypes.includes(bt));
+      if (cellData && cellData.ownerId === clientState.myPlayerId && !(unit.type === 'ENGINEER' && cellData.ruin && cellData.ruinRevealed)) {
+        const canBuildTypes = unit.type === 'ENGINEER'
+          ? getEngineerBuildableTypes(CFG,unit.engineerLevel)
+          : getInfantryBuildableTypes(CFG);
+        const allBuildable = unit.type === 'ENGINEER'
+          ? ['FARM', 'MINE', 'OIL_WELL', 'LUMBER_CAMP', 'FACTORY', 'CITY']
+          : getInfantryBuildableTypes(CFG);
+        const nextLevelTypes = unit.type === 'ENGINEER'
+          ? getEngineerBuildableTypes(CFG,unit.engineerLevel + 1).filter((bt: string) => !canBuildTypes.includes(bt))
+          : [];
 
         for (const bt of allBuildable) {
           const allowedBiomes = BUILDING_PLACEMENT_RULES[bt];
           const biomeOk = !allowedBiomes || allowedBiomes.includes(cellData.biome);
-          const canBuildByLevel = allowedTypes.includes(bt);
+          const canBuildByLevel = canBuildTypes.includes(bt);
           const isNextLevel = nextLevelTypes.includes(bt);
           let capacityOk = false;
           if (bt === 'CITY') {
@@ -550,14 +650,15 @@ export class HUD {
           const available = canBuildByLevel && biomeOk && capacityOk;
 
           const cost = BUILDING_COSTS[bt];
+          const isFree = !cost || (cost.food === 0 && cost.material === 0);
           let costLabel = 'Free';
           if (cost && (cost.food > 0 || cost.material > 0)) {
             const parts: string[] = [];
-            if (cost.food > 0) parts.push(`🍞 ${cost.food}`);
-            if (cost.material > 0) parts.push(`🪨 ${cost.material}`);
+            if (cost.food > 0) parts.push(`\ud83c\udf5e ${cost.food}`);
+            if (cost.material > 0) parts.push(`\ud83e\udea8 ${cost.material}`);
             costLabel = parts.join(' ');
           }
-          const consumesNote = cost?.consumesEngineer ? ' ⚠ Consumes engineer' : '';
+          const consumesNote = cost?.consumesBuilder ? ' \u26a0 Consumes unit' : '';
           const displayName = BUILDING_DISPLAY[bt] || bt;
           const dimClass = !available ? ' build-option-dimmed' : '';
           const levelNote = !canBuildByLevel && isNextLevel ? ' <span class="build-option-note">Requires Lv.2</span>' : !canBuildByLevel ? ' <span class="build-option-note">Locked</span>' : '';
@@ -566,7 +667,7 @@ export class HUD {
 
           buildOptionsHtml += `<div class="build-option${dimClass}" data-build-type="${bt}" data-unit-id="${unit.unitId}" data-cell-id="${unit.cellId}" title="${costLabel}${consumesNote}">
             <span class="build-option-name">${displayName}</span>
-            <span class="build-option-cost">${costLabel}${consumesNote}</span>
+            <span class="build-option-cost">${isFree ? '\u2713 Free' : costLabel}${consumesNote}</span>
             ${levelNote}${biomeNote}${capNote}
           </div>`;
         }
@@ -612,57 +713,6 @@ export class HUD {
     const xpPct = city.xpToNext > 0 ? Math.min(100, Math.round((city.xp / city.xpToNext) * 100)) : 100;
 
     const typeLabel = (t: string) => t === 'ENGINEER' ? 'Engineer' : t === 'INFANTRY' ? 'Infantry' : t;
-
-    const round1 = (v: number) => Math.round(v * 10) / 10;
-
-    const CATEGORY_ORDER = ['FOOD', 'INDUSTRY', 'ENERGY'];
-    const CATEGORY_LABELS: Record<string, string> = { FOOD: 'Food', INDUSTRY: 'Industry', ENERGY: 'Energy' };
-    const CATEGORY_ICONS: Record<string, string> = { FOOD: '🌾', INDUSTRY: '⚒', ENERGY: '⚡' };
-
-    const categoryStockpile: Record<string, { resources: { resource: string; amount: number; label: string }[]; total: number }> = {};
-    const inflowMap: Record<string, { total: number; sources: { source: string; amount: number }[] }> = {};
-    for (const cat of CATEGORY_ORDER) {
-      categoryStockpile[cat] = { resources: [], total: 0 };
-      inflowMap[cat] = { total: 0, sources: [] };
-    }
-    for (const entry of city.stockpile) {
-      const cat = RESOURCE_CATEGORY_MAP[entry.resource] || 'INDUSTRY';
-      const label = RESOURCE_LABELS[entry.resource] || entry.resource;
-      categoryStockpile[cat].resources.push({ resource: entry.resource, amount: round1(entry.amount), label });
-      categoryStockpile[cat].total += entry.amount;
-    }
-    for (const inflow of (city.resourceInflows || [])) {
-      const cat = RESOURCE_CATEGORY_MAP[inflow.resource] || 'INDUSTRY';
-      const existing = inflowMap[cat].sources.find(s => s.source === inflow.source);
-      if (existing) {
-        existing.amount = round1(existing.amount + inflow.amount);
-      } else {
-        inflowMap[cat].sources.push({ source: inflow.source, amount: round1(inflow.amount) });
-      }
-      inflowMap[cat].total = round1(inflowMap[cat].total + inflow.amount);
-    }
-
-    let stockpileHtml = '<div class="panel-section"><div class="panel-subtitle">Stockpile</div>';
-    for (const cat of CATEGORY_ORDER) {
-      const data = categoryStockpile[cat];
-      if (data.resources.length === 0) continue;
-      const inflow = inflowMap[cat];
-      const inflowTooltip = inflow.sources.length > 0
-        ? inflow.sources.map(s => `${s.source}: +${round1(s.amount)}`).join('\\n')
-        : '';
-      const inflowLabel = inflow.total > 0 ? ` (+${round1(inflow.total)}/100t)` : '';
-      stockpileHtml += `<div class="panel-row stockpile-category" ${inflowTooltip ? `title="${inflowTooltip}"` : ''}>`;
-      stockpileHtml += `<span class="label">${CATEGORY_ICONS[cat]} ${CATEGORY_LABELS[cat]}</span>`;
-      stockpileHtml += `<span>${round1(data.total)}${inflowLabel}</span>`;
-      stockpileHtml += `</div>`;
-      for (const r of data.resources) {
-        stockpileHtml += `<div class="panel-row stockpile-resource">`;
-        stockpileHtml += `<span class="label resource-indent">${r.label}</span>`;
-        stockpileHtml += `<span>${r.amount}</span>`;
-        stockpileHtml += `</div>`;
-      }
-    }
-    stockpileHtml += '</div>';
 
     let productionHtml = '';
     if (city.currentProduction) {
@@ -743,13 +793,7 @@ export class HUD {
         <div class="panel-row"><span class="label">XP</span><span id="panel-dynamic-xp-text">${city.xp} / ${city.xpToNext}</span></div>
         <div class="progress-bar small"><div class="progress-fill" id="panel-dynamic-xp-fill" style="width: ${xpPct}%"></div></div>
       </div>
-      <div class="panel-section">
-        <div class="panel-subtitle">Rates</div>
-        <div class="panel-row"><span class="label">Food</span><span id="panel-dynamic-food">+${round1(city.foodPerTick)}</span></div>
-        <div class="panel-row"><span class="label">Energy</span><span id="panel-dynamic-energy">+${round1(city.energyPerTick)}</span></div>
-        <div class="panel-row"><span class="label">Manpower</span><span id="panel-dynamic-manpower">+${round1(city.manpowerPerTick)}</span></div>
-      </div>
-      ${stockpileHtml}
+      <div id="panel-dynamic-stockpile" class="panel-section">${this.buildStockpileHtml(city)}</div>
       ${productionHtml}
       ${queueHtml}
       ${buildingsHtml}
@@ -1029,7 +1073,7 @@ export class HUD {
         if (u && u.status === 'IDLE' && u.type === 'ENGINEER') {
           const cellData = clientState.visibleCells.get(u.cellId);
           if (cellData && cellData.ownerId === clientState.myPlayerId && !cellData.ruin) {
-            const allowedTypes = getEngineerBuildableTypes(u.engineerLevel);
+            const allowedTypes = getEngineerBuildableTypes(CFG,u.engineerLevel);
             const freeExtractor = allowedTypes.find((bt: string) => {
               const cost = BUILDING_COSTS[bt];
               return cost && cost.food === 0 && cost.material === 0 && BUILDING_PLACEMENT_RULES[bt]?.includes(cellData.biome);

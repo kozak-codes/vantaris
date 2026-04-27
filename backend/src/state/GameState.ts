@@ -1,6 +1,5 @@
 import { Schema, type, MapSchema } from '@colyseus/schema';
-import { GamePhase } from '@vantaris/shared';
-import { CFG } from '@vantaris/shared/constants';
+import { GamePhase, CFG } from '@vantaris/shared';
 import { CellState } from './CellState';
 import { PlayerState } from './PlayerState';
 import { UnitState } from './UnitState';

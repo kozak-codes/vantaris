@@ -10,7 +10,6 @@ export default defineConfig({
   resolve: {
     conditions: ['import', 'node', 'default'],
     alias: [
-      { find: '@vantaris/shared/constants', replacement: resolve(root, 'shared/src/constants.ts') },
       { find: '@vantaris/shared', replacement: resolve(root, 'shared/src/index.ts') },
     ],
   },

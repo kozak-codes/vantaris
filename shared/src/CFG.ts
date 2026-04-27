@@ -1,7 +1,36 @@
 import { TerrainType, ResourceType, type FogConfig, type GlobeConfig, type CameraConfig } from './types';
 
 // ──────────────────────────────────────────────
-// Interfaces
+// This file contains ONLY the CFG object and its
+// interfaces — all gameplay-tunable values in one
+// place.  No derived data, no side effects.
+//
+//   ✅  CFG.UNITS.INFANTRY.buildable
+//   ✅  CFG.RESOURCES.BREAD.recipe
+//   ✅  CFG.CITY.BASE_GRAIN_RATE
+//
+//   ❌  Separate top-level const for gameplay data
+//   ❌  Duplicated data (e.g. FACTORY.RECIPES that
+//       mirrors RESOURCES.*.recipe)
+//   ❌  Derived / computed values (use cfgHelpers.ts)
+//   ❌  Magic numbers scattered in mutations/
+//
+// Recipes are defined on the processed resource
+// (CFG.RESOURCES.BREAD.recipe), not duplicated in
+// FACTORY.RECIPES.  Factory recipes are derived via
+// getFactoryRecipes(cfg) in cfgHelpers.ts.
+//
+// Resource categories are derived from the .category
+// field on each resource.  Use getResourceCategories(cfg)
+// and getResourceCategoryMap(cfg) in cfgHelpers.ts.
+//
+// Unit-specific data (e.g. buildable types) belongs
+// on that unit's config inside CFG.UNITS.  Use the
+// DRY helper getUnitBuildableTypes(cfg, type, level)
+// in cfgHelpers.ts — never duplicate per-unit logic.
+//
+// Matchmaking config lives in matchmaking.ts since
+// it is server-only and not part of the game state.
 // ──────────────────────────────────────────────
 
 export interface TerrainConfig {
@@ -24,7 +53,7 @@ export interface BuildingConfig {
   ticks: number;
   placement: string[];
   extractorOutput: { resource: ResourceType; amount: number } | null;
-  cost: { food: number; material: number; consumesEngineer: boolean };
+  cost: { food: number; material: number; consumesBuilder: boolean };
 }
 
 export interface ResourceConfig {
@@ -33,21 +62,14 @@ export interface ResourceConfig {
   materialValue?: number;
   category?: string;
   recipe?: {
+    id?: string;
+    name?: string;
     building: string;
     input: { resource: ResourceType; amount: number }[];
     output: { resource: ResourceType; amount: number }[];
     ticksPerCycle: number;
     minFactoryTier: number;
   };
-}
-
-export interface FactoryRecipeDef {
-  id: string;
-  name: string;
-  input: { resource: ResourceType; amount: number }[];
-  output: { resource: ResourceType; amount: number }[];
-  ticksPerCycle: number;
-  minFactoryTier: number;
 }
 
 export interface ICFG {
@@ -92,12 +114,11 @@ export interface ICFG {
     ENERGY_PIPELINE_MAX_HOPS: number;
   };
   FACTORY: {
-    RECIPES: FactoryRecipeDef[];
     XP_PER_CYCLE: number;
     TIER_THRESHOLDS: number[];
     BASE_XP: number;
   };
-  RESOURCE_CATEGORIES: Record<string, { label: string; resources: ResourceType[] }>;
+  RESOURCE_CATEGORY_LABELS: Record<string, string>;
   DAY_NIGHT: {
     CYCLE_TICKS: number;
     SUN_INTENSITY: number;
@@ -167,6 +188,12 @@ export const CFG: ICFG = {
       resourceCost: { FOOD: 20 } as Record<string, number>,
       manpowerCost: 1,
       visionRange: 1,
+      buildable: {
+        FARM:        { minLevel: 1 },
+        MINE:        { minLevel: 1 },
+        LUMBER_CAMP: { minLevel: 1 },
+        RUIN_RESTORE:{ minLevel: 1 },
+      },
     },
     ENGINEER: {
       ticksCost: 300,
@@ -189,25 +216,26 @@ export const CFG: ICFG = {
 
   // ─── Buildings (dictionary per building type) ──
   BUILDINGS: {
-    FARM:        { ticks: 200, placement: ['PLAINS', 'FOREST'],         extractorOutput: { resource: ResourceType.GRAIN,  amount: 3 }, cost: { food: 0,  material: 0,  consumesEngineer: false } },
-    MINE:        { ticks: 300, placement: ['MOUNTAIN', 'DESERT'],       extractorOutput: { resource: ResourceType.ORE,    amount: 3 }, cost: { food: 0,  material: 0,  consumesEngineer: false } },
-    OIL_WELL:    { ticks: 350, placement: ['DESERT', 'TUNDRA'],         extractorOutput: { resource: ResourceType.OIL,    amount: 2 }, cost: { food: 30, material: 20, consumesEngineer: true  } },
-    LUMBER_CAMP: { ticks: 250, placement: ['FOREST', 'TUNDRA'],          extractorOutput: { resource: ResourceType.TIMBER, amount: 3 }, cost: { food: 0,  material: 0,  consumesEngineer: false } },
-    FACTORY:     { ticks: 400, placement: ['PLAINS', 'DESERT', 'TUNDRA'], extractorOutput: null,                                              cost: { food: 50, material: 30, consumesEngineer: true  } },
-    CITY:        { ticks: 500, placement: ['PLAINS', 'DESERT'],          extractorOutput: null,                                              cost: { food: 80, material: 40, consumesEngineer: true  } },
-    RUIN_RESTORE:{ ticks: 400, placement: [],                            extractorOutput: null,                                              cost: { food: 0,  material: 0,  consumesEngineer: false } },
+    FARM:        { ticks: 200, placement: ['PLAINS', 'FOREST'],         extractorOutput: { resource: ResourceType.GRAIN,  amount: 3 }, cost: { food: 0,  material: 0,  consumesBuilder: true  } },
+    MINE:        { ticks: 300, placement: ['MOUNTAIN', 'DESERT'],       extractorOutput: { resource: ResourceType.ORE,    amount: 3 }, cost: { food: 0,  material: 0,  consumesBuilder: true  } },
+    OIL_WELL:    { ticks: 350, placement: ['DESERT', 'TUNDRA'],         extractorOutput: { resource: ResourceType.OIL,    amount: 2 }, cost: { food: 30, material: 20, consumesBuilder: true  } },
+    LUMBER_CAMP: { ticks: 250, placement: ['FOREST', 'TUNDRA'],          extractorOutput: { resource: ResourceType.TIMBER, amount: 3 }, cost: { food: 0,  material: 0,  consumesBuilder: true  } },
+    FACTORY:     { ticks: 400, placement: ['PLAINS', 'DESERT', 'TUNDRA'], extractorOutput: null,                                              cost: { food: 50, material: 30, consumesBuilder: true  } },
+    CITY:        { ticks: 500, placement: ['PLAINS', 'DESERT'],          extractorOutput: null,                                              cost: { food: 80, material: 40, consumesBuilder: true  } },
+    RUIN_RESTORE:{ ticks: 400, placement: [],                            extractorOutput: null,                                              cost: { food: 0,  material: 0,  consumesBuilder: false } },
   },
 
   // ─── Resources (flat dictionary per resource type) ──
+  // Recipes are defined on the processed resource, not in FACTORY.RECIPES.
   RESOURCES: {
     GRAIN:  { tier: 'raw',       foodValue: 0.67,  category: 'FOOD' },
     ORE:    { tier: 'raw',       materialValue: 1.0, category: 'INDUSTRY' },
     OIL:    { tier: 'raw',       foodValue: 0.5,   category: 'ENERGY' },
     TIMBER: { tier: 'raw',                          category: 'INDUSTRY' },
-    BREAD:  { tier: 'processed', foodValue: 1.0,   category: 'FOOD',    recipe: { building: 'FACTORY', input: [{ resource: ResourceType.GRAIN,  amount: 3 }], output: [{ resource: ResourceType.BREAD, amount: 2 }], ticksPerCycle: 50, minFactoryTier: 1 } },
-    STEEL:  { tier: 'processed', materialValue: 1.5, category: 'INDUSTRY', recipe: { building: 'FACTORY', input: [{ resource: ResourceType.ORE,    amount: 3 }], output: [{ resource: ResourceType.STEEL, amount: 2 }], ticksPerCycle: 60, minFactoryTier: 1 } },
-    POWER:  { tier: 'processed',                    category: 'ENERGY',  recipe: { building: 'FACTORY', input: [{ resource: ResourceType.OIL,    amount: 2 }], output: [{ resource: ResourceType.POWER, amount: 2 }], ticksPerCycle: 70, minFactoryTier: 1 } },
-    LUMBER: { tier: 'processed',                    category: 'INDUSTRY', recipe: { building: 'FACTORY', input: [{ resource: ResourceType.TIMBER, amount: 3 }], output: [{ resource: ResourceType.LUMBER, amount: 2 }], ticksPerCycle: 45, minFactoryTier: 1 } },
+    BREAD:  { tier: 'processed', foodValue: 1.0,   category: 'FOOD',    recipe: { id: 'bake', name: 'Bake Grain', building: 'FACTORY', input: [{ resource: ResourceType.GRAIN,  amount: 3 }], output: [{ resource: ResourceType.BREAD, amount: 2 }], ticksPerCycle: 50, minFactoryTier: 1 } },
+    STEEL:  { tier: 'processed', materialValue: 1.5, category: 'INDUSTRY', recipe: { id: 'smelt', name: 'Smelt Ore', building: 'FACTORY', input: [{ resource: ResourceType.ORE,    amount: 3 }], output: [{ resource: ResourceType.STEEL, amount: 2 }], ticksPerCycle: 60, minFactoryTier: 1 } },
+    POWER:  { tier: 'processed',                    category: 'ENERGY',  recipe: { id: 'refine', name: 'Refine Oil', building: 'FACTORY', input: [{ resource: ResourceType.OIL,    amount: 2 }], output: [{ resource: ResourceType.POWER, amount: 2 }], ticksPerCycle: 70, minFactoryTier: 1 } },
+    LUMBER: { tier: 'processed',                    category: 'INDUSTRY', recipe: { id: 'mill', name: 'Mill Timber', building: 'FACTORY', input: [{ resource: ResourceType.TIMBER, amount: 3 }], output: [{ resource: ResourceType.LUMBER, amount: 2 }], ticksPerCycle: 45, minFactoryTier: 1 } },
   } as Record<string, ResourceConfig>,
 
   // ─── City / Settlement ────────────────────
@@ -237,12 +265,12 @@ export const CFG: ICFG = {
     PASSIVE_EXPANSION_TICKS: { 1: 0, 2: 120, 3: 60, 4: 30, 5: 15, 6: 5 } as Record<number, number>,
   },
 
-  // ─── Resource Categories ──────────────────
-  RESOURCE_CATEGORIES: {
-    FOOD:     { label: 'Food',     resources: [ResourceType.BREAD, ResourceType.GRAIN, ResourceType.OIL] },
-    INDUSTRY: { label: 'Industry',  resources: [ResourceType.ORE, ResourceType.STEEL, ResourceType.TIMBER, ResourceType.LUMBER] },
-    ENERGY:   { label: 'Energy',   resources: [ResourceType.POWER] },
-  } as Record<string, { label: string; resources: ResourceType[] }>,
+  // ─── Resource Category Labels ──────────────
+  RESOURCE_CATEGORY_LABELS: {
+    FOOD: 'Food',
+    INDUSTRY: 'Industry',
+    ENERGY: 'Energy',
+  },
 
   // ─── Supply Chain ─────────────────────────
   SUPPLY_CHAIN: {
@@ -253,12 +281,6 @@ export const CFG: ICFG = {
 
   // ─── Factory ──────────────────────────────
   FACTORY: {
-    RECIPES: [
-      { id: 'bake',   name: 'Bake Grain',   input: [{ resource: ResourceType.GRAIN,  amount: 3 }], output: [{ resource: ResourceType.BREAD, amount: 2 }], ticksPerCycle: 50, minFactoryTier: 1 },
-      { id: 'smelt',  name: 'Smelt Ore',     input: [{ resource: ResourceType.ORE,    amount: 3 }], output: [{ resource: ResourceType.STEEL, amount: 2 }], ticksPerCycle: 60, minFactoryTier: 1 },
-      { id: 'refine', name: 'Refine Oil',    input: [{ resource: ResourceType.OIL,    amount: 2 }], output: [{ resource: ResourceType.POWER, amount: 2 }], ticksPerCycle: 70, minFactoryTier: 1 },
-      { id: 'mill',   name: 'Mill Timber',   input: [{ resource: ResourceType.TIMBER, amount: 3 }], output: [{ resource: ResourceType.LUMBER, amount: 2 }], ticksPerCycle: 45, minFactoryTier: 1 },
-    ],
     XP_PER_CYCLE: 10,
     TIER_THRESHOLDS: [0, 100, 500, 2000, 10000],
     BASE_XP: 0,
@@ -297,72 +319,3 @@ export const CFG: ICFG = {
     RUINED_CITY: 'CITY',
   },
 };
-
-export const MATCHMAKING_CFG = {
-  MAX_PLAYERS: 8,
-  COUNTDOWN_SECONDS: 5,
-  RECONNECTION_WINDOW_MS: 60000,
-};
-
-// ──────────────────────────────────────────────
-// Derived helpers (computed once from CFG)
-// ──────────────────────────────────────────────
-
-export const PASSABLE_TERRAIN = (Object.entries(CFG.TERRAIN) as [string, TerrainConfig][])
-  .filter(([, t]) => t.passable)
-  .map(([k]) => k);
-
-export const MOVEMENT_COST: Record<string, number> = {};
-export const CELL_BUILDING_CAPACITY: Record<string, number> = {};
-for (const [key, t] of Object.entries(CFG.TERRAIN) as [string, TerrainConfig][]) {
-  MOVEMENT_COST[key] = t.cost;
-  CELL_BUILDING_CAPACITY[key] = t.capacity;
-}
-
-export const BUILDING_TICKS: Record<string, number> = {};
-export const BUILDING_COSTS: Record<string, { food: number; material: number; consumesEngineer: boolean }> = {};
-export const BUILDING_PLACEMENT_RULES: Record<string, string[]> = {};
-for (const [key, val] of Object.entries(CFG.BUILDINGS) as [string, BuildingConfig][]) {
-  BUILDING_TICKS[key] = val.ticks;
-  BUILDING_COSTS[key] = { food: val.cost.food, material: val.cost.material, consumesEngineer: val.cost.consumesEngineer };
-  if (val.placement.length > 0) BUILDING_PLACEMENT_RULES[key] = [...val.placement];
-}
-
-export const EXTRACTOR_OUTPUT: Record<string, { resource: ResourceType; amount: number }> = {};
-export const EXTRACTOR_TYPES: string[] = [];
-for (const [key, val] of Object.entries(CFG.BUILDINGS) as [string, BuildingConfig][]) {
-  if (val.extractorOutput) {
-    EXTRACTOR_OUTPUT[key] = { resource: val.extractorOutput.resource, amount: val.extractorOutput.amount };
-  }
-  if (val.extractorOutput && !val.cost.consumesEngineer && key !== 'FACTORY' && key !== 'CITY' && key !== 'RUIN_RESTORE') {
-    EXTRACTOR_TYPES.push(key);
-  }
-}
-
-export const FOOD_VALUE: Record<string, number> = {};
-export const MATERIAL_VALUE: Record<string, number> = {};
-export const RAW_RESOURCES: ResourceType[] = [];
-export const PROCESSED_RESOURCES: ResourceType[] = [];
-export const RESOURCE_CATEGORY_MAP: Record<string, string> = {};
-for (const [key, val] of Object.entries(CFG.RESOURCES) as [string, ResourceConfig][]) {
-  if (val.foodValue !== undefined && val.foodValue > 0) FOOD_VALUE[key] = val.foodValue;
-  if (val.materialValue !== undefined && val.materialValue > 0) MATERIAL_VALUE[key] = val.materialValue;
-  if (val.tier === 'raw') RAW_RESOURCES.push(key as ResourceType);
-  if (val.tier === 'processed') PROCESSED_RESOURCES.push(key as ResourceType);
-  if (val.category) RESOURCE_CATEGORY_MAP[key] = val.category;
-}
-
-export const UNIT_PRODUCTION_COSTS: { type: string; ticksCost: number; resourceCost: Record<string, number>; manpowerCost: number }[] = [];
-for (const [key, val] of Object.entries(CFG.UNITS) as [string, UnitConfig][]) {
-  UNIT_PRODUCTION_COSTS.push({ type: key, ticksCost: val.ticksCost, resourceCost: { ...val.resourceCost }, manpowerCost: val.manpowerCost });
-}
-
-export function getEngineerBuildableTypes(engineerLevel: number): string[] {
-  const engineer = CFG.UNITS['ENGINEER'];
-  if (!engineer?.buildable) return [];
-  const result: string[] = [];
-  for (const [buildingType, req] of Object.entries(engineer.buildable)) {
-    if (req.minLevel <= engineerLevel) result.push(buildingType);
-  }
-  return result;
-}

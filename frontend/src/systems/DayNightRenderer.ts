@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { clientState, onStateUpdate } from '../state/ClientState';
 import { GLOBE_RADIUS } from './IconFactory';
-import { CFG } from '@vantaris/shared/constants';
+import { CFG } from '@vantaris/shared';
 
 const MOON_INTENSITY = 0.3;
 const MOON_ORBIT_TILT = 0.35;

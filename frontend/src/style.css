@@ -637,6 +637,46 @@ html, body {
   border-radius: 3px;
 }
 
+.build-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  margin: 2px 0;
+  border: 1px solid rgba(68, 136, 255, 0.25);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  gap: 8px;
+}
+
+.build-option:hover {
+  background: rgba(68, 136, 255, 0.12);
+  border-color: rgba(68, 136, 255, 0.5);
+}
+
+.build-option.build-option-dimmed {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.build-option-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.build-option-cost {
+  font-size: 11px;
+  color: #aaccff;
+}
+
+.build-option-note {
+  font-size: 10px;
+  color: #aa6644;
+  margin-left: 4px;
+}
+
 .panel-actions {
   margin-top: 10px;
   display: flex;

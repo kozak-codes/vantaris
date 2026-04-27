@@ -1,4 +1,4 @@
-import { CFG } from '@vantaris/shared/constants';
+import { CFG } from '@vantaris/shared';
 
 export class TickSystem {
   private interval: ReturnType<typeof setInterval> | null = null;

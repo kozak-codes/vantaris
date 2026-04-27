@@ -1,5 +1,4 @@
-import { TerrainType } from '@vantaris/shared';
-import { CFG } from '@vantaris/shared/constants';
+import { TerrainType, CFG } from '@vantaris/shared';
 import { generateWorld } from './worldgen/pipeline';
 import { placeRuins } from './worldgen/ruins';
 import { SeededRandom } from './worldgen/rng';

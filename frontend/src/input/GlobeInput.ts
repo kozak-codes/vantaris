@@ -1,8 +1,19 @@
 import * as THREE from 'three';
 import { clientState, notifySelectionChanged } from '../state/ClientState';
 import { sendMoveUnit, sendClaimTerritory, sendBuildStructure, sendRestoreRuin } from '../network/ColyseusClient';
-import { TerrainType } from '@vantaris/shared';
-import { PASSABLE_TERRAIN, BUILDING_COSTS, BUILDING_PLACEMENT_RULES, getEngineerBuildableTypes } from '@vantaris/shared/constants';
+import {
+  TerrainType,
+  CFG,
+  getPassableTerrain,
+  getBuildingCosts,
+  getBuildingPlacementRules,
+  getEngineerBuildableTypes,
+  getInfantryBuildableTypes,
+} from '@vantaris/shared';
+
+const PASSABLE_TERRAIN = getPassableTerrain(CFG);
+const BUILDING_COSTS = getBuildingCosts(CFG);
+const BUILDING_PLACEMENT_RULES = getBuildingPlacementRules(CFG);
 
 const CLICK_THRESHOLD_PX = 5;
 
@@ -326,7 +337,7 @@ export class GlobeInput {
     const unitId = clientState.selectedUnitId;
     if (!unitId) return;
     const unit = clientState.units.get(unitId);
-    if (!unit || unit.status !== 'IDLE' || unit.ownerId !== clientState.myPlayerId) return;
+    if (!unit || unit.status !== 'IDLE' || unit.ownerId !== clientState.myPlayerId || unit.type !== 'INFANTRY') return;
 
     sendClaimTerritory(unitId);
     clientState.pendingCommand = null;
@@ -337,7 +348,12 @@ export class GlobeInput {
     const unitId = clientState.selectedUnitId;
     if (!unitId) return;
     const unit = clientState.units.get(unitId);
-    if (!unit || unit.status !== 'IDLE' || unit.ownerId !== clientState.myPlayerId || unit.type !== 'ENGINEER') return;
+    if (!unit || unit.status !== 'IDLE' || unit.ownerId !== clientState.myPlayerId) return;
+
+    const canBuildTypes = unit.type === 'ENGINEER'
+      ? getEngineerBuildableTypes(CFG, unit.engineerLevel)
+      : getInfantryBuildableTypes(CFG);
+    if (canBuildTypes.length === 0) return;
 
     const cellId = unit.cellId;
     const cellData = clientState.visibleCells.get(cellId);
@@ -350,8 +366,7 @@ export class GlobeInput {
       return;
     }
 
-    const allowedTypes = getEngineerBuildableTypes(unit.engineerLevel);
-    const freeExtractor = allowedTypes.find((bt: string) => {
+    const freeExtractor = canBuildTypes.find((bt: string) => {
       const cost = BUILDING_COSTS[bt];
       if (!cost || cost.food > 0 || cost.material > 0) return false;
       const allowedBiomes = BUILDING_PLACEMENT_RULES[bt];

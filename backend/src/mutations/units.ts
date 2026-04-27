@@ -1,8 +1,14 @@
 import { GameState } from '../state/GameState';
 import { UnitState } from '../state/UnitState';
-import { UnitType, UnitStatus } from '@vantaris/shared';
-import { MOVEMENT_COST, CFG } from '@vantaris/shared/constants';
-import type { AdjacencyMap } from '@vantaris/shared';
+import {
+  UnitType,
+  UnitStatus,
+  CFG,
+  getMovementCost,
+  type AdjacencyMap,
+} from '@vantaris/shared';
+
+const MOVEMENT_COST = getMovementCost(CFG);
 
 let unitIdCounter = 0;
 

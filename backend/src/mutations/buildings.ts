@@ -1,18 +1,27 @@
 import { GameState } from '../state/GameState';
 import { BuildingState } from '../state/BuildingState';
-import { ResourceType } from '@vantaris/shared';
 import {
+  ResourceType,
   CFG,
-  CELL_BUILDING_CAPACITY,
-  BUILDING_TICKS,
-  BUILDING_PLACEMENT_RULES,
-  BUILDING_COSTS,
-  FOOD_VALUE,
-  MATERIAL_VALUE,
+  type ICFG,
+  getCellBuildingCapacity as computeCellBuildingCapacity,
+  getBuildingTicks,
+  getBuildingPlacementRules,
+  getBuildingCosts,
+  getFoodValue,
+  getMaterialValue,
   getEngineerBuildableTypes,
-} from '@vantaris/shared/constants';
-import type { AdjacencyMap } from '@vantaris/shared';
+  getUnitBuildableTypes,
+  type AdjacencyMap,
+} from '@vantaris/shared';
 import { getCityStockpile, getCityStockpileAmount, setCityStockpile } from './resources';
+
+const CELL_BUILDING_CAPACITY = computeCellBuildingCapacity(CFG);
+const BUILDING_TICKS = getBuildingTicks(CFG);
+const BUILDING_PLACEMENT_RULES = getBuildingPlacementRules(CFG);
+const BUILDING_COSTS = getBuildingCosts(CFG);
+const FOOD_VALUE = getFoodValue(CFG);
+const MATERIAL_VALUE = getMaterialValue(CFG);
 
 const ROUND_PRECISION = 0.001;
 
@@ -68,6 +77,12 @@ export function createBuilding(
   building.resourcesInvested = '{"food":0,"material":0}';
 
   state.buildings.set(building.buildingId, building);
+
+  if (cell.ruin) {
+    cell.ruin = '';
+    cell.ruinRevealed = false;
+  }
+
   return building;
 }
 
@@ -91,6 +106,7 @@ export function canPlaceBuilding(
   buildingType: string,
   playerId: string,
   engineerLevel: number = 1,
+  unitType: string = 'ENGINEER',
 ): boolean {
   const cell = state.cells.get(cellId);
   if (!cell) return false;
@@ -99,11 +115,14 @@ export function canPlaceBuilding(
 
   if (buildingType === 'CITY' && cell.hasCity) return false;
 
+  const buildingConfig = CFG.BUILDINGS[buildingType];
+  if (!buildingConfig) return false;
+
+  const allowedBuildings = getUnitBuildableTypes(CFG, unitType, unitType === 'ENGINEER' ? engineerLevel : 1);
+  if (!allowedBuildings.includes(buildingType)) return false;
+
   const allowedBiomes = BUILDING_PLACEMENT_RULES[buildingType];
   if (allowedBiomes && !allowedBiomes.includes(cell.biome)) return false;
-
-  const allowedTypes = getEngineerBuildableTypes(engineerLevel);
-  if (!allowedTypes.includes(buildingType)) return false;
 
   const capacity = getCellBuildingCapacity(cell);
   const currentCount = countBuildingsOnCell(state, cellId);
@@ -125,7 +144,7 @@ export function getAvailableBuildTypes(
   const capacity = getCellBuildingCapacity(cell);
   const currentCount = countBuildingsOnCell(state, cellId);
 
-  const allowedTypes = getEngineerBuildableTypes(engineerLevel);
+  const allowedTypes = getEngineerBuildableTypes(CFG, engineerLevel);
   const available: string[] = [];
   for (const bType of allowedTypes) {
     if (bType === 'CITY' && cell.hasCity) continue;

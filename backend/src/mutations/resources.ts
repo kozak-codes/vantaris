@@ -1,14 +1,12 @@
 import { GameState } from '../state/GameState';
 import { CityState } from '../state/CityState';
 import { BuildingState } from '../state/BuildingState';
-import { ResourceType } from '@vantaris/shared';
-import {
-  CFG,
-  EXTRACTOR_OUTPUT,
-  RAW_RESOURCES,
-} from '@vantaris/shared/constants';
+import { ResourceType, CFG, getExtractorOutput, getRawResources, getFactoryRecipes } from '@vantaris/shared';
 import { getBuildingStockpile, setBuildingStockpile, getBuildingStockpileAmount, addToBuildingStockpile } from './buildings';
 import type { AdjacencyMap, ResourceInflowEntry } from '@vantaris/shared';
+
+const EXTRACTOR_OUTPUT = getExtractorOutput(CFG);
+const RAW_RESOURCES = getRawResources(CFG);
 
 const ROUND_PRECISION = 0.001;
 
@@ -172,7 +170,7 @@ export function tickFactoryProcessing(state: GameState): void {
     if (building.productionTicksRemaining > 0) continue;
     if (!building.recipe) continue;
 
-    const recipe = CFG.FACTORY.RECIPES.find(r => r.id === building.recipe);
+    const recipe = getFactoryRecipes(CFG).find(r => r.id === building.recipe);
     if (!recipe) continue;
     if (building.factoryTier < recipe.minFactoryTier) continue;
 

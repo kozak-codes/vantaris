@@ -1,5 +1,5 @@
 import { TerrainType } from '../types/index';
-import { CFG } from '@vantaris/shared/constants';
+import { CFG } from '@vantaris/shared';
 
 let _seed = 42;
 

@@ -13,9 +13,17 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
-    "./constants": {
-      "types": "./src/constants.ts",
-      "default": "./src/constants.ts"
+    "./CFG": {
+      "types": "./src/CFG.ts",
+      "default": "./src/CFG.ts"
+    },
+    "./cfgHelpers": {
+      "types": "./src/cfgHelpers.ts",
+      "default": "./src/cfgHelpers.ts"
+    },
+    "./matchmaking": {
+      "types": "./src/matchmaking.ts",
+      "default": "./src/matchmaking.ts"
     }
   }
 }

@@ -46,3 +46,29 @@ export type {
 } from './types';
 
 export { buildAdjacencyMap } from './hexAdjacency';
+
+export { CFG, type ICFG, type TerrainConfig, type UnitConfig, type BuildingConfig, type ResourceConfig } from './CFG';
+
+export {
+  getPassableTerrain,
+  getMovementCost,
+  getCellBuildingCapacity,
+  getBuildingTicks,
+  getBuildingCosts,
+  getBuildingPlacementRules,
+  getExtractorOutput,
+  getExtractorTypes,
+  getFoodValue,
+  getMaterialValue,
+  getRawResources,
+  getProcessedResources,
+  getResourceCategoryMap,
+  getResourceCategories,
+  getFactoryRecipes,
+  getUnitBuildableTypes,
+  getInfantryBuildableTypes,
+  getEngineerBuildableTypes,
+  getUnitProductionCosts,
+} from './cfgHelpers';
+
+export { MATCHMAKING_CFG } from './matchmaking';

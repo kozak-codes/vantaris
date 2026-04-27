@@ -1,8 +1,13 @@
 import * as THREE from 'three';
 import { clientState, onStateUpdate } from '../state/ClientState';
 import { GLOBE_RADIUS } from './IconFactory';
-import { PASSABLE_TERRAIN } from '@vantaris/shared/constants';
-import { TerrainType } from '@vantaris/shared';
+import {
+  CFG,
+  getPassableTerrain,
+  TerrainType,
+} from '@vantaris/shared';
+
+const PASSABLE_TERRAIN = getPassableTerrain(CFG);
 
 const SELECTION_OFFSET = 0.015;
 const PATH_LINE_OFFSET = 1.02;
