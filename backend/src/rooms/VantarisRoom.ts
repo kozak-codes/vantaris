@@ -363,6 +363,11 @@ computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.IN
     const building = this.state.buildings.get(data.buildingId);
     if (!building || building.ownerId !== playerId || building.type !== 'FACTORY') return;
 
+    if (data.recipeId === '') {
+      building.recipe = '';
+      return;
+    }
+
     const recipe = getFactoryRecipes(CFG).find(r => r.id === data.recipeId);
     if (!recipe) return;
     if (building.factoryTier < recipe.minFactoryTier) return;
