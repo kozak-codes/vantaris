@@ -38,14 +38,16 @@ export const BuildingPanel: FunctionalComponent<BuildingPanelProps> = ({ buildin
           <div class="panel-subtitle">Recipe</div>
           <div class="panel-row"><span class="label">{currentRecipe.name}</span><span>{inputLabel} → {outputLabel}</span></div>
           <div class="panel-row"><span class="label">Cycle</span><span>{currentRecipe.ticksPerCycle}t</span></div>
-          {building.productionTicksRemaining > 0 && <div class="panel-row"><span class="label">Status</span><span>Under construction ({building.productionTicksRemaining}t)</span></div>}
+          {isMine && (
+            <button class="panel-btn" style={{ marginTop: '4px' }} onClick={() => sendSetFactoryRecipe(building.buildingId, '')}>Clear Recipe</button>
+          )}
         </div>
       );
-    } else if (!isBuilding) {
+    } else {
       const availableRecipes = FACTORY_RECIPES.filter(r => r.minFactoryTier <= building.factoryTier);
       productionHtml = (
         <div class="panel-section">
-          <div class="panel-subtitle">Select Recipe</div>
+          <div class="panel-subtitle">{isBuilding ? 'Select Recipe (activates when built)' : 'Select Recipe'}</div>
           {availableRecipes.length > 0
             ? availableRecipes.map(r => {
               const inputLabel = r.input.map(i => `${i.amount} ${RESOURCE_LABELS[i.resource] || i.resource}`).join(' + ');
@@ -84,14 +86,11 @@ export const BuildingPanel: FunctionalComponent<BuildingPanelProps> = ({ buildin
   }
 
   let factoryInfoHtml: any = null;
-  if (building.type === 'FACTORY' && !isBuilding) {
+  if (building.type === 'FACTORY') {
     factoryInfoHtml = (
       <div class="panel-section">
         <div class="panel-row"><span class="label">Tier</span><span>Lv.{building.factoryTier}</span></div>
         <div class="panel-row"><span class="label">XP</span><span>{building.factoryXp}</span></div>
-        {currentRecipe && isMine && (
-          <button class="panel-btn" onClick={() => sendSetFactoryRecipe(building.buildingId, '')}>Clear Recipe</button>
-        )}
       </div>
     );
   }
