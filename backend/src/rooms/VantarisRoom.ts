@@ -37,15 +37,6 @@ const PLAYER_COLORS = [
   '#8844ff',
 ];
 
-const RUIN_TYPE_TO_BUILDING: Record<string, string> = {
-  'RUINED_FACTORY': 'FACTORY',
-  'COLLAPSED_MINE': 'MINE',
-  'OVERGROWN_FARM': 'FARM',
-  'RUINED_BARRACKS': 'FARM',
-  'RUINED_PORT': 'FACTORY',
-  'RUINED_CITY': 'CITY',
-};
-
 export class VantarisRoom extends Room<GameState> {
   maxClients = 8;
   private adjacencyMap: AdjacencyMap = {};
@@ -133,10 +124,6 @@ export class VantarisRoom extends Room<GameState> {
 
     this.onMessage('buildStructure', (client, data: { unitId: string; buildingType: string; cellId: string }) => {
       this.handleBuildStructure(client, data);
-    });
-
-    this.onMessage('restoreRuin', (client, data: { unitId: string; cellId: string }) => {
-      this.handleRestoreRuin(client, data);
     });
 
     this.onMessage('setFactoryRecipe', (client, data: { buildingId: string; recipeId: string }) => {
@@ -538,61 +525,6 @@ computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.IN
 
     if (cost && cost.consumesBuilder) {
       unit.buildTicksRemaining = 1;
-    }
-  }
-
-  private handleRestoreRuin(client: Client, data: { unitId: string; cellId: string }): void {
-    const playerId = client.sessionId;
-    const unit = this.state.units.get(data.unitId);
-    if (!unit || unit.ownerId !== playerId || unit.status !== 'IDLE') return;
-
-    const cell = this.state.cells.get(data.cellId);
-    if (!cell || !cell.ruin) return;
-    if (!cell.ruinRevealed) return;
-    if (unit.cellId !== data.cellId) return;
-    if (cell.ownerId !== playerId) return;
-
-    const ruinType = cell.ruin;
-    const buildingType = RUIN_TYPE_TO_BUILDING[ruinType] ?? 'FARM';
-
-    const ruinConfig = CFG.BUILDINGS[buildingType];
-    const allowedBuilders = getUnitBuildableTypes(CFG, unit.type, unit.type === 'ENGINEER' ? unit.engineerLevel : 1);
-    if (ruinConfig && !allowedBuilders.includes(buildingType)) return;
-
-    const engineerLevel = unit.type === 'ENGINEER' ? unit.engineerLevel : 1;
-    if (!canPlaceBuilding(this.state, data.cellId, buildingType, playerId, engineerLevel, unit.type)) {
-      client.send('error', { type: 'error', code: 'INVALID_BUILD' });
-      return;
-    }
-
-    const cost = BUILDING_COSTS[buildingType];
-    if (cost && (cost.food > 0 || cost.material > 0)) {
-      if (!canAffordBuildingCost(this.state, data.cellId, buildingType, playerId, this.adjacencyMap)) {
-        client.send('error', { type: 'error', code: 'INSUFFICIENT_RESOURCES' });
-        return;
-      }
-    }
-
-    cell.ruin = '';
-    cell.ruinRevealed = false;
-
-    if (buildingType === 'CITY') {
-      const city = createCity(this.state, playerId, data.cellId);
-      city.population = CFG.CITY.POPULATION_INITIAL;
-      unit.status = 'BUILDING';
-      unit.buildTicksRemaining = BUILDING_TICKS.RUIN_RESTORE;
-      if (cost?.consumesBuilder) {
-        unit.buildTicksRemaining = 1;
-      }
-    } else {
-      const building = createBuilding(this.state, playerId, data.cellId, buildingType);
-      if (building) {
-        unit.status = 'BUILDING';
-        unit.buildTicksRemaining = BUILDING_TICKS.RUIN_RESTORE;
-        if (cost?.consumesBuilder) {
-          unit.buildTicksRemaining = 1;
-        }
-      }
     }
   }
 

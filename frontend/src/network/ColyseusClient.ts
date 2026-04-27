@@ -138,12 +138,6 @@ export function sendBuildStructure(unitId: string, buildingType: string, cellId:
   }
 }
 
-export function sendRestoreRuin(unitId: string, cellId: string): void {
-  if (currentRoom) {
-    currentRoom.send('restoreRuin', { unitId, cellId });
-  }
-}
-
 export function sendSetFactoryRecipe(buildingId: string, recipeId: string): void {
   if (currentRoom) {
     currentRoom.send('setFactoryRecipe', { buildingId, recipeId });

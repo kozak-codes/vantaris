@@ -71,10 +71,10 @@ export const TilePanel: FunctionalComponent<TilePanelProps> = ({ tileId, biome, 
         <div class="panel-section">
           <div class="panel-subtitle">Structures</div>
           {bOnTile.map(b => (
-            <div class="panel-row">
+            <button class="panel-row panel-row-btn" data-building-id={b.buildingId}>
               <span>{BUILDING_DISPLAY[b.type] || b.type}</span>
               {b.isMine && <span class="label owned-label">Yours</span>}
-            </div>
+            </button>
           ))}
         </div>
       )}

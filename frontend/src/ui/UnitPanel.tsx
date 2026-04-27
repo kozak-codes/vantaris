@@ -6,7 +6,7 @@ import {
   visibleCells, cities, players, unitsOnSelectedTile,
   selectTile,
 } from '../state/signals';
-import { sendClaimTerritory, sendSetUnitIdle, sendBuildStructure, sendRestoreRuin } from '../network/ColyseusClient';
+import { sendClaimTerritory, sendSetUnitIdle, sendBuildStructure } from '../network/ColyseusClient';
 import { BIOME_TRAVEL_NAMES, STATUS_DISPLAY, BUILDING_DISPLAY, typeLabel } from './hud-shared';
 import { BuildMenu } from './BuildMenu';
 
@@ -66,34 +66,30 @@ export const UnitPanel: FunctionalComponent<UnitPanelProps> = ({ unit, tileId, b
 
     let buildButton = <></>;
     if (cellData && cellData.ownerId === myPlayerId.value) {
-      if (cellData.ruin && cellData.ruinRevealed) {
-        buildButton = <button class="panel-btn cmd-btn" onClick={() => { sendRestoreRuin(unit.unitId, unit.cellId); pendingCommand.value = null; }} title="Restore this ruin">3 Restore<span class="cmd-key">3</span></button>;
-      } else {
-        const canBuildTypes = unit.type === 'ENGINEER'
-          ? getUnitBuildableTypes(CFG, 'ENGINEER', (unit as any).engineerLevel ?? 1)
-          : getUnitBuildableTypes(CFG, 'INFANTRY', 1);
-        const placeableTypes = canBuildTypes.filter((bt: string) => {
-          const allowedBiomes = BUILDING_PLACEMENT_RULES[bt];
-          if (allowedBiomes && !allowedBiomes.includes(cellData.biome)) return false;
-          if (bt === 'CITY') {
-            let cellHasCity = false;
-            for (const [, c] of cities.value) { if (c.cellId === unit.cellId) { cellHasCity = true; break; } }
-            return !cellHasCity;
-          }
-          return cellData.buildings.length < cellData.buildingCapacity;
-        });
-        if (placeableTypes.length > 0) {
-          buildButton = <button class="panel-btn cmd-btn" onClick={() => {
-            const freeExtractor = placeableTypes.find((bt: string) => {
-              const cost = BUILDING_COSTS[bt];
-              return cost && cost.food === 0 && cost.material === 0;
-            });
-            if (freeExtractor) {
-              sendBuildStructure(unit.unitId, freeExtractor, unit.cellId);
-              pendingCommand.value = null;
-            }
-          }} title="Build a structure on this hex">3 Build<span class="cmd-key">3</span></button>;
+      const canBuildTypes = unit.type === 'ENGINEER'
+        ? getUnitBuildableTypes(CFG, 'ENGINEER', (unit as any).engineerLevel ?? 1)
+        : getUnitBuildableTypes(CFG, 'INFANTRY', 1);
+      const placeableTypes = canBuildTypes.filter((bt: string) => {
+        const allowedBiomes = BUILDING_PLACEMENT_RULES[bt];
+        if (allowedBiomes && !allowedBiomes.includes(cellData.biome)) return false;
+        if (bt === 'CITY') {
+          let cellHasCity = false;
+          for (const [, c] of cities.value) { if (c.cellId === unit.cellId) { cellHasCity = true; break; } }
+          return !cellHasCity;
         }
+        return cellData.buildings.length < cellData.buildingCapacity;
+      });
+      if (placeableTypes.length > 0) {
+        buildButton = <button class="panel-btn cmd-btn" onClick={() => {
+          const freeExtractor = placeableTypes.find((bt: string) => {
+            const cost = BUILDING_COSTS[bt];
+            return cost && cost.food === 0 && cost.material === 0;
+          });
+          if (freeExtractor) {
+            sendBuildStructure(unit.unitId, freeExtractor, unit.cellId);
+            pendingCommand.value = null;
+          }
+        }} title="Build a structure on this hex">3 Build<span class="cmd-key">3</span></button>;
       }
     }
 
@@ -127,7 +123,7 @@ export const UnitPanel: FunctionalComponent<UnitPanelProps> = ({ unit, tileId, b
   let buildOptionsHtml: any[] = [];
   if (isMyUnit && unit.status === 'IDLE') {
     const cellData = visibleCells.value.get(unit.cellId);
-    if (cellData && cellData.ownerId === myPlayerId.value && !(unit.type === 'ENGINEER' && cellData.ruin && cellData.ruinRevealed)) {
+    if (cellData && cellData.ownerId === myPlayerId.value) {
       const canBuildTypes = unit.type === 'ENGINEER'
         ? getUnitBuildableTypes(CFG, 'ENGINEER', (unit as any).engineerLevel ?? 1)
         : getUnitBuildableTypes(CFG, 'INFANTRY', 1);

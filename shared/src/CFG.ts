@@ -192,7 +192,6 @@ export const CFG: ICFG = {
         FARM:        { minLevel: 1 },
         MINE:        { minLevel: 1 },
         LUMBER_CAMP: { minLevel: 1 },
-        RUIN_RESTORE:{ minLevel: 1 },
       },
     },
     ENGINEER: {
@@ -205,7 +204,6 @@ export const CFG: ICFG = {
         MINE:        { minLevel: 1 },
         OIL_WELL:    { minLevel: 1 },
         LUMBER_CAMP: { minLevel: 1 },
-        RUIN_RESTORE:{ minLevel: 1 },
         FACTORY:     { minLevel: 2 },
         CITY:        { minLevel: 2 },
       },
@@ -222,7 +220,6 @@ export const CFG: ICFG = {
     LUMBER_CAMP: { ticks: 250, placement: ['FOREST', 'TUNDRA'],          extractorOutput: { resource: ResourceType.TIMBER, amount: 3 }, cost: { food: 0,  material: 0,  consumesBuilder: true  } },
     FACTORY:     { ticks: 400, placement: ['PLAINS', 'DESERT', 'TUNDRA'], extractorOutput: null,                                              cost: { food: 50, material: 30, consumesBuilder: true  } },
     CITY:        { ticks: 500, placement: ['PLAINS', 'DESERT'],          extractorOutput: null,                                              cost: { food: 80, material: 40, consumesBuilder: true  } },
-    RUIN_RESTORE:{ ticks: 400, placement: [],                            extractorOutput: null,                                              cost: { food: 0,  material: 0,  consumesBuilder: false } },
   },
 
   // ─── Resources (flat dictionary per resource type) ──

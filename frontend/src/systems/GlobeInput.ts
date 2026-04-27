@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { clientState, notifySelectionChanged } from '../state/ClientState';
-import { sendMoveUnit, sendClaimTerritory, sendBuildStructure, sendRestoreRuin } from '../network/ColyseusClient';
+import { sendMoveUnit, sendClaimTerritory, sendBuildStructure } from '../network/ColyseusClient';
 import {
   TerrainType,
   CFG,
@@ -358,13 +358,6 @@ export class GlobeInput {
     const cellId = unit.cellId;
     const cellData = clientState.visibleCells.get(cellId);
     if (!cellData || cellData.ownerId !== clientState.myPlayerId) return;
-
-    if (cellData.ruin && cellData.ruinRevealed) {
-      sendRestoreRuin(unitId, cellId);
-      clientState.pendingCommand = null;
-      notifySelectionChanged();
-      return;
-    }
 
     const freeExtractor = canBuildTypes.find((bt: string) => {
       const cost = BUILDING_COSTS[bt];

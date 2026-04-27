@@ -7,6 +7,8 @@ import {
   getMovementCost,
   type AdjacencyMap,
 } from '@vantaris/shared';
+import { createBuilding } from './buildings';
+import { createCity } from './cities';
 
 const MOVEMENT_COST = getMovementCost(CFG);
 
@@ -152,6 +154,18 @@ export function completeClaim(
     const prevPlayer = state.players.get(previousOwner);
     if (prevPlayer && prevPlayer.territoryCellCount > 0) {
       prevPlayer.territoryCellCount--;
+    }
+  }
+
+  if (cell.ruin && cell.ruinRevealed) {
+    const buildingType = CFG.RUIN_TYPE_TO_BUILDING[cell.ruin] ?? 'FARM';
+    cell.ruin = '';
+    cell.ruinRevealed = false;
+    if (buildingType === 'CITY') {
+      const city = createCity(state, newOwnerId, cellId);
+      if (city) city.population = CFG.CITY.POPULATION_INITIAL;
+    } else {
+      createBuilding(state, newOwnerId, cellId, buildingType);
     }
   }
 }

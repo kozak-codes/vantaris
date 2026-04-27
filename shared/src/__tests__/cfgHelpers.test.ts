@@ -71,7 +71,7 @@ describe('getBuildingCosts', () => {
     const costs = getBuildingCosts(CFG);
     expect(costs.FARM).toEqual({ food: 0, material: 0, consumesBuilder: true });
     expect(costs.CITY).toEqual({ food: 80, material: 40, consumesBuilder: true });
-    expect(costs.RUIN_RESTORE.consumesBuilder).toBe(false);
+    expect(costs.LUMBER_CAMP.consumesBuilder).toBe(true);
   });
 });
 
@@ -79,7 +79,7 @@ describe('getBuildingPlacementRules', () => {
   it('returns placement rules for buildings with placement', () => {
     const rules = getBuildingPlacementRules(CFG);
     expect(rules.FARM).toEqual(['PLAINS', 'FOREST']);
-    expect(rules.RUIN_RESTORE).toBeUndefined();
+    expect(rules.OIL_WELL).toEqual(['DESERT', 'TUNDRA']);
   });
 });
 
@@ -174,7 +174,7 @@ describe('getFactoryRecipes', () => {
 describe('getUnitBuildableTypes', () => {
   it('returns all buildable types for infantry at level 1', () => {
     const types = getUnitBuildableTypes(CFG, 'INFANTRY', 1);
-    expect(types).toEqual(expect.arrayContaining(['FARM', 'MINE', 'LUMBER_CAMP', 'RUIN_RESTORE']));
+    expect(types).toEqual(expect.arrayContaining(['FARM', 'MINE', 'LUMBER_CAMP']));
     expect(types).not.toContain('FACTORY');
     expect(types).not.toContain('CITY');
   });
