@@ -119,10 +119,8 @@ export interface CityStockpileData {
 export interface PlayerResourceData {
   food: number;
   energy: number;
-  manpower: number;
   foodPerTick: number;
   energyPerTick: number;
-  manpowerPerTick: number;
   totalPopulation: number;
   factoryCount: number;
 }
@@ -269,7 +267,7 @@ export interface ProductionItem {
   type: string;
   ticksCost: number;
   resourceCost: Record<string, number>;
-  manpowerCost: number;
+  popCost: number;
 }
 
 export interface CityData {
@@ -288,7 +286,6 @@ export interface CityData {
   productionResourcesInvested: Record<string, number>;
   foodPerTick: number;
   energyPerTick: number;
-  manpowerPerTick: number;
   stockpile: StockpileEntry[];
   resourceInflows: ResourceInflowEntry[];
 }

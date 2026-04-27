@@ -44,7 +44,7 @@ export interface TerrainConfig {
 export interface UnitConfig {
   ticksCost: number;
   resourceCost: Record<string, number>;
-  manpowerCost: number;
+  popCost: number;
   visionRange: number;
   buildable?: Record<string, { minLevel: number }>;
 }
@@ -101,7 +101,7 @@ export interface ICFG {
     BREAD_EMERGENCY_GRAIN_RATIO: number;
     INFLOW_WINDOW_TICKS: number;
     TIER_XP_THRESHOLDS: number[];
-    TIER_MANPOWER: Record<number, number>;
+    GARRISON_CAPACITY: Record<number, number>;
     XP_PER_POP_PER_10: number;
     XP_FOOD_MULTIPLIER: number;
     XP_ENERGY_MULTIPLIER: number;
@@ -186,7 +186,7 @@ export const CFG: ICFG = {
     INFANTRY: {
       ticksCost: 100,
       resourceCost: { FOOD: 20 } as Record<string, number>,
-      manpowerCost: 1,
+      popCost: 1,
       visionRange: 1,
       buildable: {
         FARM:        { minLevel: 1 },
@@ -198,7 +198,7 @@ export const CFG: ICFG = {
     ENGINEER: {
       ticksCost: 300,
       resourceCost: { FOOD: 30 } as Record<string, number>,
-      manpowerCost: 2,
+      popCost: 2,
       visionRange: 1,
       buildable: {
         FARM:        { minLevel: 1 },
@@ -257,7 +257,7 @@ export const CFG: ICFG = {
     BREAD_EMERGENCY_GRAIN_RATIO: 1.5,
     INFLOW_WINDOW_TICKS: 100,
     TIER_XP_THRESHOLDS: [0, 5000, 15000, 40000, 100000, 250000],
-    TIER_MANPOWER: { 1: 2, 2: 6, 3: 15, 4: 35, 5: 90, 6: 250 } as Record<number, number>,
+    GARRISON_CAPACITY: { 1: 2, 2: 6, 3: 15, 4: 35, 5: 90, 6: 250 } as Record<number, number>,
     XP_PER_POP_PER_10: 1,
     XP_FOOD_MULTIPLIER: 1.5,
     XP_ENERGY_MULTIPLIER: 1.3,

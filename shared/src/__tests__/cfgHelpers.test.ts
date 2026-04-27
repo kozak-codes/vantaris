@@ -206,6 +206,6 @@ describe('getUnitProductionCosts', () => {
     const inf = costs.find(c => c.type === 'INFANTRY');
     expect(inf).toBeDefined();
     expect(inf!.ticksCost).toBe(100);
-    expect(inf!.manpowerCost).toBe(1);
+    expect(inf!.popCost).toBe(1);
   });
 });

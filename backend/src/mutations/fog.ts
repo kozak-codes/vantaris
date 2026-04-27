@@ -137,7 +137,7 @@ export function buildPlayerSlice(
       cities: [],
       buildings: [],
       players: [],
-      resources: { food: 0, energy: 0, manpower: 0, foodPerTick: 0, energyPerTick: 0, manpowerPerTick: 0, totalPopulation: 0, factoryCount: 0 },
+      resources: { food: 0, energy: 0, foodPerTick: 0, energyPerTick: 0, totalPopulation: 0, factoryCount: 0 },
     };
   }
 
@@ -261,7 +261,6 @@ export function buildPlayerSlice(
           productionResourcesInvested: productionResourcesInvested,
           foodPerTick: city.foodPerTick,
           energyPerTick: city.energyPerTick,
-          manpowerPerTick: city.manpowerPerTick,
           stockpile: stockpileMapToEntries(citySp),
           resourceInflows: resourceInflows,
         });
@@ -320,7 +319,6 @@ export function buildPlayerSlice(
 
   let totalFood = 0;
   let totalEnergy = 0;
-  let totalManpower = 0;
   let totalPop = 0;
   let factCount = 0;
 
@@ -341,10 +339,8 @@ export function buildPlayerSlice(
   const resources: PlayerResourceData = {
     food: Math.floor(totalFood),
     energy: Math.floor(totalEnergy),
-    manpower: totalManpower,
     foodPerTick: 0,
     energyPerTick: 0,
-    manpowerPerTick: 0,
     totalPopulation: totalPop,
     factoryCount: factCount,
   };

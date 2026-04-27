@@ -15,9 +15,9 @@ const MATERIAL_VALUE = getMaterialValue(CFG);
 
 let cityIdCounter = 0;
 
-export function getProductionCost(unitType: string): { ticksCost: number; resourceCost: Record<string, number>; manpowerCost: number } {
+export function getProductionCost(unitType: string): { ticksCost: number; resourceCost: Record<string, number>; popCost: number } {
   const cost = UNIT_PRODUCTION_COSTS.find(c => c.type === unitType);
-  return cost ? { ticksCost: cost.ticksCost, resourceCost: { ...cost.resourceCost }, manpowerCost: cost.manpowerCost } : { ticksCost: 100, resourceCost: { BREAD: 20 }, manpowerCost: 1 };
+  return cost ? { ticksCost: cost.ticksCost, resourceCost: { ...cost.resourceCost }, popCost: cost.popCost } : { ticksCost: 100, resourceCost: { BREAD: 20 }, popCost: 1 };
 }
 
 export function getRepeatQueue(city: CityState): string[] {
@@ -78,7 +78,7 @@ export function createCity(
 
   setRepeatQueue(city, []);
   const cost = getProductionCost('INFANTRY');
-  setPriorityQueue(city, [{ type: 'INFANTRY', ticksCost: cost.ticksCost, resourceCost: cost.resourceCost, manpowerCost: cost.manpowerCost }]);
+  setPriorityQueue(city, [{ type: 'INFANTRY', ticksCost: cost.ticksCost, resourceCost: cost.resourceCost, popCost: cost.popCost }]);
 
   initCityStockpile(city);
 
@@ -119,7 +119,7 @@ export function startNextProduction(city: CityState): boolean {
     type,
     ticksCost: cost.ticksCost,
     resourceCost: cost.resourceCost,
-    manpowerCost: cost.manpowerCost,
+    popCost: cost.popCost,
   });
 
   if (repeatQ.length > 1) {
@@ -196,7 +196,7 @@ function deductMaterialFromCity(city: CityState, amount: number): boolean {
 export function canCityAffordProduction(city: CityState): boolean {
   const current = getCurrentProduction(city);
   if (!current) return true;
-  if (city.population < current.manpowerCost + 1) return false;
+  if (city.population < current.popCost + 1) return false;
 
   for (const [resource, amount] of Object.entries(current.resourceCost)) {
     if (resource === 'FOOD') {
@@ -283,8 +283,8 @@ export function investProductionTick(city: CityState): void {
 }
 
 export function consumeProductionCosts(city: CityState, item: ProductionItem): boolean {
-  if (city.population < item.manpowerCost + 1) return false;
-  city.population -= item.manpowerCost;
+  if (city.population < item.popCost + 1) return false;
+  city.population -= item.popCost;
 
   const invested = getResourcesInvested(city);
 
@@ -342,7 +342,7 @@ export function addPriorityItem(city: CityState, unitType: string): void {
     type: unitType,
     ticksCost: cost.ticksCost,
     resourceCost: cost.resourceCost,
-    manpowerCost: cost.manpowerCost,
+    popCost: cost.popCost,
   });
   setPriorityQueue(city, queue);
 }

@@ -337,15 +337,14 @@ export function tickInflowResets(state: GameState): void {
 }
 
 export function computePlayerResourceSummary(state: GameState, playerId: string): {
-  food: number; energy: number; manpower: number;
-  foodPerTick: number; energyPerTick: number; manpowerPerTick: number;
+  food: number; energy: number;
+  foodPerTick: number; energyPerTick: number;
   totalPopulation: number; factoryCount: number;
 } {
   let totalPopulation = 0;
   let factoryCount = 0;
   let totalFood = 0;
   let totalEnergy = 0;
-  let manpower = 0;
   let totalFoodSatisfaction = 0;
   let totalEnergySatisfaction = 0;
   let cityCount = 0;
@@ -356,8 +355,6 @@ export function computePlayerResourceSummary(state: GameState, playerId: string)
     const sp = getCityStockpile(city);
     totalFood += (sp[ResourceType.BREAD] || 0) + (sp[ResourceType.GRAIN] || 0);
     totalEnergy += sp[ResourceType.POWER] || 0;
-    const tier = city.tier;
-    manpower += CFG.CITY.TIER_MANPOWER[tier] ?? 2;
     totalFoodSatisfaction += city.foodPerTick;
     totalEnergySatisfaction += city.energyPerTick;
     cityCount++;
@@ -372,10 +369,8 @@ export function computePlayerResourceSummary(state: GameState, playerId: string)
   return {
     food: Math.floor(totalFood),
     energy: Math.floor(totalEnergy),
-    manpower,
     foodPerTick: roundDisplay(cityCount > 0 ? totalFoodSatisfaction / cityCount : 0),
     energyPerTick: roundDisplay(cityCount > 0 ? totalEnergySatisfaction / cityCount : 0),
-    manpowerPerTick: 0,
     totalPopulation,
     factoryCount,
   };

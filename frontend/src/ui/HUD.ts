@@ -294,7 +294,6 @@ export class HUD {
 
     const foodSatPct = Math.round(city.foodPerTick * 100);
     const energySatPct = Math.round(city.energyPerTick * 100);
-    const manPower = city.tier ? (CFG.CITY.TIER_MANPOWER[city.tier] ?? 2) : 2;
     const popGrowthRate = city.foodPerTick >= 1.0
       ? CFG.CITY.POPULATION_GROWTH_BASE + CFG.CITY.POPULATION_GROWTH_FOOD_BONUS * city.foodPerTick
       : 0;
@@ -307,7 +306,6 @@ export class HUD {
         html += `<span class="label">${CATEGORY_ICONS[cat]} ${CATEGORY_LABELS[cat]}</span>`;
         html += `<span>${popLabel}</span>`;
         html += `</div>`;
-        html += `<div class="panel-row stockpile-resource"><span class="label resource-indent">Manpower</span><span>${manPower}</span></div>`;
         continue;
       }
       const data = categoryStockpile[cat];
@@ -433,14 +431,13 @@ export class HUD {
     this.resourceBar.classList.remove('hidden');
 
     const r = clientState.resources;
-    const hash = `${r.food},${r.energy},${r.manpower},${r.foodPerTick},${r.energyPerTick},${r.manpowerPerTick},${r.totalPopulation},${r.factoryCount}`;
+    const hash = `${r.food},${r.energy},${r.foodPerTick},${r.energyPerTick},${r.totalPopulation},${r.factoryCount}`;
     if (hash === this.lastResourceHash) return;
     this.lastResourceHash = hash;
 
     this.resourceBar.innerHTML = `
       <div class="res-item"><span class="res-icon food-icon">☘</span><span class="res-val">${r.food}</span><span class="res-rate">+${r.foodPerTick}/t</span></div>
       <div class="res-item"><span class="res-icon energy-icon">⚡</span><span class="res-val">${r.energy}</span><span class="res-rate">+${r.energyPerTick}/t</span></div>
-      <div class="res-item"><span class="res-icon manpower-icon">⊕</span><span class="res-val">${r.manpower}</span><span class="res-rate">+${r.manpowerPerTick}/t</span></div>
       <div class="res-sep"></div>
       <div class="res-item"><span class="res-icon pop-icon">⚑</span><span class="res-val">${r.totalPopulation}</span></div>
       <div class="res-item"><span class="res-icon factory-icon">⚙</span><span class="res-val">${r.factoryCount}</span></div>
@@ -732,7 +729,7 @@ export class HUD {
         const item = city.priorityQueue[i];
         const prodCost = UNIT_PRODUCTION_COSTS.find(c => c.type === item.type);
         const resParts = prodCost ? Object.entries(prodCost.resourceCost).map(([r, a]) => `${RESOURCE_LABELS[r] || r}: ${a}`).join(', ') : '';
-        const tooltip = prodCost ? `${resParts}${prodCost.manpowerCost ? ', Pop: ' + prodCost.manpowerCost : ''}, Ticks: ${prodCost.ticksCost}` : '';
+        const tooltip = prodCost ? `${resParts}${prodCost.popCost ? ', Pop: ' + prodCost.popCost : ''}, Ticks: ${prodCost.ticksCost}` : '';
         queueHtml += `<div class="panel-row queue-item" title="${tooltip}">
           <button class="queue-toggle-btn" data-queue-toggle-to-repeat="${i}" data-city-id="${city.cityId}" data-unit-type="${item.type}" title="Toggle infinite ON">∞</button>
           <span>▸ ${typeLabel(item.type)}</span>
@@ -743,7 +740,7 @@ export class HUD {
         const unitType = city.repeatQueue[i];
         const prodCost = UNIT_PRODUCTION_COSTS.find(c => c.type === unitType);
         const resParts = prodCost ? Object.entries(prodCost.resourceCost).map(([r, a]) => `${RESOURCE_LABELS[r] || r}: ${a}`).join(', ') : '';
-        const tooltip = prodCost ? `${resParts}${prodCost.manpowerCost ? ', Pop: ' + prodCost.manpowerCost : ''}, Ticks: ${prodCost.ticksCost}` : '';
+        const tooltip = prodCost ? `${resParts}${prodCost.popCost ? ', Pop: ' + prodCost.popCost : ''}, Ticks: ${prodCost.ticksCost}` : '';
         queueHtml += `<div class="panel-row queue-item" title="${tooltip}">
           <button class="queue-toggle-btn queue-toggle-active" data-queue-toggle-to-priority="${i}" data-city-id="${city.cityId}" data-unit-type="${unitType}" title="Toggle infinite OFF">∞</button>
           <span>${typeLabel(unitType)}</span>

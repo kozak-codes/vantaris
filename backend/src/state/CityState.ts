@@ -22,7 +22,6 @@ export class CityState extends Schema {
 
   @type('number') foodPerTick: number = 0;
   @type('number') energyPerTick: number = 0;
-  @type('number') manpowerPerTick: number = 0;
 
   @type('string') stockpile: string = '[]';
   @type('string') resourceInflows: string = '[]';

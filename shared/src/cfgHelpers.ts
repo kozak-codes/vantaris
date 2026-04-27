@@ -196,10 +196,10 @@ export function getEngineerBuildableTypes(cfg: ICFG, engineerLevel: number): str
   return getUnitBuildableTypes(cfg, 'ENGINEER', engineerLevel);
 }
 
-export function getUnitProductionCosts(cfg: ICFG): { type: string; ticksCost: number; resourceCost: Record<string, number>; manpowerCost: number }[] {
-  const result: { type: string; ticksCost: number; resourceCost: Record<string, number>; manpowerCost: number }[] = [];
+export function getUnitProductionCosts(cfg: ICFG): { type: string; ticksCost: number; resourceCost: Record<string, number>; popCost: number }[] {
+  const result: { type: string; ticksCost: number; resourceCost: Record<string, number>; popCost: number }[] = [];
   for (const [key, val] of Object.entries(cfg.UNITS) as [string, UnitConfig][]) {
-    result.push({ type: key, ticksCost: val.ticksCost, resourceCost: { ...val.resourceCost }, manpowerCost: val.manpowerCost });
+    result.push({ type: key, ticksCost: val.ticksCost, resourceCost: { ...val.resourceCost }, popCost: val.popCost });
   }
   return result;
 }
