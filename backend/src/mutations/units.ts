@@ -163,10 +163,10 @@ export function completeClaim(
     cell.ruin = '';
     cell.ruinRevealed = false;
     if (buildingType === 'CITY') {
-      const city = createCity(state, newOwnerId, cellId);
-      if (city) city.population = CFG.CITY.POPULATION_INITIAL;
+      createCity(state, newOwnerId, cellId);
     } else {
-      createBuilding(state, newOwnerId, cellId, buildingType);
+      const building = createBuilding(state, newOwnerId, cellId, buildingType);
+      if (building) building.productionTicksRemaining = 0;
     }
   }
 }
