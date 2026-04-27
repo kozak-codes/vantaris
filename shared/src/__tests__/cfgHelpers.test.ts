@@ -161,7 +161,7 @@ describe('getFactoryRecipes', () => {
     expect(bake).toBeDefined();
     expect(bake!.input[0].resource).toBe(ResourceType.GRAIN);
     expect(bake!.output[0].resource).toBe(ResourceType.BREAD);
-    expect(bake!.ticksPerCycle).toBe(50);
+    expect(bake!.ticksPerCycle).toBe(120);
   });
 
   it('includes smelt, refine, and mill recipes', () => {
@@ -182,8 +182,7 @@ describe('getUnitBuildableTypes', () => {
   it('returns level-gated types for engineers', () => {
     const eng1 = getUnitBuildableTypes(CFG, 'ENGINEER', 1);
     const eng2 = getUnitBuildableTypes(CFG, 'ENGINEER', 2);
-    expect(eng1).not.toContain('FACTORY');
-    expect(eng1).not.toContain('CITY');
+    expect(eng1).toEqual(expect.arrayContaining(['FACTORY', 'CITY']));
     expect(eng2).toEqual(expect.arrayContaining(['FACTORY', 'CITY']));
   });
 

@@ -110,6 +110,9 @@ export interface BuildingData {
   factoryXp: number;
   stockpile: StockpileEntry[];
   resourcesInvested: { food: number; material: number };
+  deliveryTargetId: string;
+  specializationRecipe: string;
+  specializationCycles: number;
 }
 
 export interface CityStockpileData {

@@ -1,10 +1,37 @@
 import { FunctionalComponent } from 'preact';
-import type { BuildingData } from '@vantaris/shared';
+import { CFG, type BuildingData } from '@vantaris/shared';
 import {
-  myPlayerId, selectedBuildingId,
+  myPlayerId, selectedBuildingId, cities, buildings,
 } from '../state/signals';
 import { BUILDING_DISPLAY, RESOURCE_LABELS, EXTRACTOR_OUTPUT, FACTORY_RECIPES } from './hud-shared';
-import { sendSetFactoryRecipe } from '../network/ColyseusClient';
+import { sendSetFactoryRecipe, sendSetDeliveryTarget } from '../network/ColyseusClient';
+
+interface DeliveryOption {
+  id: string;
+  label: string;
+  type: 'city' | 'factory';
+}
+
+function getDeliveryTargets(building: BuildingData): DeliveryOption[] {
+  const pid = myPlayerId.value;
+  const options: DeliveryOption[] = [];
+
+  for (const [, city] of cities.value) {
+    if (city.ownerId === pid) {
+      options.push({ id: city.cityId, label: `${city.name || 'City'}`, type: 'city' });
+    }
+  }
+
+  for (const [, b] of buildings.value) {
+    if (b.ownerId === pid && b.type === 'FACTORY' && b.productionTicksRemaining <= 0 && b.buildingId !== building.buildingId) {
+      const recipe = b.recipe ? FACTORY_RECIPES.find(r => r.id === b.recipe) : null;
+      const label = recipe ? `Factory (${recipe.name})` : 'Factory';
+      options.push({ id: b.buildingId, label, type: 'factory' });
+    }
+  }
+
+  return options;
+}
 
 interface BuildingPanelProps {
   building: BuildingData;
@@ -33,11 +60,16 @@ export const BuildingPanel: FunctionalComponent<BuildingPanelProps> = ({ buildin
     if (currentRecipe) {
       const inputLabel = currentRecipe.input.map(i => `${i.amount} ${RESOURCE_LABELS[i.resource] || i.resource}`).join(' + ');
       const outputLabel = currentRecipe.output.map(o => `${o.amount} ${RESOURCE_LABELS[o.resource] || o.resource}`).join(' + ');
+    const specCycles = building.specializationCycles || 0;
+    const specMultiplier = 1 + specCycles * CFG.FACTORY.SPECIALIZATION_BONUS_PER_CYCLE;
+    const specPercent = Math.round((specMultiplier - 1) * 100);
+    const effectiveTicks = Math.ceil(currentRecipe.ticksPerCycle / specMultiplier);
+    const cycleDisplay = specCycles > 0 ? `${effectiveTicks}t (base ${currentRecipe.ticksPerCycle}t)` : `${currentRecipe.ticksPerCycle}t`;
       productionHtml = (
         <div class="panel-section">
           <div class="panel-subtitle">Recipe</div>
           <div class="panel-row"><span class="label">{currentRecipe.name}</span><span>{inputLabel} → {outputLabel}</span></div>
-          <div class="panel-row"><span class="label">Cycle</span><span>{currentRecipe.ticksPerCycle}t</span></div>
+          <div class="panel-row"><span class="label">Cycle</span><span>{cycleDisplay}</span></div>
           {isMine && (
             <button class="panel-btn" style={{ marginTop: '4px' }} onClick={() => sendSetFactoryRecipe(building.buildingId, '')}>Clear Recipe</button>
           )}
@@ -73,6 +105,32 @@ export const BuildingPanel: FunctionalComponent<BuildingPanelProps> = ({ buildin
     );
   }
 
+  const isExtractor = !!extractorInfo;
+  const isFactory = building.type === 'FACTORY';
+  const hasOutput = isExtractor || isFactory;
+  let deliveryHtml: any = null;
+  if (isMine && hasOutput) {
+    const targets = getDeliveryTargets(building);
+    const currentTarget = building.deliveryTargetId || '';
+    deliveryHtml = (
+      <div class="panel-section">
+        <div class="panel-subtitle">Deliver To</div>
+        <select
+          class="panel-select"
+          value={currentTarget}
+          onChange={(e: any) => {
+            sendSetDeliveryTarget(building.buildingId, e.target.value);
+          }}
+        >
+          <option value="">Auto (Nearest)</option>
+          {targets.map(t => (
+            <option value={t.id}>{t.label}</option>
+          ))}
+        </select>
+      </div>
+    );
+  }
+
   let stockpileHtml: any = null;
   if (building.stockpile && building.stockpile.length > 0) {
     stockpileHtml = (
@@ -87,10 +145,16 @@ export const BuildingPanel: FunctionalComponent<BuildingPanelProps> = ({ buildin
 
   let factoryInfoHtml: any = null;
   if (building.type === 'FACTORY') {
+    const specCycles = building.specializationCycles || 0;
+    const specMultiplier = 1 + specCycles * CFG.FACTORY.SPECIALIZATION_BONUS_PER_CYCLE;
+    const specPercent = Math.round((specMultiplier - 1) * 100);
     factoryInfoHtml = (
       <div class="panel-section">
         <div class="panel-row"><span class="label">Tier</span><span>Lv.{building.factoryTier}</span></div>
         <div class="panel-row"><span class="label">XP</span><span>{building.factoryXp}</span></div>
+        {currentRecipe && specCycles > 0 && (
+          <div class="panel-row"><span class="label">Specialization</span><span>+{specPercent}% speed ({specCycles} cycles)</span></div>
+        )}
       </div>
     );
   }
@@ -106,6 +170,7 @@ export const BuildingPanel: FunctionalComponent<BuildingPanelProps> = ({ buildin
         {isBuilding && <div class="panel-row"><span class="label">Build time</span><span>{building.productionTicksRemaining} ticks</span></div>}
       </div>
       {productionHtml}
+      {deliveryHtml}
       {factoryInfoHtml}
       {stockpileHtml}
       <div class="panel-section panel-back-link">

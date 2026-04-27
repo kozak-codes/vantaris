@@ -11,5 +11,8 @@ export class BuildingState extends Schema {
   @type('number') factoryXp: number = 0;
   @type('string') stockpile: string = '{}';
   @type('string') resourcesInvested: string = '{"food":0,"material":0}';
+  @type('string') deliveryTargetId: string = '';
+  @type('string') specializationRecipe: string = '';
+  @type('number') specializationCycles: number = 0;
   recipeTicksRemaining: number = 0;
 }

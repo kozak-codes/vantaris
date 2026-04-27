@@ -166,6 +166,9 @@ export function buildPlayerSlice(
               factoryXp: building.factoryXp,
               stockpile: stockpileMapToEntries(bsp),
               resourcesInvested: getResourcesInvested(building),
+              deliveryTargetId: building.deliveryTargetId,
+              specializationRecipe: building.specializationRecipe,
+              specializationCycles: building.specializationCycles,
             });
           }
         }
@@ -275,18 +278,21 @@ export function buildPlayerSlice(
   for (const [, building] of state.buildings) {
     if (visibleCellIds.has(building.cellId)) {
       const bsp = getBuildingStockpile(building);
-      buildings.push({
-        buildingId: building.buildingId,
-        ownerId: building.ownerId,
-        cellId: building.cellId,
-        type: building.type,
-        productionTicksRemaining: building.productionTicksRemaining,
-        recipe: building.recipe,
-        factoryTier: building.factoryTier,
-        factoryXp: building.factoryXp,
-        stockpile: stockpileMapToEntries(bsp),
-        resourcesInvested: getResourcesInvested(building),
-      });
+        buildings.push({
+          buildingId: building.buildingId,
+          ownerId: building.ownerId,
+          cellId: building.cellId,
+          type: building.type,
+          productionTicksRemaining: building.productionTicksRemaining,
+          recipe: building.recipe,
+          factoryTier: building.factoryTier,
+          factoryXp: building.factoryXp,
+          stockpile: stockpileMapToEntries(bsp),
+          resourcesInvested: getResourcesInvested(building),
+          deliveryTargetId: building.deliveryTargetId,
+          specializationRecipe: building.specializationRecipe,
+          specializationCycles: building.specializationCycles,
+        });
     }
   }
 

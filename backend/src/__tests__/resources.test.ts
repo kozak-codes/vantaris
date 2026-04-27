@@ -318,11 +318,12 @@ describe('Available Build Types', () => {
     expect(types).toContain('FACTORY');
   });
 
-  it('should NOT return factory for plains at level 1', () => {
+  it('should return factory for plains at level 1', () => {
     const state = makeTestState();
     const types = getAvailableBuildTypes(state, 'cell_0', 'p1', 1);
     expect(types).toContain('FARM');
-    expect(types).not.toContain('FACTORY');
+    expect(types).toContain('FACTORY');
+    expect(types).toContain('CITY');
   });
 
   it('should return mine for mountain', () => {
@@ -339,10 +340,10 @@ describe('Available Build Types', () => {
 });
 
 describe('Engineer Level Gating', () => {
-  it('should not allow factory at level 1', () => {
+  it('should allow factory at level 1', () => {
     const state = makeTestState();
     const result = canPlaceBuilding(state, 'cell_0', 'FACTORY', 'p1', 1);
-    expect(result).toBe(false);
+    expect(result).toBe(true);
   });
 
   it('should allow factory at level 2', () => {
@@ -351,10 +352,10 @@ describe('Engineer Level Gating', () => {
     expect(result).toBe(true);
   });
 
-  it('should not allow city at level 1', () => {
+  it('should allow city at level 1', () => {
     const state = makeTestState();
     const result = canPlaceBuilding(state, 'cell_0', 'CITY', 'p1', 1);
-    expect(result).toBe(false);
+    expect(result).toBe(true);
   });
 });
 

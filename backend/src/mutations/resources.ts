@@ -18,6 +18,28 @@ function roundDisplay(v: number): number {
   return Math.round(v * 10) / 10;
 }
 
+function hexDist(fromCellId: string, toCellId: string, state: GameState, adjacencyMap: AdjacencyMap, ownerId: string): number {
+  if (fromCellId === toCellId) return 0;
+  const visited = new Set<string>([fromCellId]);
+  let frontier = [fromCellId];
+  for (let dist = 1; dist <= CFG.SUPPLY_CHAIN.MAX_HOPS + 2; dist++) {
+    const nextFrontier: string[] = [];
+    for (const cid of frontier) {
+      const neighbors = adjacencyMap[cid] ?? [];
+      for (const nId of neighbors) {
+        if (visited.has(nId)) continue;
+        if (nId === toCellId) return dist;
+        const nCell = state.cells.get(nId);
+        if (!nCell || nCell.ownerId !== ownerId) continue;
+        visited.add(nId);
+        nextFrontier.push(nId);
+      }
+    }
+    frontier = nextFrontier;
+  }
+  return -1;
+}
+
 export function getCityStockpile(city: CityState): Record<string, number> {
   try {
     return JSON.parse(city.stockpile);
@@ -96,7 +118,26 @@ function findNearestStorage(
   ownerId: string,
   state: GameState,
   adjacencyMap: AdjacencyMap,
+  preferredTargetId?: string,
 ): { type: 'city' | 'factory'; id: string; distance: number } | null {
+  // If the building has a delivery target set, check it first
+  if (preferredTargetId) {
+    const targetCity = state.cities.get(preferredTargetId);
+    if (targetCity && targetCity.ownerId === ownerId) {
+      const dist = hexDist(cellId, targetCity.cellId, state, adjacencyMap, ownerId);
+      if (dist >= 0 && dist <= CFG.SUPPLY_CHAIN.MAX_HOPS) {
+        return { type: 'city', id: targetCity.cityId, distance: dist };
+      }
+    }
+    const targetBuilding = state.buildings.get(preferredTargetId);
+    if (targetBuilding && targetBuilding.ownerId === ownerId && targetBuilding.type === 'FACTORY' && targetBuilding.productionTicksRemaining <= 0) {
+      const dist = hexDist(cellId, targetBuilding.cellId, state, adjacencyMap, ownerId);
+      if (dist >= 0 && dist <= CFG.SUPPLY_CHAIN.MAX_HOPS) {
+        return { type: 'factory', id: targetBuilding.buildingId, distance: dist };
+      }
+    }
+  }
+
   const visited = new Set<string>([cellId]);
   let frontier = [cellId];
 
@@ -148,7 +189,7 @@ export function tickExtractorOutput(state: GameState, adjacencyMap: AdjacencyMap
     const cell = state.cells.get(building.cellId);
     if (!cell) continue;
 
-    const target = findNearestStorage(building.cellId, building.ownerId, state, adjacencyMap);
+    const target = findNearestStorage(building.cellId, building.ownerId, state, adjacencyMap, building.deliveryTargetId || undefined);
     if (!target) continue;
 
     const penalty = 1.0 - (target.distance * CFG.SUPPLY_CHAIN.DISTANCE_PENALTY);
@@ -184,7 +225,13 @@ export function tickFactoryProcessing(state: GameState): void {
     }
 
     if (!building.recipeTicksRemaining) {
-      building.recipeTicksRemaining = recipe.ticksPerCycle;
+      if (building.specializationRecipe !== building.recipe) {
+        building.specializationRecipe = building.recipe;
+        building.specializationCycles = 0;
+      }
+      const specializationMultiplier = 1 + building.specializationCycles * CFG.FACTORY.SPECIALIZATION_BONUS_PER_CYCLE;
+      const effectiveTicks = Math.ceil(recipe.ticksPerCycle / specializationMultiplier);
+      building.recipeTicksRemaining = effectiveTicks;
     }
     building.recipeTicksRemaining--;
 
@@ -193,7 +240,8 @@ export function tickFactoryProcessing(state: GameState): void {
         addToBuildingStockpile(building, out.resource, out.amount);
       }
       building.factoryXp += CFG.FACTORY.XP_PER_CYCLE;
-      building.recipeTicksRemaining = recipe.ticksPerCycle;
+      building.specializationCycles++;
+      building.recipeTicksRemaining = 0;
 
       for (let i = CFG.FACTORY.TIER_THRESHOLDS.length - 1; i >= 0; i--) {
         if (building.factoryXp >= CFG.FACTORY.TIER_THRESHOLDS[i] && i + 1 > building.factoryTier) {
@@ -220,7 +268,7 @@ export function tickFactoryOutputToCities(state: GameState, adjacencyMap: Adjace
       const amount = sp[res];
       if (amount <= 0) continue;
 
-      const target = findNearestStorage(building.cellId, building.ownerId, state, adjacencyMap);
+    const target = findNearestStorage(building.cellId, building.ownerId, state, adjacencyMap, building.deliveryTargetId || undefined);
       if (!target || target.type !== 'city') continue;
 
       const city = state.cities.get(target.id);

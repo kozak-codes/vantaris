@@ -34,12 +34,6 @@ export const Tooltip: FunctionalComponent = () => {
     ruinText = 'Ruin detected';
   }
 
-  let resourceText = '';
-  if (cellData && cellData.resourceYield && cellData.resourceYield.primary !== 'NONE') {
-    const label = RESOURCE_LABELS[cellData.resourceYield.primary] || cellData.resourceYield.primary;
-    resourceText = `${label} +${cellData.resourceYield.amount}`;
-  }
-
   let buildingParts: string[] = [];
   if (cellData && cellData.buildings.length > 0) {
     buildingParts = cellData.buildings.map((b: any) => {
@@ -54,7 +48,6 @@ export const Tooltip: FunctionalComponent = () => {
       <div class="tooltip-biome">{biomeText}</div>
       <div class="tooltip-owner" style={{ color: ownerColor }}>{ownerName}</div>
       {ruinText && <div class="tooltip-ruin">{ruinText}</div>}
-      {resourceText && <div class="tooltip-resource">{resourceText}</div>}
       {buildingParts.length > 0 && <div class="tooltip-building">{buildingParts.join(', ')}</div>}
       <div class="tooltip-fog">{fogLabel}</div>
     </div>

@@ -123,6 +123,7 @@ export interface ICFG {
     XP_PER_CYCLE: number;
     TIER_THRESHOLDS: number[];
     BASE_XP: number;
+    SPECIALIZATION_BONUS_PER_CYCLE: number;
   };
   RESOURCE_CATEGORY_LABELS: Record<string, string>;
   DAY_NIGHT: {
@@ -253,8 +254,8 @@ export const CFG: ICFG = {
         MINE: { minLevel: 1 },
         OIL_WELL: { minLevel: 1 },
         LUMBER_CAMP: { minLevel: 1 },
-        FACTORY: { minLevel: 2 },
-        CITY: { minLevel: 2 },
+        FACTORY: { minLevel: 1 },
+        CITY: { minLevel: 1 },
       },
     },
   },
@@ -324,7 +325,7 @@ export const CFG: ICFG = {
         building: "FACTORY",
         input: [{ resource: ResourceType.GRAIN, amount: 3 }],
         output: [{ resource: ResourceType.BREAD, amount: 2 }],
-        ticksPerCycle: 50,
+        ticksPerCycle: 120,
         minFactoryTier: 1,
       },
     },
@@ -336,9 +337,9 @@ export const CFG: ICFG = {
         id: "smelt",
         name: "Smelt Ore",
         building: "FACTORY",
-        input: [{ resource: ResourceType.ORE, amount: 3 }],
+        input: [{ resource: ResourceType.ORE, amount: 5 }],
         output: [{ resource: ResourceType.STEEL, amount: 2 }],
-        ticksPerCycle: 60,
+        ticksPerCycle: 140,
         minFactoryTier: 1,
       },
     },
@@ -351,7 +352,7 @@ export const CFG: ICFG = {
         building: "FACTORY",
         input: [{ resource: ResourceType.OIL, amount: 2 }],
         output: [{ resource: ResourceType.POWER, amount: 2 }],
-        ticksPerCycle: 70,
+        ticksPerCycle: 160,
         minFactoryTier: 1,
       },
     },
@@ -364,7 +365,7 @@ export const CFG: ICFG = {
         building: "FACTORY",
         input: [{ resource: ResourceType.TIMBER, amount: 3 }],
         output: [{ resource: ResourceType.LUMBER, amount: 2 }],
-        ticksPerCycle: 45,
+        ticksPerCycle: 100,
         minFactoryTier: 1,
       },
     },
@@ -430,6 +431,7 @@ export const CFG: ICFG = {
     XP_PER_CYCLE: 10,
     TIER_THRESHOLDS: [0, 100, 500, 2000, 10000],
     BASE_XP: 0,
+    SPECIALIZATION_BONUS_PER_CYCLE: 0.12,
   },
 
   // ─── Day / Night ─────────────────────────

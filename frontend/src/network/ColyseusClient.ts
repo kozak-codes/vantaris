@@ -146,6 +146,12 @@ export function sendSetFactoryRecipe(buildingId: string, recipeId: string): void
   }
 }
 
+export function sendSetDeliveryTarget(buildingId: string, targetId: string): void {
+  if (currentRoom) {
+    currentRoom.send('setDeliveryTarget', { buildingId, targetId });
+  }
+}
+
 export function sendRenameCity(cityId: string, name: string): void {
   if (currentRoom) {
     currentRoom.send('renameCity', { cityId, name });

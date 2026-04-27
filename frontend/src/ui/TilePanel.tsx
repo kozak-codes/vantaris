@@ -40,11 +40,6 @@ export const TilePanel: FunctionalComponent<TilePanelProps> = ({ tileId, biome, 
   }
 
   const cellData = visibleCells.value.get(tileId);
-  let resourceHtml = <></>;
-  if (cellData && cellData.resourceYield && cellData.resourceYield.primary !== 'NONE') {
-    const label = /* use RESOURCE_LABELS */ cellData.resourceYield.primary;
-    resourceHtml = <div class="panel-row"><span class="label">Resource</span><span>{label} +{cellData.resourceYield.amount}</span></div>;
-  }
 
   return (
     <div id="hud-tile-panel" class="panel">
@@ -55,7 +50,6 @@ export const TilePanel: FunctionalComponent<TilePanelProps> = ({ tileId, biome, 
       <div class="panel-section">
         <div class="panel-row"><span class="label">Owner</span><span style={ownerColor !== '#888' ? { color: ownerColor } : {}}>{ownerName}</span></div>
         <div class="panel-row"><span class="label">Terrain</span><span>{BIOME_TRAVEL_NAMES[biome] || biome}</span></div>
-        {resourceHtml}
         <div class="panel-row"><span class="label">Units</span><span>{unitsOnTile.length}</span></div>
       </div>
       {cityOnTile && (

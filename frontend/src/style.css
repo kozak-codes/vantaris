@@ -735,6 +735,27 @@ html, body {
   border-color: rgba(68, 136, 255, 0.7);
 }
 
+.panel-select {
+  width: 100%;
+  background: rgba(20, 30, 50, 0.8);
+  border: 1px solid rgba(68, 136, 255, 0.4);
+  border-radius: 6px;
+  color: #ccddff;
+  padding: 5px 8px;
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+}
+
+.panel-select:focus {
+  border-color: rgba(68, 136, 255, 0.7);
+}
+
+.panel-select option {
+  background: #0a1628;
+  color: #ccddff;
+}
+
 .queue-toggle-btn {
   background: rgba(68, 136, 255, 0.2);
   border: 1px solid rgba(68, 136, 255, 0.5);

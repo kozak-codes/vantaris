@@ -1,6 +1,6 @@
 import { Room, Client } from '@colyseus/core';
 import { GameState } from '../state/GameState';
-import { GamePhase, TerrainType, ResourceType, BuildingType, UnitType, UnitStatus, CFG, MATCHMAKING_CFG, getUnitBuildableTypes, getInfantryBuildableTypes, getBuildingTicks, getBuildingCosts, getFactoryRecipes, AdjacencyMap, buildAdjacencyMap } from '@vantaris/shared';
+import { GamePhase, TerrainType, ResourceType, BuildingType, UnitType, UnitStatus, CFG, MATCHMAKING_CFG, getUnitBuildableTypes, getInfantryBuildableTypes, getBuildingTicks, getBuildingCosts, getFactoryRecipes, getExtractorOutput, AdjacencyMap, buildAdjacencyMap } from '@vantaris/shared';
 import type { ProductionItem } from '@vantaris/shared';
 
 const BUILDING_TICKS = getBuildingTicks(CFG);
@@ -121,6 +121,10 @@ export class VantarisRoom extends Room<GameState> {
 
     this.onMessage('renameCity', (client, data: { cityId: string; name: string }) => {
       this.handleRenameCity(client, data);
+    });
+
+    this.onMessage('setDeliveryTarget', (client, data: { buildingId: string; targetId: string }) => {
+      this.handleSetDeliveryTarget(client, data);
     });
 
     this.onMessage('revealRuin', (client, data: { cellId: string }) => {
@@ -365,6 +369,9 @@ computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.IN
 
     if (data.recipeId === '') {
       building.recipe = '';
+      building.recipeTicksRemaining = 0;
+      building.specializationRecipe = '';
+      building.specializationCycles = 0;
       return;
     }
 
@@ -372,6 +379,11 @@ computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.IN
     if (!recipe) return;
     if (building.factoryTier < recipe.minFactoryTier) return;
 
+    if (building.recipe !== data.recipeId) {
+      building.recipeTicksRemaining = 0;
+      building.specializationRecipe = '';
+      building.specializationCycles = 0;
+    }
     building.recipe = data.recipeId;
   }
 
@@ -384,6 +396,32 @@ computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.IN
     if (trimmed.length === 0) return;
 
     city.name = trimmed;
+  }
+
+  private handleSetDeliveryTarget(client: Client, data: { buildingId: string; targetId: string }): void {
+    const playerId = client.sessionId;
+    const building = this.state.buildings.get(data.buildingId);
+    if (!building || building.ownerId !== playerId) return;
+
+    const output = getExtractorOutput(CFG)[building.type];
+    if (!output && building.type !== 'FACTORY') return;
+
+    if (data.targetId === '') {
+      building.deliveryTargetId = '';
+      return;
+    }
+
+    const targetCity = this.state.cities.get(data.targetId);
+    if (targetCity && targetCity.ownerId === playerId) {
+      building.deliveryTargetId = data.targetId;
+      return;
+    }
+
+    const targetBuilding = this.state.buildings.get(data.targetId);
+    if (targetBuilding && targetBuilding.ownerId === playerId && targetBuilding.type === 'FACTORY' && targetBuilding.productionTicksRemaining <= 0) {
+      building.deliveryTargetId = data.targetId;
+      return;
+    }
   }
 
   private handleMoveUnit(client: Client, data: { unitId: string; targetCellId: string }): void {
