@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0a1628"/>
+      <stop offset="100%" stop-color="#0d1b2a"/>
+    </linearGradient>
+    <linearGradient id="hex-fill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4488ff" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#4488ff" stop-opacity="0.05"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#4488ff"/>
+      <stop offset="50%" stop-color="#44ccff"/>
+      <stop offset="100%" stop-color="#4488ff"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="big-glow">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Hex grid pattern - background decoration -->
+  <g opacity="0.12" stroke="#4488ff" stroke-width="0.5" fill="url(#hex-fill)">
+    <!-- Row 1 -->
+    <polygon points="80,60 120,37 160,60 160,106 120,129 80,106"/>
+    <polygon points="160,60 200,37 240,60 240,106 200,129 160,106"/>
+    <polygon points="240,60 280,37 320,60 320,106 280,129 240,106"/>
+    <polygon points="880,60 920,37 960,60 960,106 920,129 880,106"/>
+    <polygon points="960,60 1000,37 1040,60 1040,106 1000,129 960,106"/>
+    <polygon points="1040,60 1080,37 1120,60 1120,106 1080,129 1040,106"/>
+    <!-- Row 2 offset -->
+    <polygon points="120,129 160,106 200,129 200,175 160,198 120,175"/>
+    <polygon points="200,129 240,106 280,129 280,175 240,198 200,175"/>
+    <polygon points="920,129 960,106 1000,129 1000,175 960,198 920,175"/>
+    <polygon points="1000,129 1040,106 1080,129 1080,175 1040,198 1000,175"/>
+    <!-- Bottom rows -->
+    <polygon points="80,460 120,437 160,460 160,506 120,529 80,506"/>
+    <polygon points="160,460 200,437 240,460 240,506 200,529 160,506"/>
+    <polygon points="920,460 960,437 1000,460 1000,506 960,529 920,506"/>
+    <polygon points="1000,460 1040,437 1080,460 1080,506 1040,529 1000,506"/>
+    <polygon points="120,529 160,506 200,529 200,575 160,598 120,575"/>
+    <polygon points="960,529 1000,506 1040,529 1040,575 1000,598 960,575"/>
+  </g>
+
+  <!-- Central large hex - globe hint -->
+  <g transform="translate(600,315)" filter="url(#big-glow)">
+    <polygon points="0,-140 121,-70 121,70 0,140 -121,70 -121,-70" fill="none" stroke="#4488ff" stroke-width="1.5" opacity="0.3"/>
+    <polygon points="0,-105 91,-52.5 91,52.5 0,105 -91,52.5 -91,-52.5" fill="none" stroke="#4488ff" stroke-width="1" opacity="0.2"/>
+    <polygon points="0,-70 60.6,-35 60.6,35 0,70 -60.6,35 -60.6,-35" fill="#4488ff" opacity="0.08" stroke="#4488ff" stroke-width="1" opacity="0.15"/>
+  </g>
+
+  <!-- Title -->
+  <text x="600" y="250" text-anchor="middle" font-family="'Segoe UI',system-ui,sans-serif" font-size="96" font-weight="800" fill="#e0eaff" filter="url(#glow)" letter-spacing="20">VANTARIS</text>
+
+  <!-- Subtitle -->
+  <text x="600" y="310" text-anchor="middle" font-family="'Segoe UI',system-ui,sans-serif" font-size="24" fill="#6688aa" letter-spacing="8">HEX-GLOBE STRATEGY</text>
+
+  <!-- Accent line -->
+  <rect x="480" y="330" width="240" height="2" rx="1" fill="url(#accent)" opacity="0.6"/>
+
+  <!-- Description -->
+  <text x="600" y="380" text-anchor="middle" font-family="'Segoe UI',system-ui,sans-serif" font-size="18" fill="#556677">Conquer the globe. Build empires. Dominate.</text>
+
+  <!-- Bottom tag -->
+  <text x="600" y="580" text-anchor="middle" font-family="'Segoe UI',system-ui,sans-serif" font-size="13" fill="#334455" letter-spacing="3">VANTARIS.GG</text>
+</svg>
