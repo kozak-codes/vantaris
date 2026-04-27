@@ -560,6 +560,49 @@ html, body {
   margin-top: 12px;
 }
 
+.lobby-links {
+  margin-top: 16px;
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+}
+
+.lobby-link {
+  color: #6688aa;
+  font-size: 12px;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.lobby-link:hover {
+  color: #99bbdd;
+}
+
+.how-to-play-panel {
+  max-width: 520px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.htp-section {
+  margin-bottom: 14px;
+  text-align: left;
+}
+
+.htp-section h3 {
+  font-size: 13px;
+  color: #88aacc;
+  margin: 0 0 4px 0;
+  font-weight: 600;
+}
+
+.htp-section p {
+  font-size: 12px;
+  color: #99aabb;
+  margin: 2px 0;
+  line-height: 1.5;
+}
+
 .panel {
   position: fixed;
   bottom: 20px;
