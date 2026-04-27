@@ -65,11 +65,20 @@ export const BuildingPanel: FunctionalComponent<BuildingPanelProps> = ({ buildin
     const specPercent = Math.round((specMultiplier - 1) * 100);
     const effectiveTicks = Math.ceil(currentRecipe.ticksPerCycle / specMultiplier);
     const cycleDisplay = specCycles > 0 ? `${effectiveTicks}t (base ${currentRecipe.ticksPerCycle}t)` : `${currentRecipe.ticksPerCycle}t`;
+    const recipeTotal = building.recipeTicksTotal || effectiveTicks;
+    const recipeRemaining = building.recipeTicksRemaining || 0;
+    const recipeProgress = recipeTotal > 0 ? Math.round(((recipeTotal - recipeRemaining) / recipeTotal) * 100) : 0;
       productionHtml = (
         <div class="panel-section">
           <div class="panel-subtitle">Recipe</div>
           <div class="panel-row"><span class="label">{currentRecipe.name}</span><span>{inputLabel} → {outputLabel}</span></div>
           <div class="panel-row"><span class="label">Cycle</span><span>{cycleDisplay}</span></div>
+          {building.recipeTicksRemaining > 0 && (
+            <div class="progress-bar-container">
+              <div class="progress-bar" style={{ width: `${recipeProgress}%` }} />
+              <span class="progress-bar-label">{recipeRemaining}t</span>
+            </div>
+          )}
           {isMine && (
             <button class="panel-btn" style={{ marginTop: '4px' }} onClick={() => sendSetFactoryRecipe(building.buildingId, '')}>Clear Recipe</button>
           )}

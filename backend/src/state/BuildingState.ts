@@ -14,5 +14,6 @@ export class BuildingState extends Schema {
   @type('string') deliveryTargetId: string = '';
   @type('string') specializationRecipe: string = '';
   @type('number') specializationCycles: number = 0;
-  recipeTicksRemaining: number = 0;
+  @type('number') recipeTicksRemaining: number = 0;
+  @type('number') recipeTicksTotal: number = 0;
 }

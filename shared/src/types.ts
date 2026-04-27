@@ -113,6 +113,8 @@ export interface BuildingData {
   deliveryTargetId: string;
   specializationRecipe: string;
   specializationCycles: number;
+  recipeTicksRemaining: number;
+  recipeTicksTotal: number;
 }
 
 export interface CityStockpileData {

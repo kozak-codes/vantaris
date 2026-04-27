@@ -16,11 +16,22 @@ import {
   type StockpileEntry,
   type ProductionItem,
   type ResourceInflowEntry,
+  getFactoryRecipes,
 } from '@vantaris/shared';
 import { GameState } from '../state/GameState';
+import { BuildingState } from '../state/BuildingState';
 import { getCityStockpile } from './resources';
 import { getBuildingStockpile, getCellBuildingCapacity, countBuildingsOnCell, getResourcesInvested } from './buildings';
 import { getRepeatQueue, getPriorityQueue, getCurrentProduction } from './cities';
+
+function getRecipeTicksTotal(building: BuildingState): number {
+  if (!building.recipe) return 0;
+  const recipe = getFactoryRecipes(CFG).find(r => r.id === building.recipe);
+  if (!recipe) return 0;
+  const specCycles = building.specializationCycles || 0;
+  const multiplier = 1 + specCycles * CFG.FACTORY.SPECIALIZATION_BONUS_PER_CYCLE;
+  return Math.ceil(recipe.ticksPerCycle / multiplier);
+}
 
 export function revealCellForPlayer(state: GameState, playerId: string, cellId: string): void {
   const player = state.players.get(playerId);
@@ -169,6 +180,8 @@ export function buildPlayerSlice(
               deliveryTargetId: building.deliveryTargetId,
               specializationRecipe: building.specializationRecipe,
               specializationCycles: building.specializationCycles,
+              recipeTicksRemaining: building.recipeTicksRemaining,
+              recipeTicksTotal: getRecipeTicksTotal(building),
             });
           }
         }
@@ -292,6 +305,8 @@ export function buildPlayerSlice(
           deliveryTargetId: building.deliveryTargetId,
           specializationRecipe: building.specializationRecipe,
           specializationCycles: building.specializationCycles,
+          recipeTicksRemaining: building.recipeTicksRemaining,
+          recipeTicksTotal: getRecipeTicksTotal(building),
         });
     }
   }
