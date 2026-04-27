@@ -417,10 +417,20 @@ computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.IN
     const unit = this.state.units.get(data.unitId);
     if (!unit || unit.ownerId !== playerId) return;
 
+    if (unit.status === 'BUILDING') {
+      for (const [, building] of this.state.buildings) {
+        if (building.cellId === unit.cellId && building.ownerId === playerId && building.productionTicksRemaining > 0) {
+          cancelBuilding(this.state, building.buildingId, this.adjacencyMap);
+          break;
+        }
+      }
+    }
+
     unit.status = 'IDLE';
     unit.path = '[]';
     unit.movementTicksRemaining = 0;
     unit.claimTicksRemaining = 0;
+    unit.buildTicksRemaining = 0;
   }
 
   private handleCityQueueAddPriority(client: Client, data: { cityId: string; unitType: string }): void {

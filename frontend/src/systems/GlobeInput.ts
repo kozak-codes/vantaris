@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { clientState, notifySelectionChanged } from '../state/ClientState';
 import { sendMoveUnit, sendClaimTerritory, sendBuildStructure } from '../network/ColyseusClient';
+import { selectedBuildingId } from '../state/signals';
 import {
   TerrainType,
   CFG,
@@ -180,6 +181,7 @@ export class GlobeInput {
       clientState.selectedUnitId = null;
       clientState.selectedCityId = null;
       clientState.pendingCommand = null;
+      selectedBuildingId.value = null;
       notifySelectionChanged();
       return;
     }
@@ -206,6 +208,7 @@ export class GlobeInput {
     clientState.selectedUnitId = null;
     clientState.selectedCityId = null;
     clientState.pendingCommand = null;
+    selectedBuildingId.value = null;
 
     const unitsOnTile: string[] = [];
     for (const [unitId, unit] of clientState.units) {
@@ -231,6 +234,7 @@ export class GlobeInput {
     clientState.selectedTileId = null;
     clientState.selectedUnitId = null;
     clientState.selectedCityId = null;
+    selectedBuildingId.value = null;
     clientState.pendingCommand = null;
     notifySelectionChanged();
   }

@@ -4,9 +4,9 @@ import type { CityData } from '@vantaris/shared';
 
 const RESOURCE_CATEGORY_MAP = getResourceCategoryMap(CFG);
 
-const CATEGORY_ORDER = ['FOOD', 'INDUSTRY', 'ENERGY', 'POPULATION'];
-const CATEGORY_LABELS: Record<string, string> = { FOOD: 'Food', INDUSTRY: 'Industry', ENERGY: 'Energy', POPULATION: 'Population' };
-const CATEGORY_ICONS: Record<string, string> = { FOOD: '\u{1F33E}', INDUSTRY: '\u2692', ENERGY: '\u26A1', POPULATION: '\u{1F465}' };
+const CATEGORY_ORDER = ['FOOD', 'INDUSTRY', 'ENERGY'];
+const CATEGORY_LABELS: Record<string, string> = { FOOD: 'Food', INDUSTRY: 'Industry', ENERGY: 'Energy' };
+const CATEGORY_ICONS: Record<string, string> = { FOOD: '\u{1F33E}', INDUSTRY: '\u2692', ENERGY: '\u26A1' };
 
 const RESOURCE_LABELS: Record<string, string> = {
   BREAD: 'Bread', GRAIN: 'Grain', ORE: 'Ore', STEEL: 'Steel',
@@ -14,9 +14,6 @@ const RESOURCE_LABELS: Record<string, string> = {
 };
 
 const round1 = (v: number) => Math.round(v);
-
-const POP_CAP: Record<number, number> = CFG.CITY.POPULATION_CAP;
-function getPopCap(tier: number): number { return POP_CAP[tier] ?? 50; }
 
 interface StockpileSectionProps {
   city: CityData;
@@ -48,25 +45,11 @@ export const StockpileSection: FunctionalComponent<StockpileSectionProps> = ({ c
 
   const foodSatPct = Math.round(city.foodPerTick * 100);
   const energySatPct = Math.round(city.energyPerTick * 100);
-  const popGrowthRate = city.foodPerTick >= 1.0
-    ? CFG.CITY.POPULATION_GROWTH_RATE * city.population * (1 - city.population / getPopCap(city.tier)) * (city.foodPerTick - 1)
-    : city.foodPerTick < CFG.CITY.POPULATION_DECLINE_THRESHOLD
-      ? -CFG.CITY.POPULATION_DECLINE_RATE * city.population
-      : 0;
 
   return (
     <div class="panel-section">
       <div class="panel-subtitle">Stockpile</div>
       {CATEGORY_ORDER.map(cat => {
-        if (cat === 'POPULATION') {
-          const popLabel = popGrowthRate > 0 ? `${city.population} (+${round1(popGrowthRate)}/t)` : `${city.population}`;
-          return (
-            <div class="panel-row stockpile-category">
-              <span class="label">{CATEGORY_ICONS[cat]} {CATEGORY_LABELS[cat]}</span>
-              <span>{popLabel}</span>
-            </div>
-          );
-        }
         const data = categoryStockpile[cat];
         if (data.resources.length === 0 && cat !== 'ENERGY') return null;
 

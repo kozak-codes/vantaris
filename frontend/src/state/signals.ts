@@ -215,6 +215,10 @@ export function syncFromClientState(cs: {
   selectedCityId.value = cs.selectedCityId;
   pendingCommand.value = cs.pendingCommand;
 
+  if (!cs.selectedTileId || cs.selectedUnitId || cs.selectedCityId) {
+    selectedBuildingId.value = null;
+  }
+
   const mp = cs.players.get(cs.myPlayerId);
   if (mp) myColor.value = mp.color;
 
