@@ -54,6 +54,12 @@ export interface UnitConfig {
   visionRange: number;
   buildExhaustion: number;
   buildable?: Record<string, { minLevel: number }>;
+  canClaim?: boolean;
+  claimTickMultiplier?: number;
+  upgradeFrom?: string;
+  upgradeCost?: Record<string, number>;
+  upgradeTicks?: number;
+  maxWeight?: number;
 }
 
 export interface BuildingConfig {
@@ -62,6 +68,8 @@ export interface BuildingConfig {
   extractorOutput: { resource: ResourceType; amount: number } | null;
   cost: { food: number; material: number };
   exhaustionCost: number;
+  wagePer100Ticks: number;
+  target: number;
 }
 
 export interface ResourceConfig {
@@ -231,12 +239,33 @@ export const CFG: ICFG = {
 
   // ─── Units (dictionary per unit type) ──
   UNITS: {
+    CITIZEN: {
+      ticksCost: 50,
+      resourceCost: { FOOD: 10 } as Record<string, number>,
+      popCost: 1,
+      visionRange: 1,
+      buildExhaustion: 1,
+      canClaim: true,
+      claimTickMultiplier: 2,
+      maxWeight: 10,
+      buildable: {
+        FARM: { minLevel: 1 },
+        MINE: { minLevel: 1 },
+        LUMBER_CAMP: { minLevel: 1 },
+      },
+    },
     INFANTRY: {
       ticksCost: 100,
       resourceCost: { FOOD: 20 } as Record<string, number>,
       popCost: 1,
       visionRange: 1,
       buildExhaustion: 1,
+      canClaim: true,
+      claimTickMultiplier: 1,
+      upgradeFrom: 'CITIZEN',
+      upgradeCost: { FOOD: 10, ORE: 5 } as Record<string, number>,
+      upgradeTicks: 50,
+      maxWeight: 15,
       buildable: {
         FARM: { minLevel: 1 },
         MINE: { minLevel: 1 },
@@ -249,6 +278,10 @@ export const CFG: ICFG = {
       popCost: 2,
       visionRange: 1,
       buildExhaustion: 3,
+      upgradeFrom: 'CITIZEN',
+      upgradeCost: { FOOD: 20, STEEL: 10 } as Record<string, number>,
+      upgradeTicks: 100,
+      maxWeight: 20,
       buildable: {
         FARM: { minLevel: 1 },
         MINE: { minLevel: 1 },
@@ -257,6 +290,17 @@ export const CFG: ICFG = {
         FACTORY: { minLevel: 1 },
         CITY: { minLevel: 1 },
       },
+    },
+    TRADER: {
+      ticksCost: 200,
+      resourceCost: { FOOD: 15, POWER: 5 } as Record<string, number>,
+      popCost: 1,
+      visionRange: 2,
+      buildExhaustion: 0,
+      upgradeFrom: 'CITIZEN',
+      upgradeCost: { FOOD: 15, POWER: 5 } as Record<string, number>,
+      upgradeTicks: 75,
+      maxWeight: 30,
     },
   },
 
@@ -270,6 +314,8 @@ export const CFG: ICFG = {
       extractorOutput: { resource: ResourceType.GRAIN, amount: 3 },
       cost: { food: 0, material: 0 },
       exhaustionCost: 1,
+      wagePer100Ticks: 5,
+      target: 200,
     },
     MINE: {
       ticks: 300,
@@ -277,6 +323,8 @@ export const CFG: ICFG = {
       extractorOutput: { resource: ResourceType.ORE, amount: 3 },
       cost: { food: 0, material: 0 },
       exhaustionCost: 1,
+      wagePer100Ticks: 5,
+      target: 200,
     },
     OIL_WELL: {
       ticks: 350,
@@ -284,6 +332,8 @@ export const CFG: ICFG = {
       extractorOutput: { resource: ResourceType.OIL, amount: 2 },
       cost: { food: 30, material: 20 },
       exhaustionCost: 1,
+      wagePer100Ticks: 8,
+      target: 150,
     },
     LUMBER_CAMP: {
       ticks: 250,
@@ -291,6 +341,8 @@ export const CFG: ICFG = {
       extractorOutput: { resource: ResourceType.TIMBER, amount: 3 },
       cost: { food: 0, material: 0 },
       exhaustionCost: 1,
+      wagePer100Ticks: 5,
+      target: 200,
     },
     FACTORY: {
       ticks: 400,
@@ -298,6 +350,8 @@ export const CFG: ICFG = {
       extractorOutput: null,
       cost: { food: 50, material: 30 },
       exhaustionCost: 3,
+      wagePer100Ticks: 10,
+      target: 100,
     },
     CITY: {
       ticks: 500,
@@ -305,6 +359,8 @@ export const CFG: ICFG = {
       extractorOutput: null,
       cost: { food: 80, material: 40 },
       exhaustionCost: 3,
+      wagePer100Ticks: 0,
+      target: 0,
     },
   },
 
@@ -378,7 +434,7 @@ export const CFG: ICFG = {
       [ResourceType.GRAIN]: 60,
       [ResourceType.ORE]: 30,
       [ResourceType.STEEL]: 10,
-      [ResourceType.POWER]: 20,
+      [ResourceType.POWER]: 1000,
     } as Record<string, number>,
     POPULATION_INITIAL: 10,
     POPULATION_CAP: {

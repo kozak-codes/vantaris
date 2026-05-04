@@ -192,8 +192,30 @@ export function getInfantryBuildableTypes(cfg: ICFG): string[] {
   return getUnitBuildableTypes(cfg, 'INFANTRY', 1);
 }
 
+export function getCitizenBuildableTypes(cfg: ICFG): string[] {
+  return getUnitBuildableTypes(cfg, 'CITIZEN', 1);
+}
+
 export function getEngineerBuildableTypes(cfg: ICFG, engineerLevel: number): string[] {
   return getUnitBuildableTypes(cfg, 'ENGINEER', engineerLevel);
+}
+
+export function getTraderBuildableTypes(cfg: ICFG): string[] {
+  return getUnitBuildableTypes(cfg, 'TRADER', 1);
+}
+
+export function getUpgradeOptions(cfg: ICFG): { fromType: string; toType: string; cost: Record<string, number>; ticks: number }[] {
+  const result: { fromType: string; toType: string; cost: Record<string, number>; ticks: number }[] = [];
+  for (const [unitType, unitConfig] of Object.entries(cfg.UNITS) as [string, UnitConfig][]) {
+    if (unitConfig.upgradeFrom && unitConfig.upgradeCost && unitConfig.upgradeTicks !== undefined) {
+      result.push({ fromType: unitConfig.upgradeFrom, toType: unitType, cost: { ...unitConfig.upgradeCost }, ticks: unitConfig.upgradeTicks });
+    }
+  }
+  return result;
+}
+
+export function getUpgradeForType(cfg: ICFG, fromType: string): { toType: string; cost: Record<string, number>; ticks: number }[] {
+  return getUpgradeOptions(cfg).filter(o => o.fromType === fromType);
 }
 
 export function getUnitProductionCosts(cfg: ICFG): { type: string; ticksCost: number; resourceCost: Record<string, number>; popCost: number }[] {

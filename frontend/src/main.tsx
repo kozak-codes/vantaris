@@ -60,6 +60,7 @@ leaveBtn.addEventListener('click', handleLeaveGame);
 render(<App />, document.getElementById('hud-root')!);
 const cameraControls = new CameraControls(camera, canvas, pivot);
 const globeInput = new GlobeInput(canvas, camera, globeRenderer.getGlobeGroup());
+globeInput.setCameraControls(cameraControls);
 
 (window as any).vantaris = createDebugAPI(grid, globeRenderer, cameraControls, pivot);
 console.log('%c[vantaris] Debug API available at window.vantaris', 'color: #4488ff; font-weight: bold');

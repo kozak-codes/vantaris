@@ -66,8 +66,12 @@ export {
   getResourceCategories,
   getFactoryRecipes,
   getUnitBuildableTypes,
+  getCitizenBuildableTypes,
   getInfantryBuildableTypes,
   getEngineerBuildableTypes,
+  getTraderBuildableTypes,
+  getUpgradeOptions,
+  getUpgradeForType,
   getUnitProductionCosts,
 } from './cfgHelpers';
 

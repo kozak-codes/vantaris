@@ -2,6 +2,7 @@ import { FunctionalComponent } from 'preact';
 import { selectedTileId, selectedCellData, selectedRevealedData, selectedUnit, selectedCity, selectedBuildingId, buildings, players } from '../state/signals';
 import { TickCounter } from './TickCounter';
 import { ResourceBar } from './ResourceBar';
+import { EconomyDialog } from './EconomyDialog';
 import { Tooltip } from './Tooltip';
 import { UnitPanel } from './UnitPanel';
 import { CityPanel } from './CityPanel';
@@ -50,6 +51,7 @@ export const App: FunctionalComponent = () => {
       <ResourceBar />
       <Tooltip />
       <TilePanelContainer />
+      <EconomyDialog />
       <PlayerList />
       <EliminationOverlay />
       <ChatPanel />

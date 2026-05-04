@@ -67,7 +67,7 @@ export const clientState: ClientState = {
   cities: new Map(),
   buildings: new Map(),
   players: new Map(),
-  resources: { food: 0, energy: 0, foodPerTick: 0, energyPerTick: 0, totalPopulation: 0, factoryCount: 0 },
+  resources: { food: 0, energy: 0, foodPerTick: 0, energyPerTick: 0, totalPopulation: 0, factoryCount: 0, energyCredits: 0, claimCompensation: 0 },
   selectedTileId: null,
   selectedUnitId: null,
   selectedCityId: null,
@@ -280,11 +280,7 @@ function validateSelections(): void {
   }
 
   if (clientState.pendingCommand) {
-    if (clientState.pendingCommand === 'move') {
-      if (!clientState.selectedUnitId) {
-        clientState.pendingCommand = null;
-      }
-    } else if (clientState.pendingCommand === 'claim') {
+    if (clientState.pendingCommand === 'claim') {
       if (!clientState.selectedUnitId) {
         clientState.pendingCommand = null;
       }
@@ -304,7 +300,7 @@ export function clearClientState(): void {
   clientState.cities.clear();
   clientState.buildings.clear();
   clientState.players.clear();
-  clientState.resources = { food: 0, energy: 0, foodPerTick: 0, energyPerTick: 0, totalPopulation: 0, factoryCount: 0 };
+  clientState.resources = { food: 0, energy: 0, foodPerTick: 0, energyPerTick: 0, totalPopulation: 0, factoryCount: 0, energyCredits: 0, claimCompensation: 0 };
   clientState.selectedTileId = null;
   clientState.selectedUnitId = null;
   clientState.selectedCityId = null;

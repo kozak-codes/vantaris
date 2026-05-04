@@ -13,4 +13,7 @@ export class UnitState extends Schema {
   @type('number') buildTicksRemaining: number = 0;
   @type('number') engineerLevel: number = 1;
   @type('number') buildExhaustion: number = 0;
+  @type('string') name: string = '';
+  @type('number') energyCredits: number = 0;
+  @type('number') inventoryWeight: number = 0;
 }

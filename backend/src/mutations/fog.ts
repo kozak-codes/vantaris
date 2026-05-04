@@ -148,7 +148,7 @@ export function buildPlayerSlice(
       cities: [],
       buildings: [],
       players: [],
-      resources: { food: 0, energy: 0, foodPerTick: 0, energyPerTick: 0, totalPopulation: 0, factoryCount: 0 },
+      resources: { food: 0, energy: 0, foodPerTick: 0, energyPerTick: 0, totalPopulation: 0, factoryCount: 0, energyCredits: 0, claimCompensation: 0 },
     };
   }
 
@@ -177,7 +177,7 @@ export function buildPlayerSlice(
               factoryXp: building.factoryXp,
               stockpile: stockpileMapToEntries(bsp),
               resourcesInvested: getResourcesInvested(building),
-              deliveryTargetId: building.deliveryTargetId,
+              stockpileTarget: building.stockpileTarget,
               specializationRecipe: building.specializationRecipe,
               specializationCycles: building.specializationCycles,
               recipeTicksRemaining: building.recipeTicksRemaining,
@@ -246,6 +246,9 @@ export function buildPlayerSlice(
         buildTicksRemaining: unit.buildTicksRemaining,
         engineerLevel: unit.engineerLevel,
         buildExhaustion: unit.buildExhaustion,
+        name: unit.name,
+        energyCredits: unit.energyCredits,
+        inventoryWeight: unit.inventoryWeight,
       });
     }
   }
@@ -302,7 +305,7 @@ export function buildPlayerSlice(
           factoryXp: building.factoryXp,
           stockpile: stockpileMapToEntries(bsp),
           resourcesInvested: getResourcesInvested(building),
-          deliveryTargetId: building.deliveryTargetId,
+          stockpileTarget: building.stockpileTarget,
           specializationRecipe: building.specializationRecipe,
           specializationCycles: building.specializationCycles,
           recipeTicksRemaining: building.recipeTicksRemaining,
@@ -368,6 +371,8 @@ export function buildPlayerSlice(
     energyPerTick: 0,
     totalPopulation: totalPop,
     factoryCount: factCount,
+    energyCredits: player ? player.energyCredits : 0,
+    claimCompensation: player ? player.claimCompensation : 0,
   };
 
   return {

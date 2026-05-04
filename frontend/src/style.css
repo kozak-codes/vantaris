@@ -11,6 +11,7 @@ html, body {
   background: #000;
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   color: #ccc;
+  touch-action: manipulation;
 }
 
 #globe-canvas {
@@ -76,7 +77,7 @@ html, body {
   font-size: 12px;
   font-family: monospace;
   z-index: 40;
-  pointer-events: none;
+  cursor: pointer;
   backdrop-filter: blur(8px);
 }
 
@@ -156,6 +157,7 @@ html, body {
   backdrop-filter: blur(8px);
   transition: all 0.2s ease;
   padding: 0;
+  touch-action: manipulation;
 }
 
 #hud-leave:hover {
@@ -309,6 +311,7 @@ html, body {
   padding: 0 2px;
   opacity: 0;
   transition: opacity 0.15s ease;
+  touch-action: manipulation;
 }
 
 .plist-row:hover .plist-dm-btn {
@@ -428,6 +431,7 @@ html, body {
   flex-direction: column;
   align-items: center;
   color: #ccc;
+  touch-action: manipulation;
 }
 
 .queue-btn:hover {
@@ -489,6 +493,7 @@ html, body {
   cursor: pointer;
   font-size: 14px;
   transition: all 0.2s ease;
+  touch-action: manipulation;
 }
 
 .cancel-btn:hover {
@@ -546,6 +551,7 @@ html, body {
   cursor: pointer;
   transition: all 0.2s ease;
   letter-spacing: 1px;
+  touch-action: manipulation;
 }
 
 .play-btn:hover {
@@ -617,6 +623,7 @@ html, body {
   font-size: 13px;
   backdrop-filter: blur(8px);
   z-index: 40;
+  touch-action: manipulation;
 }
 
 .panel-right {
@@ -653,6 +660,7 @@ html, body {
   cursor: pointer;
   padding: 0 4px;
   line-height: 1;
+  touch-action: manipulation;
 }
 
 .panel-close:hover {
@@ -726,9 +734,15 @@ html, body {
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
   gap: 8px;
+  touch-action: manipulation;
 }
 
-.build-option:hover {
+.build-option[disabled] {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.build-option:not([disabled]):hover {
   background: rgba(68, 136, 255, 0.12);
   border-color: rgba(68, 136, 255, 0.5);
 }
@@ -747,6 +761,17 @@ html, body {
 .build-option-cost {
   font-size: 11px;
   color: #aaccff;
+}
+
+.build-option-ticks {
+  font-size: 10px;
+  color: #556677;
+  margin-left: 4px;
+}
+
+.build-option .resource-missing {
+  color: #cc6644;
+  font-weight: 600;
 }
 
 .build-option-note {
@@ -771,6 +796,7 @@ html, body {
   font-size: 13px;
   cursor: pointer;
   transition: all 0.2s ease;
+  touch-action: manipulation;
 }
 
 .panel-btn:hover {
@@ -837,6 +863,7 @@ html, body {
   cursor: pointer;
   margin-right: 4px;
   font-weight: bold;
+  touch-action: manipulation;
 }
 
 .queue-toggle-btn:hover {
@@ -852,6 +879,7 @@ html, body {
   padding: 0 4px;
   margin-left: auto;
   opacity: 0.7;
+  touch-action: manipulation;
 }
 
 .queue-remove-btn:hover {
@@ -862,6 +890,30 @@ html, body {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.toggle-btn {
+  background: rgba(100, 100, 100, 0.3);
+  border: 1px solid rgba(150, 150, 150, 0.4);
+  border-radius: 4px;
+  color: #888;
+  padding: 2px 10px;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+  touch-action: manipulation;
+  min-width: 42px;
+  text-align: center;
+}
+
+.toggle-btn:hover {
+  background: rgba(100, 100, 100, 0.5);
+}
+
+.toggle-btn.toggle-active {
+  background: rgba(68, 180, 68, 0.3);
+  border-color: rgba(68, 180, 68, 0.6);
+  color: #6c6;
 }
 
 .queue-priority {
@@ -922,6 +974,7 @@ html, body {
   border-radius: 4px;
   padding: 2px 4px;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .selected-entity:hover {
@@ -934,6 +987,7 @@ html, body {
   border-radius: 4px;
   padding: 3px 4px;
   transition: background 0.15s ease;
+  touch-action: manipulation;
 }
 
 .unit-row[data-unit-id]:hover,
@@ -964,6 +1018,7 @@ html, body {
   color: #8899aa;
   font-size: 12px;
   padding: 4px 12px;
+  touch-action: manipulation;
 }
 
 .panel-btn-secondary:hover {
@@ -1057,6 +1112,7 @@ html, body {
   z-index: 45;
   font-size: 13px;
   transition: all 0.2s ease;
+  touch-action: manipulation;
 }
 
 #hud-chat.hidden {
@@ -1082,6 +1138,7 @@ html, body {
   cursor: pointer;
   transition: all 0.15s ease;
   border-bottom: 2px solid transparent;
+  touch-action: manipulation;
 }
 
 .chat-tab:hover {
@@ -1132,6 +1189,7 @@ html, body {
   white-space: nowrap;
   border-bottom: 2px solid transparent;
   transition: all 0.15s ease;
+  touch-action: manipulation;
 }
 
 .chat-dm-tab.active {
@@ -1229,9 +1287,149 @@ html, body {
   backdrop-filter: blur(8px);
   transition: all 0.2s ease;
   padding: 0;
+  touch-action: manipulation;
 }
 
 #hud-chat-toggle:hover {
   border-color: rgba(100, 140, 200, 0.6);
   background: rgba(30, 50, 80, 0.8);
+}
+
+.hud-resources {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.energy-credits-item {
+  cursor: pointer;
+}
+
+.energy-credits-item:hover {
+  opacity: 0.85;
+}
+
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(4px);
+}
+
+.dialog {
+  background: rgba(10, 10, 15, 0.92);
+  border: 1px solid rgba(100, 140, 200, 0.3);
+  border-radius: 10px;
+  min-width: 320px;
+  max-width: 480px;
+  max-height: 80vh;
+  overflow-y: auto;
+  backdrop-filter: blur(12px);
+  font-family: monospace;
+  font-size: 12px;
+  color: #ccc;
+}
+
+.dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(100, 140, 200, 0.2);
+}
+
+.dialog-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #dde;
+}
+
+.dialog-close {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 4px;
+  touch-action: manipulation;
+}
+
+.dialog-close:hover {
+  color: #ccc;
+}
+
+.dialog-body {
+  padding: 10px 14px;
+}
+
+.economy-setting {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.economy-input {
+  width: 60px;
+  background: rgba(20, 20, 30, 0.8);
+  border: 1px solid rgba(100, 140, 200, 0.3);
+  border-radius: 4px;
+  color: #ccc;
+  font-family: monospace;
+  font-size: 12px;
+  padding: 2px 6px;
+  text-align: right;
+  touch-action: manipulation;
+}
+
+.economy-input:focus {
+  outline: none;
+  border-color: rgba(100, 140, 200, 0.6);
+}
+
+.economy-unit {
+  color: #888;
+  font-size: 11px;
+}
+
+.economy-citizen-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(100, 140, 200, 0.08);
+  font-size: 11px;
+}
+
+.economy-citizen-name {
+  flex: 1;
+  color: #bbc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.economy-citizen-type {
+  color: #889;
+  width: 58px;
+  text-align: center;
+}
+
+.economy-citizen-credits {
+  color: #4c8;
+  width: 56px;
+  text-align: right;
+}
+
+.economy-citizen-weight {
+  color: #889;
+  width: 36px;
+  text-align: right;
+}
+
+.economy-citizen-list {
+  max-height: 200px;
+  overflow-y: auto;
 }

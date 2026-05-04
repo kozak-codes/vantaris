@@ -79,8 +79,10 @@ export class MatchmakingRoom extends Room<MatchmakingState> {
     const playerCount = this.state.playerCount;
     const spawnPoints = this.generateSpawnPoints(playerCount);
 
+    const worldSeed = Date.now();
     const room = await matchMaker.createRoom('vantaris_room', {
       spawnPoints,
+      worldSeed,
     });
 
     for (const client of this.clients) {

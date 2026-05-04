@@ -22,7 +22,7 @@ export function getProductionCost(unitType: string): { ticksCost: number; resour
 }
 
 export function getRepeatQueue(city: CityState): string[] {
-  try { return JSON.parse(city.repeatQueue); } catch { return ['INFANTRY']; }
+  try { return JSON.parse(city.repeatQueue); } catch { return ['CITIZEN']; }
 }
 
 export function setRepeatQueue(city: CityState, queue: string[]): void {
@@ -77,9 +77,8 @@ export function createCity(
   city.xp = 0;
   city.population = CFG.CITY.POPULATION_INITIAL;
 
-  setRepeatQueue(city, []);
-  const cost = getProductionCost('INFANTRY');
-  setPriorityQueue(city, [{ type: 'INFANTRY', ticksCost: cost.ticksCost, resourceCost: cost.resourceCost, popCost: cost.popCost }]);
+  setRepeatQueue(city, ['CITIZEN']);
+  setPriorityQueue(city, []);
 
   initCityStockpile(city);
 

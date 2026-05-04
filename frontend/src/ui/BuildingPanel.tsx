@@ -1,38 +1,12 @@
 import { FunctionalComponent } from 'preact';
 import { CFG, type BuildingData } from '@vantaris/shared';
 import {
-  myPlayerId, selectedBuildingId, cities, buildings,
+  myPlayerId, selectedBuildingId,
 } from '../state/signals';
 import { BUILDING_DISPLAY, RESOURCE_LABELS, EXTRACTOR_OUTPUT, FACTORY_RECIPES } from './hud-shared';
-import { sendSetFactoryRecipe, sendSetDeliveryTarget } from '../network/ColyseusClient';
+import { sendSetFactoryRecipe, sendSetStockpileTarget } from '../network/ColyseusClient';
 
-interface DeliveryOption {
-  id: string;
-  label: string;
-  type: 'city' | 'factory';
-}
-
-function getDeliveryTargets(building: BuildingData): DeliveryOption[] {
-  const pid = myPlayerId.value;
-  const options: DeliveryOption[] = [];
-
-  for (const [, city] of cities.value) {
-    if (city.ownerId === pid) {
-      options.push({ id: city.cityId, label: `${city.name || 'City'}`, type: 'city' });
-    }
-  }
-
-  for (const [, b] of buildings.value) {
-    if (b.ownerId === pid && b.type === 'FACTORY' && b.productionTicksRemaining <= 0 && b.buildingId !== building.buildingId) {
-      const recipe = b.recipe ? FACTORY_RECIPES.find(r => r.id === b.recipe) : null;
-      const label = recipe ? `Factory (${recipe.name})` : 'Factory';
-      options.push({ id: b.buildingId, label, type: 'factory' });
-    }
-  }
-
-  return options;
-}
-
+// Strip delivery target imports, add stockpile target
 interface BuildingPanelProps {
   building: BuildingData;
 }
@@ -45,6 +19,10 @@ export const BuildingPanel: FunctionalComponent<BuildingPanelProps> = ({ buildin
   const currentRecipe = building.recipe
     ? FACTORY_RECIPES.find(r => r.id === building.recipe)
     : null;
+  const bldgConfig = CFG.BUILDINGS[building.type];
+  const wagePer100 = bldgConfig?.wagePer100Ticks ?? 0;
+  const defaultTarget = bldgConfig?.target ?? 0;
+  const currentTarget = building.stockpileTarget || defaultTarget;
 
   let productionHtml: any = null;
   if (extractorInfo) {
@@ -114,40 +92,30 @@ export const BuildingPanel: FunctionalComponent<BuildingPanelProps> = ({ buildin
     );
   }
 
-  const isExtractor = !!extractorInfo;
-  const isFactory = building.type === 'FACTORY';
-  const hasOutput = isExtractor || isFactory;
-  let deliveryHtml: any = null;
-  if (isMine && hasOutput) {
-    const targets = getDeliveryTargets(building);
-    const currentTarget = building.deliveryTargetId || '';
-    deliveryHtml = (
+  let stockpileHtml: any = null;
+  const totalStock = building.stockpile.reduce((sum, e) => sum + e.amount, 0);
+  if (building.stockpile && building.stockpile.length > 0) {
+    stockpileHtml = (
       <div class="panel-section">
-        <div class="panel-subtitle">Deliver To</div>
-        <select
-          class="panel-select"
-          value={currentTarget}
-          onChange={(e: any) => {
-            sendSetDeliveryTarget(building.buildingId, e.target.value);
-          }}
-        >
-          <option value="">Auto (Nearest)</option>
-          {targets.map(t => (
-            <option value={t.id}>{t.label}</option>
-          ))}
-        </select>
+        <div class="panel-subtitle">Stockpile ({Math.round(totalStock)}/{currentTarget})</div>
+        {building.stockpile.map(entry => (
+          <div class="panel-row"><span class="label">{RESOURCE_LABELS[entry.resource] || entry.resource}</span><span>{Math.round(entry.amount)}</span></div>
+        ))}
       </div>
     );
   }
 
-  let stockpileHtml: any = null;
-  if (building.stockpile && building.stockpile.length > 0) {
-    stockpileHtml = (
+  let targetHtml: any = null;
+  if (isMine && defaultTarget > 0) {
+    targetHtml = (
       <div class="panel-section">
-        <div class="panel-subtitle">Stockpile</div>
-        {building.stockpile.map(entry => (
-          <div class="panel-row"><span class="label">{RESOURCE_LABELS[entry.resource] || entry.resource}</span><span>{Math.round(entry.amount)}</span></div>
-        ))}
+        <div class="panel-row"><span class="label">Target</span><span class="economy-setting">
+          <input type="number" class="economy-input" value={currentTarget} min={0} step={10}
+            onInput={(e: any) => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 0) sendSetStockpileTarget(building.buildingId, v); }}
+          />
+          <span class="economy-unit">stock</span>
+        </span></div>
+        {wagePer100 > 0 && <div class="panel-row"><span class="label">Wage</span><span>⚡ {wagePer100}/100t</span></div>}
       </div>
     );
   }
@@ -179,7 +147,7 @@ export const BuildingPanel: FunctionalComponent<BuildingPanelProps> = ({ buildin
         {isBuilding && <div class="panel-row"><span class="label">Build time</span><span>{building.productionTicksRemaining} ticks</span></div>}
       </div>
       {productionHtml}
-      {deliveryHtml}
+      {targetHtml}
       {factoryInfoHtml}
       {stockpileHtml}
       <div class="panel-section panel-back-link">

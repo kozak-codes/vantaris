@@ -1,6 +1,6 @@
 import { Room, Client } from '@colyseus/core';
 import { GameState } from '../state/GameState';
-import { GamePhase, TerrainType, ResourceType, BuildingType, UnitType, UnitStatus, CFG, MATCHMAKING_CFG, getUnitBuildableTypes, getInfantryBuildableTypes, getBuildingTicks, getBuildingCosts, getFactoryRecipes, getExtractorOutput, AdjacencyMap, buildAdjacencyMap } from '@vantaris/shared';
+import { GamePhase, TerrainType, ResourceType, BuildingType, UnitType, UnitStatus, CFG, MATCHMAKING_CFG, getUnitBuildableTypes, getInfantryBuildableTypes, getCitizenBuildableTypes, getBuildingTicks, getBuildingCosts, getFactoryRecipes, getExtractorOutput, getUpgradeForType, AdjacencyMap, buildAdjacencyMap } from '@vantaris/shared';
 import type { ProductionItem } from '@vantaris/shared';
 
 const BUILDING_TICKS = getBuildingTicks(CFG);
@@ -8,22 +8,34 @@ const BUILDING_COSTS = getBuildingCosts(CFG);
 import { generateGlobe } from '../globe';
 import { computeVisibilityForPlayer, buildPlayerSlice } from '../mutations/fog';
 import { completeClaim } from '../mutations/units';
-import { createCity, tickCityProduction, addToRepeatQueue, removeFromRepeatQueue, addPriorityItem, clearPriorityQueue, canCityAffordProduction, consumeProductionCosts, investProductionTick } from '../mutations/cities';
+import { createCity, tickCityProduction, addToRepeatQueue, removeFromRepeatQueue, addPriorityItem, clearPriorityQueue, getRepeatQueue, setRepeatQueue, canCityAffordProduction, consumeProductionCosts, investProductionTick } from '../mutations/cities';
 import { CellState } from '../state/CellState';
 import { PlayerState } from '../state/PlayerState';
 import { UnitState } from '../state/UnitState';
 import { BuildingState } from '../state/BuildingState';
 import { TickSystem } from '../systems/TickSystem';
 import { findPath, buildUnitsByCellId } from '../systems/Pathfinding';
+import { processCitizenAI, createTaskQueue } from '../systems/CitizenAI';
 import { spawnUnit, assignPath, stepUnit, startClaiming } from '../mutations/units';
 import type { StepResult } from '../mutations/units';
 import { createBuilding, tickBuildingProduction, canPlaceBuilding, cancelBuilding, getAvailableBuildTypes, countBuildingsOnCell, canAffordBuildingCost, tickBuildingConstruction, getResourcesInvested } from '../mutations/buildings';
-import { tickExtractorOutput, tickFactoryProcessing, tickFactoryOutputToCities, tickCityResourceDrain, tickPopulation, tickCityXP, tickInflowResets } from '../mutations/resources';
+import { tickExtractorOutput, tickFactoryProcessing, tickCityResourceDrain, tickPopulation, tickCityXP, tickInflowResets, tickBuildingWages } from '../mutations/resources';
 import { claimCell, loseCell } from '../mutations/territory';
 
 interface CreateOptions {
   spawnPoints: { cellId: string }[];
   dayNightCycleTicks?: number;
+  worldSeed?: number;
+}
+
+function hashStringToSeed(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + ch;
+    hash |= 0;
+  }
+  return Math.abs(hash) || 1;
 }
 
 export class VantarisRoom extends Room<GameState> {
@@ -31,12 +43,14 @@ export class VantarisRoom extends Room<GameState> {
   private adjacencyMap: AdjacencyMap = {};
   private cellPositions: Record<string, [number, number, number]> = {};
   private tickSystem = new TickSystem();
+  private taskQueue = createTaskQueue();
 
   async onCreate(options: CreateOptions): Promise<void> {
     const playerCount = options.spawnPoints?.length || 1;
     const subdivideLevel = playerCount > 4 ? 4 : 3;
     this.maxClients = MATCHMAKING_CFG.MAX_PLAYERS;
-    const globe = generateGlobe(subdivideLevel);
+    const worldSeed = options.worldSeed ?? hashStringToSeed(this.roomId);
+    const globe = generateGlobe(subdivideLevel, worldSeed);
 
     this.setState(new GameState());
 
@@ -107,6 +121,10 @@ export class VantarisRoom extends Room<GameState> {
       this.handleCityQueueClearPriority(client, data);
     });
 
+    this.onMessage('cityToggleCitizenProduction', (client, data: { cityId: string }) => {
+      this.handleCityToggleCitizenProduction(client, data);
+    });
+
     this.onMessage('claimTerritory', (client, data: { unitId: string }) => {
       this.handleClaimTerritory(client, data);
     });
@@ -119,12 +137,16 @@ export class VantarisRoom extends Room<GameState> {
       this.handleSetFactoryRecipe(client, data);
     });
 
+    this.onMessage('upgradeUnit', (client, data: { unitId: string; targetUnitType: string }) => {
+      this.handleUpgradeUnit(client, data);
+    });
+
     this.onMessage('renameCity', (client, data: { cityId: string; name: string }) => {
       this.handleRenameCity(client, data);
     });
 
-    this.onMessage('setDeliveryTarget', (client, data: { buildingId: string; targetId: string }) => {
-      this.handleSetDeliveryTarget(client, data);
+    this.onMessage('setStockpileTarget', (client, data: { buildingId: string; target: number }) => {
+      this.handleSetStockpileTarget(client, data);
     });
 
     this.onMessage('revealRuin', (client, data: { cellId: string }) => {
@@ -162,6 +184,13 @@ export class VantarisRoom extends Room<GameState> {
         player.cameraZoom = data.zoom;
       }
     });
+
+    this.onMessage('setClaimCompensation', (client, data: { value: number }) => {
+      const player = this.state.players.get(client.sessionId);
+      if (player) {
+        player.claimCompensation = Math.max(0, data.value);
+      }
+    });
   }
 
   onJoin(client: Client, options: { spawnPoint?: string; displayName?: string }): void {
@@ -183,11 +212,12 @@ export class VantarisRoom extends Room<GameState> {
     const city = createCity(this.state, playerId, spawnCellId);
     city.population = CFG.CITY.POPULATION_INITIAL;
 
-    spawnUnit(this.state, playerId, spawnCellId, 'INFANTRY');
+    player.energyCredits = CFG.CITY.INITIAL_STOCKPILE[ResourceType.POWER] || 1000;
+    player.claimCompensation = 10;
 
     completeClaim(this.state, spawnCellId, playerId);
 
-      computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.INFANTRY.visionRange);
+      computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.CITIZEN.visionRange);
 
     const slice = buildPlayerSlice(this.state, playerId);
     client.send('stateUpdate', slice);
@@ -217,9 +247,10 @@ export class VantarisRoom extends Room<GameState> {
     this.processCityProduction();
     this.processUnitMovement();
     this.processClaimTimers();
+    this.processCitizenAI();
     this.processExtractorOutput();
     this.processFactoryProcessing();
-    this.processFactoryOutput();
+    this.processBuildingWages();
     this.processCityResourceDrain();
     this.processPopulation();
     this.processCityXP();
@@ -283,9 +314,6 @@ export class VantarisRoom extends Room<GameState> {
         const result = stepUnit(this.state, unit.unitId, this.adjacencyMap);
         if (result && result.arrived) {
           const cell = this.state.cells.get(result.cellId);
-          if (cell && !cell.ownerId && this.isAdjacentToTerritory(result.cellId, unit.ownerId) && unit.type === 'INFANTRY') {
-            startClaiming(this.state, unit.unitId);
-          }
           if (cell && cell.ruin && !cell.ruinRevealed) {
             cell.ruinRevealed = true;
           }
@@ -320,21 +348,30 @@ export class VantarisRoom extends Room<GameState> {
 
       const owner = this.state.players.get(claim.ownerId);
       if (owner) {
-        computeVisibilityForPlayer(this.state, claim.ownerId, this.adjacencyMap, CFG.UNITS.INFANTRY.visionRange);
+        const compensation = owner.claimCompensation;
+        if (compensation > 0 && owner.energyCredits >= compensation && unit) {
+          owner.energyCredits -= compensation;
+          unit.energyCredits += compensation;
+        }
+        computeVisibilityForPlayer(this.state, claim.ownerId, this.adjacencyMap, CFG.UNITS[unit?.type ?? 'CITIZEN']?.visionRange ?? 1);
       }
     }
   }
 
+  private processCitizenAI(): void {
+    processCitizenAI(this.state, this.adjacencyMap, this.cellPositions, this.state.tick, this.taskQueue);
+  }
+
   private processExtractorOutput(): void {
-    tickExtractorOutput(this.state, this.adjacencyMap);
+    tickExtractorOutput(this.state);
   }
 
   private processFactoryProcessing(): void {
     tickFactoryProcessing(this.state);
   }
 
-  private processFactoryOutput(): void {
-    tickFactoryOutputToCities(this.state, this.adjacencyMap);
+  private processBuildingWages(): void {
+    tickBuildingWages(this.state, this.state.tick);
   }
 
   private processCityResourceDrain(): void {
@@ -398,30 +435,11 @@ computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.IN
     city.name = trimmed;
   }
 
-  private handleSetDeliveryTarget(client: Client, data: { buildingId: string; targetId: string }): void {
+  private handleSetStockpileTarget(client: Client, data: { buildingId: string; target: number }): void {
     const playerId = client.sessionId;
     const building = this.state.buildings.get(data.buildingId);
     if (!building || building.ownerId !== playerId) return;
-
-    const output = getExtractorOutput(CFG)[building.type];
-    if (!output && building.type !== 'FACTORY') return;
-
-    if (data.targetId === '') {
-      building.deliveryTargetId = '';
-      return;
-    }
-
-    const targetCity = this.state.cities.get(data.targetId);
-    if (targetCity && targetCity.ownerId === playerId) {
-      building.deliveryTargetId = data.targetId;
-      return;
-    }
-
-    const targetBuilding = this.state.buildings.get(data.targetId);
-    if (targetBuilding && targetBuilding.ownerId === playerId && targetBuilding.type === 'FACTORY' && targetBuilding.productionTicksRemaining <= 0) {
-      building.deliveryTargetId = data.targetId;
-      return;
-    }
+    building.stockpileTarget = Math.max(0, data.target);
   }
 
   private handleMoveUnit(client: Client, data: { unitId: string; targetCellId: string }): void {
@@ -504,10 +522,25 @@ computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.IN
     clearPriorityQueue(city);
   }
 
+  private handleCityToggleCitizenProduction(client: Client, data: { cityId: string }): void {
+    const playerId = client.sessionId;
+    const city = this.state.cities.get(data.cityId);
+    if (!city || city.ownerId !== playerId) return;
+    const repeatQ = getRepeatQueue(city);
+    const hasCitizen = repeatQ.includes('CITIZEN');
+    if (hasCitizen) {
+      const filtered = repeatQ.filter((t: string) => t !== 'CITIZEN');
+      setRepeatQueue(city, filtered);
+    } else {
+      repeatQ.push('CITIZEN');
+      setRepeatQueue(city, repeatQ);
+    }
+  }
+
   private handleClaimTerritory(client: Client, data: { unitId: string }): void {
     const playerId = client.sessionId;
     const unit = this.state.units.get(data.unitId);
-    if (!unit || unit.ownerId !== playerId || unit.type !== 'INFANTRY' || unit.status !== 'IDLE') return;
+    if (!unit || unit.ownerId !== playerId || !CFG.UNITS[unit.type]?.canClaim || unit.status !== 'IDLE') return;
 
     const cell = this.state.cells.get(unit.cellId);
     if (!cell) return;
@@ -535,7 +568,8 @@ computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.IN
       return;
     }
 
-    const allowedBuilders = getUnitBuildableTypes(CFG, unit.type, unit.type === 'ENGINEER' ? unit.engineerLevel : 1);
+    const unitLevel = unit.type === 'ENGINEER' ? unit.engineerLevel : 1;
+    const allowedBuilders = getUnitBuildableTypes(CFG, unit.type, unitLevel);
     if (!allowedBuilders.includes(data.buildingType)) return;
 
     const cell = this.state.cells.get(data.cellId);
@@ -572,6 +606,73 @@ computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.IN
 
     unit.status = 'BUILDING';
     unit.buildTicksRemaining = buildTicks;
+  }
+
+  private handleUpgradeUnit(client: Client, data: { unitId: string; targetUnitType: string }): void {
+    const playerId = client.sessionId;
+    const unit = this.state.units.get(data.unitId);
+    if (!unit || unit.ownerId !== playerId || unit.status !== 'IDLE') return;
+
+    const targetConfig = CFG.UNITS[data.targetUnitType];
+    if (!targetConfig || !targetConfig.upgradeFrom) return;
+
+    if (unit.type !== targetConfig.upgradeFrom) {
+      client.send('error', { type: 'error', code: 'INVALID_UPGRADE' });
+      return;
+    }
+
+    let onCityTile = false;
+    for (const [, city] of this.state.cities) {
+      if (city.cellId === unit.cellId && city.ownerId === playerId) {
+        onCityTile = true;
+        break;
+      }
+    }
+    if (!onCityTile) {
+      client.send('error', { type: 'error', code: 'MUST_BE_ON_CITY' });
+      return;
+    }
+
+    const upgradeCost = targetConfig.upgradeCost;
+    if (!upgradeCost) return;
+
+    let nearestCity: any = null;
+    for (const [, city] of this.state.cities) {
+      if (city.cellId === unit.cellId && city.ownerId === playerId) {
+        nearestCity = city;
+        break;
+      }
+    }
+    if (!nearestCity) return;
+
+    const stockpile = nearestCity.stockpile as Map<string, number>;
+    for (const [resource, amount] of Object.entries(upgradeCost)) {
+      const available = stockpile.get(resource) ?? 0;
+      if (available < amount) {
+        client.send('error', { type: 'error', code: 'INSUFFICIENT_RESOURCES' });
+        return;
+      }
+    }
+
+    for (const [resource, amount] of Object.entries(upgradeCost)) {
+      const current = stockpile.get(resource) ?? 0;
+      const remaining = current - amount;
+      if (remaining <= 0) {
+        stockpile.delete(resource);
+      } else {
+        stockpile.set(resource, remaining);
+      }
+    }
+
+    unit.type = data.targetUnitType;
+    if (data.targetUnitType === 'INFANTRY') {
+      unit.type = 'INFANTRY';
+    } else if (data.targetUnitType === 'ENGINEER') {
+      unit.type = 'ENGINEER';
+      unit.engineerLevel = 1;
+    } else if (data.targetUnitType === 'TRADER') {
+      unit.type = 'TRADER';
+    }
   }
 
   private isAdjacentToTerritory(cellId: string, playerId: string): boolean {

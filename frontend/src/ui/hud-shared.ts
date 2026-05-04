@@ -1,8 +1,10 @@
-import { CFG, getBuildingCosts, getBuildingPlacementRules, getUnitProductionCosts } from '@vantaris/shared';
+import { CFG, getBuildingCosts, getBuildingPlacementRules, getUnitProductionCosts, getUpgradeForType, getBuildingTicks } from '@vantaris/shared';
 
 export const BUILDING_COSTS = getBuildingCosts(CFG);
+export const BUILDING_TICKS = getBuildingTicks(CFG);
 export const BUILDING_PLACEMENT_RULES = getBuildingPlacementRules(CFG);
 export const UNIT_PRODUCTION_COSTS = getUnitProductionCosts(CFG);
+export const UPGRADE_OPTIONS = getUpgradeForType(CFG, 'CITIZEN');
 
 export const TIER_NAMES: Record<number, string> = {
   1: 'Settlement', 2: 'Village', 3: 'Town',
@@ -15,7 +17,7 @@ export const BIOME_TRAVEL_NAMES: Record<string, string> = {
 };
 
 export const STATUS_DISPLAY: Record<string, string> = {
-  IDLE: 'Idle', MOVING: 'Moving', BUILDING: 'Building', CLAIMING: 'Claiming',
+  IDLE: 'Idle', MOVING: 'Moving', BUILDING: 'Building', CLAIMING: 'Claiming', UPGRADING: 'Upgrading',
 };
 
 export const BUILDING_DISPLAY: Record<string, string> = Object.fromEntries(
@@ -37,7 +39,7 @@ export const RUIN_LABELS: Record<string, string> = {
 
 export const RUIN_TYPE_TO_BUILDING: Record<string, string> = CFG.RUIN_TYPE_TO_BUILDING;
 
-export const typeLabel = (t: string) => t === 'ENGINEER' ? 'Engineer' : t === 'INFANTRY' ? 'Infantry' : t;
+export const typeLabel = (t: string) => t === 'ENGINEER' ? 'Engineer' : t === 'INFANTRY' ? 'Infantry' : t === 'CITIZEN' ? 'Citizen' : t === 'TRADER' ? 'Trader' : t;
 
 export const EXTRACTOR_OUTPUT: Record<string, { resource: string; amount: number } | null> = {};
 for (const [k, v] of Object.entries(CFG.BUILDINGS)) {

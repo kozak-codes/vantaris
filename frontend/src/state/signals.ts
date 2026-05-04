@@ -1,6 +1,7 @@
 import { signal, computed } from '@preact/signals';
 import type { VisibleCellData, RevealedCellData, UnitData, CityData, BuildingData, PlayerSummary, PlayerResourceData, ChatMessage } from '@vantaris/shared';
 import { clientState, notifySelectionChanged } from './ClientState';
+import type { CommandAction } from './ClientState';
 
 export const myPlayerId = signal<string>('');
 export const myColor = signal<string>('#4488ff');
@@ -24,7 +25,7 @@ export const units = signal<Map<string, UnitData>>(new Map());
 export const cities = signal<Map<string, CityData>>(new Map());
 export const buildings = signal<Map<string, BuildingData>>(new Map());
 export const players = signal<Map<string, PlayerSummary>>(new Map());
-export const resources = signal<PlayerResourceData>({ food: 0, energy: 0, foodPerTick: 0, energyPerTick: 0, totalPopulation: 0, factoryCount: 0 });
+export const resources = signal<PlayerResourceData>({ food: 0, energy: 0, foodPerTick: 0, energyPerTick: 0, totalPopulation: 0, factoryCount: 0, energyCredits: 0, claimCompensation: 0 });
 
 export const eliminationEvent = signal<{ color: string; displayName: string; eliminatedTick: number } | null>(null);
 export const gameWonEvent = signal<{ color: string; displayName: string } | null>(null);
@@ -130,6 +131,24 @@ export function selectTile(tileId: string | null) {
   clientState.selectedCityId = null;
   clientState.pendingCommand = null;
   selectedBuildingId.value = null;
+  notifySelectionChanged();
+}
+
+export function deselectEntity() {
+  clientState.selectedUnitId = null;
+  clientState.selectedCityId = null;
+  clientState.pendingCommand = null;
+  selectedBuildingId.value = null;
+  notifySelectionChanged();
+}
+
+export function clearPendingCommand() {
+  clientState.pendingCommand = null;
+  notifySelectionChanged();
+}
+
+export function setPendingCommand(cmd: CommandAction | null) {
+  clientState.pendingCommand = cmd;
   notifySelectionChanged();
 }
 

@@ -1,12 +1,11 @@
 import { GameState } from '../state/GameState';
 import { CityState } from '../state/CityState';
 import { BuildingState } from '../state/BuildingState';
-import { ResourceType, CFG, getExtractorOutput, getRawResources, getFactoryRecipes } from '@vantaris/shared';
+import { ResourceType, CFG, getExtractorOutput, getFactoryRecipes } from '@vantaris/shared';
 import { getBuildingStockpile, setBuildingStockpile, getBuildingStockpileAmount, addToBuildingStockpile } from './buildings';
 import type { AdjacencyMap, ResourceInflowEntry } from '@vantaris/shared';
 
 const EXTRACTOR_OUTPUT = getExtractorOutput(CFG);
-const RAW_RESOURCES = getRawResources(CFG);
 
 const ROUND_PRECISION = 0.001;
 
@@ -18,26 +17,37 @@ function roundDisplay(v: number): number {
   return Math.round(v * 10) / 10;
 }
 
-function hexDist(fromCellId: string, toCellId: string, state: GameState, adjacencyMap: AdjacencyMap, ownerId: string): number {
-  if (fromCellId === toCellId) return 0;
-  const visited = new Set<string>([fromCellId]);
-  let frontier = [fromCellId];
-  for (let dist = 1; dist <= CFG.SUPPLY_CHAIN.MAX_HOPS + 2; dist++) {
-    const nextFrontier: string[] = [];
-    for (const cid of frontier) {
-      const neighbors = adjacencyMap[cid] ?? [];
-      for (const nId of neighbors) {
-        if (visited.has(nId)) continue;
-        if (nId === toCellId) return dist;
-        const nCell = state.cells.get(nId);
-        if (!nCell || nCell.ownerId !== ownerId) continue;
-        visited.add(nId);
-        nextFrontier.push(nId);
+export function tickBuildingWages(state: GameState, tick: number): void {
+  if (tick % 100 !== 0) return;
+
+  for (const [, building] of state.buildings) {
+    if (building.productionTicksRemaining > 0) continue;
+
+    const bldgConfig = CFG.BUILDINGS[building.type];
+    if (!bldgConfig || bldgConfig.wagePer100Ticks <= 0) continue;
+
+    const sp = getBuildingStockpile(building);
+    const totalStock = Object.values(sp).reduce((sum, v) => sum + v, 0);
+    const target = building.stockpileTarget || bldgConfig.target;
+    if (target <= 0 || totalStock < target) continue;
+
+    const owner = state.players.get(building.ownerId);
+    if (!owner || owner.energyCredits < bldgConfig.wagePer100Ticks) continue;
+
+    let citizenOnTile: string | null = null;
+    for (const [, unit] of state.units) {
+      if (unit.cellId === building.cellId && unit.ownerId === building.ownerId) {
+        citizenOnTile = unit.unitId;
+        break;
       }
     }
-    frontier = nextFrontier;
+
+    if (citizenOnTile) {
+      const unit = state.units.get(citizenOnTile)!;
+      owner.energyCredits -= bldgConfig.wagePer100Ticks;
+      unit.energyCredits += bldgConfig.wagePer100Ticks;
+    }
   }
-  return -1;
 }
 
 export function getCityStockpile(city: CityState): Record<string, number> {
@@ -113,95 +123,14 @@ export function resetCityInflows(city: CityState): void {
   setCityInflows(city, []);
 }
 
-function findNearestStorage(
-  cellId: string,
-  ownerId: string,
-  state: GameState,
-  adjacencyMap: AdjacencyMap,
-  preferredTargetId?: string,
-): { type: 'city' | 'factory'; id: string; distance: number } | null {
-  // If the building has a delivery target set, check it first
-  if (preferredTargetId) {
-    const targetCity = state.cities.get(preferredTargetId);
-    if (targetCity && targetCity.ownerId === ownerId) {
-      const dist = hexDist(cellId, targetCity.cellId, state, adjacencyMap, ownerId);
-      if (dist >= 0 && dist <= CFG.SUPPLY_CHAIN.MAX_HOPS) {
-        return { type: 'city', id: targetCity.cityId, distance: dist };
-      }
-    }
-    const targetBuilding = state.buildings.get(preferredTargetId);
-    if (targetBuilding && targetBuilding.ownerId === ownerId && targetBuilding.type === 'FACTORY' && targetBuilding.productionTicksRemaining <= 0) {
-      const dist = hexDist(cellId, targetBuilding.cellId, state, adjacencyMap, ownerId);
-      if (dist >= 0 && dist <= CFG.SUPPLY_CHAIN.MAX_HOPS) {
-        return { type: 'factory', id: targetBuilding.buildingId, distance: dist };
-      }
-    }
-  }
-
-  const visited = new Set<string>([cellId]);
-  let frontier = [cellId];
-
-  for (let dist = 0; dist <= CFG.SUPPLY_CHAIN.MAX_HOPS; dist++) {
-    const nextFrontier: string[] = [];
-
-    for (const cid of frontier) {
-      if (cid !== cellId) {
-        const cell = state.cells.get(cid);
-        if (!cell || cell.ownerId !== ownerId) continue;
-
-        if (cell.hasCity) {
-          const city = state.cities.get(cell.cityId);
-          if (city && city.ownerId === ownerId) {
-            return { type: 'city', id: city.cityId, distance: dist };
-          }
-        }
-
-        for (const [, building] of state.buildings) {
-          if (building.cellId === cid && building.ownerId === ownerId && building.type === 'FACTORY' && building.productionTicksRemaining <= 0) {
-            return { type: 'factory', id: building.buildingId, distance: dist };
-          }
-        }
-      }
-
-      const neighbors = adjacencyMap[cid] ?? [];
-      for (const nId of neighbors) {
-        if (visited.has(nId)) continue;
-        const nCell = state.cells.get(nId);
-        if (!nCell || nCell.ownerId !== ownerId) continue;
-        visited.add(nId);
-        nextFrontier.push(nId);
-      }
-    }
-
-    frontier = nextFrontier;
-  }
-
-  return null;
-}
-
-export function tickExtractorOutput(state: GameState, adjacencyMap: AdjacencyMap): void {
+export function tickExtractorOutput(state: GameState): void {
   for (const [, building] of state.buildings) {
     if (building.productionTicksRemaining > 0) continue;
 
     const output = EXTRACTOR_OUTPUT[building.type];
     if (!output) continue;
 
-    const cell = state.cells.get(building.cellId);
-    if (!cell) continue;
-
-    const target = findNearestStorage(building.cellId, building.ownerId, state, adjacencyMap, building.deliveryTargetId || undefined);
-    if (!target) continue;
-
-    const penalty = 1.0 - (target.distance * CFG.SUPPLY_CHAIN.DISTANCE_PENALTY);
-    const delivered = Math.max(0.01, output.amount * Math.max(0.1, penalty));
-
-    if (target.type === 'city') {
-      const city = state.cities.get(target.id);
-      if (city) addToCityStockpile(city, output.resource, delivered, building.type);
-    } else {
-      const factory = state.buildings.get(target.id);
-      if (factory) addToBuildingStockpile(factory, output.resource, delivered);
-    }
+    addToBuildingStockpile(building, output.resource, output.amount);
   }
 }
 
@@ -253,48 +182,9 @@ export function tickFactoryProcessing(state: GameState): void {
   }
 }
 
-export function tickFactoryOutputToCities(state: GameState, adjacencyMap: AdjacencyMap): void {
-  for (const [, building] of state.buildings) {
-    if (building.type !== 'FACTORY') continue;
-    if (building.productionTicksRemaining > 0) continue;
-
-    const sp = getBuildingStockpile(building);
-    const processedKeys = Object.keys(sp).filter(k =>
-      (Object.values(ResourceType) as string[]).includes(k) &&
-      !RAW_RESOURCES.includes(k as ResourceType)
-    );
-
-    for (const res of processedKeys) {
-      const amount = sp[res];
-      if (amount <= 0) continue;
-
-    const target = findNearestStorage(building.cellId, building.ownerId, state, adjacencyMap, building.deliveryTargetId || undefined);
-      if (!target || target.type !== 'city') continue;
-
-      const city = state.cities.get(target.id);
-      if (!city) continue;
-
-      const penalty = Math.max(0.1, 1.0 - (target.distance * CFG.SUPPLY_CHAIN.DISTANCE_PENALTY));
-      const delivered = amount * penalty;
-
-      const newSp = getBuildingStockpile(building);
-      newSp[res] = 0;
-      setBuildingStockpile(building, newSp);
-
-      addToCityStockpile(city, res, delivered, 'FACTORY');
-    }
-  }
-}
-
 export function tickCityResourceDrain(state: GameState): void {
   for (const [, city] of state.cities) {
     const sp = getCityStockpile(city);
-    sp[ResourceType.GRAIN] = (sp[ResourceType.GRAIN] || 0) + CFG.CITY.BASE_GRAIN_RATE;
-    addCityInflow(city, ResourceType.GRAIN, CFG.CITY.BASE_GRAIN_RATE, 'BASE');
-
-    sp[ResourceType.POWER] = (sp[ResourceType.POWER] || 0) + CFG.CITY.BASE_POWER_RATE;
-    addCityInflow(city, ResourceType.POWER, CFG.CITY.BASE_POWER_RATE, 'BASE');
-
     const pop = city.population;
     if (pop <= 0) {
       setCityStockpile(city, sp);

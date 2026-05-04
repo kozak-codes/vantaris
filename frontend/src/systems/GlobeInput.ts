@@ -1,29 +1,18 @@
 import * as THREE from 'three';
 import { clientState, notifySelectionChanged } from '../state/ClientState';
-import { sendMoveUnit, sendClaimTerritory, sendBuildStructure } from '../network/ColyseusClient';
 import { selectedBuildingId } from '../state/signals';
-import {
-  TerrainType,
-  CFG,
-  getPassableTerrain,
-  getBuildingCosts,
-  getBuildingPlacementRules,
-  getEngineerBuildableTypes,
-  getInfantryBuildableTypes,
-} from '@vantaris/shared';
+import type { CameraControls } from './CameraControls';
 
-const PASSABLE_TERRAIN = getPassableTerrain(CFG);
-const BUILDING_COSTS = getBuildingCosts(CFG);
-const BUILDING_PLACEMENT_RULES = getBuildingPlacementRules(CFG);
-
-const CLICK_THRESHOLD_PX = 5;
+const CLICK_THRESHOLD_PX = 8;
 
 export class GlobeInput {
   private canvas: HTMLCanvasElement;
   private camera: THREE.PerspectiveCamera;
   private raycaster: THREE.Raycaster;
   private pointerDownPos: { x: number; y: number } | null = null;
+  private pointerDownTime = 0;
   private globe: THREE.Group;
+  private cameraControls: CameraControls | null = null;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -43,19 +32,38 @@ export class GlobeInput {
     window.addEventListener('keydown', this.onKeyDown.bind(this));
   }
 
+  setCameraControls(cc: CameraControls): void {
+    this.cameraControls = cc;
+  }
+
   private onPointerDown(e: PointerEvent): void {
     if (e.button !== 0) return;
     this.pointerDownPos = { x: e.clientX, y: e.clientY };
+    this.pointerDownTime = Date.now();
   }
 
   private onPointerUp(e: PointerEvent): void {
     if (e.button !== 0 || !this.pointerDownPos) return;
+
+    if (this.cameraControls) {
+      if (this.cameraControls.isTouchGestureActive()) {
+        this.pointerDownPos = null;
+        return;
+      }
+      if (this.cameraControls.wasTouchMoved()) {
+        this.pointerDownPos = null;
+        return;
+      }
+    }
 
     const dx = e.clientX - this.pointerDownPos.x;
     const dy = e.clientY - this.pointerDownPos.y;
     this.pointerDownPos = null;
 
     if (Math.sqrt(dx * dx + dy * dy) > CLICK_THRESHOLD_PX) return;
+
+    const elapsed = Date.now() - this.pointerDownTime;
+    if (elapsed < 0 || elapsed > 500) return;
 
     this.handleClick(e.clientX, e.clientY);
   }
@@ -156,21 +164,6 @@ export class GlobeInput {
 
     const prevUnitId = clientState.selectedUnitId;
     const prevCityId = clientState.selectedCityId;
-    const pendingCommand = clientState.pendingCommand;
-
-    if (pendingCommand === 'move' && prevUnitId) {
-      const unit = clientState.units.get(prevUnitId);
-      if (unit && unit.status === 'IDLE' && unit.ownerId === clientState.myPlayerId && visibility) {
-        if (PASSABLE_TERRAIN.includes(visibility.biome as TerrainType)) {
-          sendMoveUnit(prevUnitId, cellId);
-          clientState.pendingCommand = null;
-          clientState.selectedTileId = cellId;
-          clientState.selectedCityId = null;
-          notifySelectionChanged();
-          return;
-        }
-      }
-    }
 
     if (cellId === clientState.selectedTileId && !prevUnitId && !prevCityId) {
       this.deselectAll();
@@ -186,7 +179,6 @@ export class GlobeInput {
       return;
     }
 
-    // Clicking a different tile while entity is selected: update tile context, keep entity only if still on that tile
     if (prevUnitId) {
       const unit = clientState.units.get(prevUnitId);
       if (unit && unit.cellId === cellId) {
@@ -220,11 +212,9 @@ export class GlobeInput {
     }
 
     if (unitsOnTile.length === 1 && citiesOnTile.length === 0) {
-      const unit = clientState.units.get(unitsOnTile[0]);
-      if (unit && unit.ownerId === clientState.myPlayerId && unit.status === 'IDLE') {
-        clientState.selectedUnitId = unitsOnTile[0];
-        clientState.pendingCommand = 'move';
-      }
+      clientState.selectedUnitId = unitsOnTile[0];
+    } else if (citiesOnTile.length === 1 && unitsOnTile.length === 0) {
+      clientState.selectedCityId = citiesOnTile[0];
     }
 
     notifySelectionChanged();
@@ -247,135 +237,16 @@ export class GlobeInput {
 
   private onKeyDown(e: KeyboardEvent): void {
     if (e.key === 'Escape') {
-      if (clientState.pendingCommand) {
-        clientState.pendingCommand = null;
-      } else if (clientState.selectedUnitId) {
+      if (clientState.selectedUnitId) {
         clientState.selectedUnitId = null;
       } else if (clientState.selectedCityId) {
         clientState.selectedCityId = null;
       } else {
         clientState.selectedTileId = null;
       }
-      notifySelectionChanged();
-      return;
-    }
-
-    if (e.key === '1' || e.key === 'm' || e.key === 'M') {
-      if (clientState.selectedUnitId) {
-        this.handleMoveKey();
-      } else {
-        this.selectEntityOnTile(0);
-      }
-    }
-
-    if (e.key === '2' || e.key === 'c' || e.key === 'C') {
-      if (clientState.selectedUnitId) {
-        this.handleClaimKey();
-      } else {
-        this.selectEntityOnTile(1);
-      }
-    }
-
-    if (e.key === '3' || e.key === 'b' || e.key === 'B') {
-      if (clientState.selectedUnitId) {
-        this.handleBuildKey();
-      } else {
-        this.selectEntityOnTile(2);
-      }
-    }
-
-    if (e.key === '4') {
-      this.selectEntityOnTile(3);
-    }
-  }
-
-  private selectEntityOnTile(index: number): void {
-    const tileId = clientState.selectedTileId;
-    if (!tileId) return;
-
-    if (index === 0) {
-      for (const [unitId, unit] of clientState.units) {
-        if (unit.cellId === tileId && unit.status === 'IDLE') {
-          clientState.selectedUnitId = unitId;
-          clientState.selectedCityId = null;
-          clientState.pendingCommand = unit.ownerId === clientState.myPlayerId ? 'move' : null;
-          notifySelectionChanged();
-          return;
-        }
-      }
-    } else if (index === 1) {
-      for (const [cityId, city] of clientState.cities) {
-        if (city.cellId === tileId) {
-          clientState.selectedCityId = cityId;
-          clientState.selectedUnitId = null;
-          clientState.pendingCommand = null;
-          notifySelectionChanged();
-          return;
-        }
-      }
-    } else {
-      const unitsOnTile: string[] = [];
-      for (const [unitId, unit] of clientState.units) {
-        if (unit.cellId === tileId && unit.status === 'IDLE') unitsOnTile.push(unitId);
-      }
-      if (unitsOnTile.length > index - 1) {
-        clientState.selectedUnitId = unitsOnTile[index - 1];
-        clientState.selectedCityId = null;
-        clientState.pendingCommand = 'move';
-        notifySelectionChanged();
-      }
-    }
-  }
-
-  private handleMoveKey(): void {
-    const unitId = clientState.selectedUnitId;
-    if (!unitId) return;
-    const unit = clientState.units.get(unitId);
-    if (!unit || unit.status !== 'IDLE' || unit.ownerId !== clientState.myPlayerId) return;
-
-    clientState.pendingCommand = 'move';
-    notifySelectionChanged();
-  }
-
-  private handleClaimKey(): void {
-    const unitId = clientState.selectedUnitId;
-    if (!unitId) return;
-    const unit = clientState.units.get(unitId);
-    if (!unit || unit.status !== 'IDLE' || unit.ownerId !== clientState.myPlayerId || unit.type !== 'INFANTRY') return;
-
-    sendClaimTerritory(unitId);
-    clientState.pendingCommand = null;
-    notifySelectionChanged();
-  }
-
-  private handleBuildKey(): void {
-    const unitId = clientState.selectedUnitId;
-    if (!unitId) return;
-    const unit = clientState.units.get(unitId);
-    if (!unit || unit.status !== 'IDLE' || unit.ownerId !== clientState.myPlayerId) return;
-
-    const canBuildTypes = unit.type === 'ENGINEER'
-      ? getEngineerBuildableTypes(CFG, unit.engineerLevel)
-      : getInfantryBuildableTypes(CFG);
-    if (canBuildTypes.length === 0) return;
-
-    const cellId = unit.cellId;
-    const cellData = clientState.visibleCells.get(cellId);
-    if (!cellData || cellData.ownerId !== clientState.myPlayerId) return;
-
-    const freeExtractor = canBuildTypes.find((bt: string) => {
-      const cost = BUILDING_COSTS[bt];
-      if (!cost || cost.food > 0 || cost.material > 0) return false;
-      const allowedBiomes = BUILDING_PLACEMENT_RULES[bt];
-      if (allowedBiomes && !allowedBiomes.includes(cellData.biome)) return false;
-      if (bt === 'CITY') return false;
-      return cellData.buildings.length < cellData.buildingCapacity;
-    });
-
-    if (freeExtractor) {
-      sendBuildStructure(unitId, freeExtractor, cellId);
       clientState.pendingCommand = null;
       notifySelectionChanged();
+      return;
     }
   }
 }

@@ -1,16 +1,13 @@
 import { FunctionalComponent } from 'preact';
-import { getUnitProductionCosts, CFG } from '@vantaris/shared';
 import type { CityData } from '@vantaris/shared';
 import {
-  myPlayerId, selectedUnitId, selectedCityId, pendingCommand,
+  myPlayerId,
   players, unitsOnSelectedTile, buildingsOnSelectedTile,
-  selectTile, selectedBuildingId,
+  selectTile, selectedBuildingId, deselectEntity,
 } from '../state/signals';
-import { sendCityQueueAddPriority, sendCityQueueAddRepeat, sendCityQueueRemoveRepeat, sendCityQueueClearPriority, sendRenameCity } from '../network/ColyseusClient';
-import { BIOME_TRAVEL_NAMES, BUILDING_DISPLAY, TIER_NAMES, RESOURCE_LABELS, typeLabel } from './hud-shared';
+import { sendCityToggleCitizenProduction, sendRenameCity } from '../network/ColyseusClient';
+import { BIOME_TRAVEL_NAMES, BUILDING_DISPLAY, TIER_NAMES, typeLabel } from './hud-shared';
 import { StockpileSection } from './StockpileSection';
-
-const UNIT_PRODUCTION_COSTS = getUnitProductionCosts(CFG);
 
 interface CityPanelProps {
   city: CityData;
@@ -30,6 +27,8 @@ export const CityPanel: FunctionalComponent<CityPanelProps> = ({ city, tileId, b
   const maxUnits = city.tier + 1;
   const unitsHere = unitsOnSelectedTile.value.length;
   const xpPct = city.xpToNext > 0 ? Math.min(100, Math.round((city.xp / city.xpToNext) * 100)) : 100;
+  const citizenRepeatQueue = city.repeatQueue.filter((t: string) => t === 'CITIZEN');
+  const isProducing = citizenRepeatQueue.length > 0;
 
   let productionHtml = <></>;
   if (city.currentProduction) {
@@ -37,47 +36,24 @@ export const CityPanel: FunctionalComponent<CityPanelProps> = ({ city, tileId, b
     productionHtml = (
       <div class="panel-section">
         <div class="panel-subtitle">Production</div>
-        <div class="panel-row"><span class="label">Building</span><span>{typeLabel(city.currentProduction.type)}</span></div>
+        <div class="panel-row"><span class="label">Producing</span><span>{typeLabel(city.currentProduction.type)}</span></div>
         <div class="progress-bar"><div class="progress-fill" style={{ width: `${pct}%` }} /></div>
         <div class="panel-row"><span class="label">Ready in</span><span>{city.productionTicksRemaining} ticks</span></div>
       </div>
     );
   }
 
-  let queueItems: any[] = [];
-  for (let i = 0; i < city.priorityQueue.length; i++) {
-    const item = city.priorityQueue[i];
-    const prodCost = UNIT_PRODUCTION_COSTS.find(c => c.type === item.type);
-    const resParts = prodCost ? Object.entries(prodCost.resourceCost).map(([r, a]) => `${RESOURCE_LABELS[r] || r}: ${a}`).join(', ') : '';
-    const tooltip = prodCost ? `${resParts}${prodCost.popCost ? ', Pop: ' + prodCost.popCost : ''}, Ticks: ${prodCost.ticksCost}` : '';
-    queueItems.push(
-      <div class="panel-row queue-item" title={tooltip}>
-        <button class="queue-toggle-btn" onClick={() => { sendCityQueueAddRepeat(city.cityId, item.type); sendCityQueueClearPriority(city.cityId); }} title="Toggle infinite ON">∞</button>
-        <span>▸ {typeLabel(item.type)}</span>
-        <button class="queue-remove-btn" onClick={() => sendCityQueueClearPriority(city.cityId)} title="Remove">✕</button>
-      </div>
-    );
-  }
-  for (let i = 0; i < city.repeatQueue.length; i++) {
-    const unitType = city.repeatQueue[i];
-    const prodCost = UNIT_PRODUCTION_COSTS.find(c => c.type === unitType);
-    const resParts = prodCost ? Object.entries(prodCost.resourceCost).map(([r, a]) => `${RESOURCE_LABELS[r] || r}: ${a}`).join(', ') : '';
-    const tooltip = prodCost ? `${resParts}${prodCost.popCost ? ', Pop: ' + prodCost.popCost : ''}, Ticks: ${prodCost.ticksCost}` : '';
-    queueItems.push(
-      <div class="panel-row queue-item" title={tooltip}>
-        <button class="queue-toggle-btn queue-toggle-active" onClick={() => { sendCityQueueAddPriority(city.cityId, unitType); sendCityQueueRemoveRepeat(city.cityId, i); }} title="Toggle infinite OFF">∞</button>
-        <span>{typeLabel(unitType)}</span>
-        <button class="queue-remove-btn" onClick={() => sendCityQueueRemoveRepeat(city.cityId, i)} title="Remove">✕</button>
-      </div>
-    );
-  }
-
-  let actionsHtml = <></>;
+  let citizenToggleHtml = <></>;
   if (isMyCity) {
-    actionsHtml = (
-      <div class="panel-actions city-queue-actions">
-        <button class="panel-btn" onClick={() => sendCityQueueAddPriority(city.cityId, 'INFANTRY')} title="Add Infantry (one-shot)">{typeLabel('INFANTRY')}</button>
-        <button class="panel-btn" onClick={() => sendCityQueueAddPriority(city.cityId, 'ENGINEER')} title="Add Engineer (one-shot)">{typeLabel('ENGINEER')}</button>
+    citizenToggleHtml = (
+      <div class="panel-section">
+        <div class="panel-subtitle">Production</div>
+        <div class="panel-row">
+          <span class="label">Recruit {typeLabel('CITIZEN')}</span>
+          <button class={`panel-btn toggle-btn${isProducing ? ' toggle-active' : ''}`} onClick={() => sendCityToggleCitizenProduction(city.cityId)}>
+            {isProducing ? 'ON' : 'OFF'}
+          </button>
+        </div>
       </div>
     );
   }
@@ -123,16 +99,10 @@ export const CityPanel: FunctionalComponent<CityPanelProps> = ({ city, tileId, b
       </div>
       <StockpileSection city={city} />
       {productionHtml}
-      {queueItems.length > 0 && (
-        <div class="panel-section">
-          <div class="panel-subtitle">Queue</div>
-          {queueItems}
-        </div>
-      )}
+      {citizenToggleHtml}
       {buildingsHtml}
-      {actionsHtml}
       <div class="panel-section panel-back-link">
-        <button class="panel-btn panel-btn-secondary" onClick={() => { selectedUnitId.value = null; selectedCityId.value = null; pendingCommand.value = null; }}>← Tile info</button>
+        <button class="panel-btn panel-btn-secondary" onClick={() => deselectEntity()}>← Tile info</button>
       </div>
     </div>
   );

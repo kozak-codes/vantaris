@@ -1,20 +1,12 @@
 import * as THREE from 'three';
 import { clientState, onStateUpdate } from '../state/ClientState';
 import { GLOBE_RADIUS } from './IconFactory';
-import {
-  CFG,
-  getPassableTerrain,
-  TerrainType,
-} from '@vantaris/shared';
-
-const PASSABLE_TERRAIN = getPassableTerrain(CFG);
 
 const SELECTION_OFFSET = 0.015;
 const PATH_LINE_OFFSET = 1.02;
 const HOVER_OFFSET = 0.012;
 
 const COLOR_HOVER = 0xffffff;
-const COLOR_MOVE_TARGET = 0xaa44ff;
 const COLOR_CLAIM_TARGET = 0xffcc00;
 
 export class SelectionRenderer {
@@ -89,7 +81,6 @@ export class SelectionRenderer {
   }
 
   private getHoverColor(): number {
-    if (clientState.pendingCommand === 'move') return COLOR_MOVE_TARGET;
     if (clientState.pendingCommand === 'claim') return COLOR_CLAIM_TARGET;
     return COLOR_HOVER;
   }
@@ -104,12 +95,9 @@ export class SelectionRenderer {
     const revealed = clientState.revealedCells.has(this.currentHoveredCellId);
     if (!visible && !revealed) return;
 
-    if (clientState.pendingCommand === 'move' && visible) {
-      const cellData = clientState.visibleCells.get(this.currentHoveredCellId);
-      if (cellData && !PASSABLE_TERRAIN.includes(cellData.biome as TerrainType)) {
-        this.hoverRing = this.buildCellRing(this.currentHoveredCellId, 0xff4444, HOVER_OFFSET);
-        return;
-      }
+    if (visible && clientState.pendingCommand === 'claim') {
+      this.hoverRing = this.buildCellRing(this.currentHoveredCellId, this.getHoverColor(), HOVER_OFFSET);
+      return;
     }
 
     this.hoverRing = this.buildCellRing(this.currentHoveredCellId, this.getHoverColor(), HOVER_OFFSET);

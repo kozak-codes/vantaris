@@ -9,6 +9,7 @@ import {
 } from '@vantaris/shared';
 import { createBuilding } from './buildings';
 import { createCity } from './cities';
+import { getNextUnitName } from './unitNames';
 
 const MOVEMENT_COST = getMovementCost(CFG);
 
@@ -34,6 +35,7 @@ export function spawnUnit(
   unit.buildTicksRemaining = 0;
   unit.engineerLevel = unitType === 'ENGINEER' ? engineerLevel : 0;
   unit.buildExhaustion = 0;
+  unit.name = getNextUnitName();
 
   state.units.set(unit.unitId, unit);
   return unit;
@@ -128,10 +130,13 @@ export function startClaiming(
 
   unit.status = UnitStatus.CLAIMING;
 
+  const unitConfig = CFG.UNITS[unit.type];
+  const multiplier = unitConfig?.claimTickMultiplier ?? 1;
+
   if (!cell || !cell.ownerId) {
-    unit.claimTicksRemaining = CFG.CLAIM.TICKS_UNCLAIMED;
+    unit.claimTicksRemaining = CFG.CLAIM.TICKS_UNCLAIMED * multiplier;
   } else {
-    unit.claimTicksRemaining = CFG.CLAIM.TICKS_ENEMY;
+    unit.claimTicksRemaining = CFG.CLAIM.TICKS_ENEMY * multiplier;
   }
 }
 

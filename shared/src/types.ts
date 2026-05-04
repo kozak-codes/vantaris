@@ -16,8 +16,10 @@ export enum QueueType {
 }
 
 export enum UnitType {
+  CITIZEN = 'CITIZEN',
   INFANTRY = 'INFANTRY',
   ENGINEER = 'ENGINEER',
+  TRADER = 'TRADER',
 }
 
 export enum UnitStatus {
@@ -110,7 +112,7 @@ export interface BuildingData {
   factoryXp: number;
   stockpile: StockpileEntry[];
   resourcesInvested: { food: number; material: number };
-  deliveryTargetId: string;
+  stockpileTarget: number;
   specializationRecipe: string;
   specializationCycles: number;
   recipeTicksRemaining: number;
@@ -128,6 +130,8 @@ export interface PlayerResourceData {
   energyPerTick: number;
   totalPopulation: number;
   factoryCount: number;
+  energyCredits: number;
+  claimCompensation: number;
 }
 
 export interface FactoryRecipe {
@@ -267,6 +271,9 @@ export interface UnitData {
   buildTicksRemaining: number;
   engineerLevel: number;
   buildExhaustion: number;
+  name: string;
+  energyCredits: number;
+  inventoryWeight: number;
 }
 
 export interface ProductionItem {

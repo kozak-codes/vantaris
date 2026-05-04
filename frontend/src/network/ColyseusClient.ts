@@ -140,15 +140,21 @@ export function sendBuildStructure(unitId: string, buildingType: string, cellId:
   }
 }
 
+export function sendUpgradeUnit(unitId: string, targetUnitType: string): void {
+  if (currentRoom) {
+    currentRoom.send('upgradeUnit', { unitId, targetUnitType });
+  }
+}
+
 export function sendSetFactoryRecipe(buildingId: string, recipeId: string): void {
   if (currentRoom) {
     currentRoom.send('setFactoryRecipe', { buildingId, recipeId });
   }
 }
 
-export function sendSetDeliveryTarget(buildingId: string, targetId: string): void {
+export function sendSetStockpileTarget(buildingId: string, target: number): void {
   if (currentRoom) {
-    currentRoom.send('setDeliveryTarget', { buildingId, targetId });
+    currentRoom.send('setStockpileTarget', { buildingId, target });
   }
 }
 
@@ -182,9 +188,21 @@ export function sendCityQueueClearPriority(cityId: string): void {
   }
 }
 
+export function sendCityToggleCitizenProduction(cityId: string): void {
+  if (currentRoom) {
+    currentRoom.send('cityToggleCitizenProduction', { cityId });
+  }
+}
+
 export function sendUpdateCamera(qx: number, qy: number, qz: number, qw: number, zoom: number): void {
   if (currentRoom) {
     currentRoom.send('updateCamera', { qx, qy, qz, qw, zoom });
+  }
+}
+
+export function sendSetClaimCompensation(value: number): void {
+  if (currentRoom) {
+    currentRoom.send('setClaimCompensation', { value });
   }
 }
 

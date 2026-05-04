@@ -1,16 +1,12 @@
 import { FunctionalComponent } from 'preact';
-import { CFG, getBuildingCosts, getBuildingPlacementRules, getUnitBuildableTypes } from '@vantaris/shared';
+import { CFG } from '@vantaris/shared';
 import type { UnitData } from '@vantaris/shared';
 import {
-  myPlayerId, pendingCommand, selectedUnitId, selectedCityId,
-  visibleCells, cities, players, unitsOnSelectedTile,
-  selectTile,
+  myPlayerId,
+  cities, players, unitsOnSelectedTile,
+  selectTile, deselectEntity,
 } from '../state/signals';
-import { sendClaimTerritory, sendSetUnitIdle, sendBuildStructure } from '../network/ColyseusClient';
-import { BIOME_TRAVEL_NAMES, STATUS_DISPLAY, BUILDING_DISPLAY, typeLabel } from './hud-shared';
-
-const BUILDING_COSTS = getBuildingCosts(CFG);
-const BUILDING_PLACEMENT_RULES = getBuildingPlacementRules(CFG);
+import { BIOME_TRAVEL_NAMES, STATUS_DISPLAY, typeLabel } from './hud-shared';
 
 interface UnitPanelProps {
   unit: UnitData;
@@ -25,13 +21,13 @@ export const UnitPanel: FunctionalComponent<UnitPanelProps> = ({ unit, tileId, b
   const isMyUnit = unit.ownerId === myPlayerId.value;
   const player = players.value.get(unit.ownerId);
   const unitColor = player ? player.color : '#888';
-  const cmd = pendingCommand.value;
-
   let statusText = STATUS_DISPLAY[unit.status] || unit.status;
   if (unit.status === 'MOVING' && unit.path && unit.path.length > 0) {
     statusText += ` — ${unit.path.length} tiles to go`;
   } else if (unit.status === 'BUILDING') {
     statusText = `Building — ${unit.buildTicksRemaining} ticks`;
+  } else if (unit.status === 'CLAIMING') {
+    statusText = `Claiming — ${unit.claimTicksRemaining} ticks`;
   }
 
   let progressHtml = <></>;
@@ -40,137 +36,45 @@ export const UnitPanel: FunctionalComponent<UnitPanelProps> = ({ unit, tileId, b
     const pct = Math.round(((total - unit.movementTicksRemaining) / total) * 100);
     progressHtml = <div class="progress-bar"><div class="progress-fill" style={{ width: `${pct}%` }} /></div>;
   } else if (unit.status === 'CLAIMING') {
-    const maxTicks = unit.claimTicksRemaining > 100 ? 300 : 50;
+    const unitCfg = CFG.UNITS[unit.type];
+    const multiplier = unitCfg?.claimTickMultiplier ?? 1;
+    const enemyBase = 3000 * multiplier;
+    const unclaimedBase = 50 * multiplier;
+    const threshold = (enemyBase + unclaimedBase) / 2;
+    const maxTicks = unit.claimTicksRemaining > threshold ? enemyBase : unclaimedBase;
     const pct = Math.round(((maxTicks - unit.claimTicksRemaining) / maxTicks) * 100);
     progressHtml = (
       <>
         <div class="progress-bar"><div class="progress-fill claim-fill" style={{ width: `${pct}%` }} /></div>
-        <div class="panel-row"><span class="label">Claiming</span><span>{unit.claimTicksRemaining} ticks</span></div>
       </>
     );
   } else if (unit.status === 'BUILDING') {
     progressHtml = <div class="progress-bar"><div class="progress-fill build-fill" style={{ width: '100%' }} /></div>;
   }
 
-  let commandsHtml = <></>;
-  if (isMyUnit && unit.status === 'IDLE') {
-    const cellData = visibleCells.value.get(unit.cellId);
-    const alreadyOwnsTile = cellData && cellData.ownerId === myPlayerId.value;
-    const moveActive = cmd === 'move' ? ' active' : '';
-
-    const canClaim = !alreadyOwnsTile && unit.type === 'INFANTRY';
-    const claimButton = canClaim
-      ? <button class="panel-btn cmd-btn" onClick={() => { sendClaimTerritory(unit.unitId); pendingCommand.value = null; }} title="Claim the tile this unit is standing on">2 Claim<span class="cmd-key">2</span></button>
-      : <></>;
-
-    commandsHtml = (
-      <div class="panel-actions">
-        <button class={`panel-btn cmd-btn${moveActive}`} onClick={() => { pendingCommand.value = cmd === 'move' ? null : 'move'; }} title="Click a destination tile to move there">1 Move<span class="cmd-key">1</span></button>
-        {claimButton}
-        <button class="panel-btn" onClick={() => { sendSetUnitIdle(unit.unitId); pendingCommand.value = null; }} title="Stop unit / cancel">Stop</button>
-      </div>
-    );
-    if (cmd === 'move') {
-      commandsHtml = (
-        <>
-          {commandsHtml}
-          <div class="cmd-hint">Click a tile to move there</div>
-        </>
-      );
-    }
-  } else if (isMyUnit && unit.status !== 'IDLE') {
-    commandsHtml = (
-      <div class="panel-actions">
-        <button class="panel-btn" onClick={() => sendSetUnitIdle(unit.unitId)}>Halt</button>
-      </div>
-    );
-  }
-
   const unitsHere = unitsOnSelectedTile.value;
   const showStack = unitsHere.length > 1;
 
-  let buildOptionsHtml: any[] = [];
-  if (isMyUnit && unit.status === 'IDLE') {
-    const cellData = visibleCells.value.get(unit.cellId);
-    if (cellData && cellData.ownerId === myPlayerId.value) {
-      const unitConfig = CFG.UNITS[unit.type];
-      const exhaustionBudget = unitConfig?.buildExhaustion ?? (unit.type === 'ENGINEER' ? 3 : 1);
-      const remainingExhaustion = exhaustionBudget - (unit.buildExhaustion ?? 0);
-
-      const canBuildTypes = unit.type === 'ENGINEER'
-        ? getUnitBuildableTypes(CFG, 'ENGINEER', (unit as any).engineerLevel ?? 1)
-        : getUnitBuildableTypes(CFG, 'INFANTRY', 1);
-      const allBuildable = unit.type === 'ENGINEER'
-        ? ['FARM', 'MINE', 'OIL_WELL', 'LUMBER_CAMP', 'FACTORY', 'CITY']
-        : getUnitBuildableTypes(CFG, 'INFANTRY', 1);
-
-      for (const bt of allBuildable) {
-        const allowedBiomes = BUILDING_PLACEMENT_RULES[bt];
-        const biomeOk = !allowedBiomes || allowedBiomes.includes(cellData.biome);
-        const canBuildByLevel = canBuildTypes.includes(bt);
-        let capacityOk = false;
-        if (bt === 'CITY') {
-          let cellHasCity = false;
-          for (const [, c] of cities.value) { if (c.cellId === unit.cellId) { cellHasCity = true; break; } }
-          capacityOk = !cellHasCity;
-        } else {
-          capacityOk = cellData.buildings.length < cellData.buildingCapacity;
-        }
-
-        const cost = BUILDING_COSTS[bt];
-        const exhaustionCost = cost?.exhaustionCost ?? 1;
-        if (remainingExhaustion < exhaustionCost) continue;
-
-        if (!(canBuildByLevel && biomeOk && capacityOk)) continue;
-
-        const isFree = !cost || (cost.food === 0 && cost.material === 0);
-        let costLabel = 'Free';
-        if (cost && (cost.food > 0 || cost.material > 0)) {
-          const parts: string[] = [];
-          if (cost.food > 0) parts.push(`\u{1F33E} ${cost.food}`);
-          if (cost.material > 0) parts.push(`\u{1FAA8} ${cost.material}`);
-          costLabel = parts.join(' ');
-        }
-        const exhaustLabel = exhaustionCost >= exhaustionBudget ? '\u26A0 Consumes unit' : `\u26A1 ${exhaustionCost}/${exhaustionBudget}`;
-        const displayName = BUILDING_DISPLAY[bt] || bt;
-
-        buildOptionsHtml.push(
-          <div class="build-option" onClick={() => { sendBuildStructure(unit.unitId, bt, unit.cellId); pendingCommand.value = null; }} title={`${costLabel} ${exhaustLabel}`}>
-            <span class="build-option-name">{displayName}</span>
-            <span class="build-option-cost">{isFree ? '' : costLabel + ' '}{exhaustLabel}</span>
-          </div>
-        );
-      }
-    }
-  }
+  const unitConfig = CFG.UNITS[unit.type];
+  const maxWeight = unitConfig?.maxWeight ?? 0;
 
   return (
     <div id="hud-tile-panel" class="panel">
       <div class="panel-header">
-        <span class="panel-title" style={{ color: unitColor }}>⦿ {typeLabel(unit.type)}</span>
+        <span class="panel-title" style={{ color: unitColor }}>⦿ {unit.name || typeLabel(unit.type)}</span>
         <button class="panel-close" onClick={() => selectTile(null)}>&times;</button>
       </div>
       <div class="panel-section">
         <div class="panel-row"><span class="label">Status</span><span>{statusText}</span></div>
         <div class="panel-row"><span class="label">Owner</span><span style={{ color: ownerColor }}>{ownerName}{isMyUnit ? ' (You)' : ''}</span></div>
         <div class="panel-row"><span class="label">Terrain</span><span>{BIOME_TRAVEL_NAMES[biome] || biome}</span></div>
-        {isMyUnit && unit.buildExhaustion > 0 && (() => {
-          const unitConfig = CFG.UNITS[unit.type];
-          const budget = unitConfig?.buildExhaustion ?? (unit.type === 'ENGINEER' ? 3 : 1);
-          return <div class="panel-row"><span class="label">Build</span><span>{budget - unit.buildExhaustion}/{budget}</span></div>;
-        })()}
+        {isMyUnit && <div class="panel-row"><span class="label">Credits</span><span>⚡ {Math.round(unit.energyCredits)}</span></div>}
+        {isMyUnit && maxWeight > 0 && <div class="panel-row"><span class="label">Carry</span><span>{unit.inventoryWeight}/{maxWeight}</span></div>}
         {showStack && <div class="panel-row"><span class="label">Stack</span><span>{unitsHere.length} units</span></div>}
       </div>
       {progressHtml}
-      {commandsHtml}
-      {buildOptionsHtml.length > 0 && (
-        <div class="panel-section">
-          <div class="panel-subtitle">Build Options</div>
-          {buildOptionsHtml}
-        </div>
-      )}
       <div class="panel-section panel-back-link">
-        <button class="panel-btn panel-btn-secondary" onClick={() => { selectedUnitId.value = null; selectedCityId.value = null; pendingCommand.value = null; }}>← Tile info</button>
+        <button class="panel-btn panel-btn-secondary" onClick={() => deselectEntity()}>← Tile info</button>
       </div>
     </div>
   );

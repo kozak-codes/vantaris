@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { CAMERA_CONFIG } from '../constants';
 
+const TOUCH_MOVE_THRESHOLD = 5;
+
 export class CameraControls {
   private camera: THREE.PerspectiveCamera;
   private canvas: HTMLCanvasElement;
@@ -14,6 +16,9 @@ export class CameraControls {
   private pinchStartDistance = 0;
   private keysHeld = new Set<string>();
   private _enabled = true;
+  private touchGestureActive = false;
+  private touchMoved = false;
+  private touchStartPos = { x: 0, y: 0 };
 
   constructor(camera: THREE.PerspectiveCamera, canvas: HTMLCanvasElement, pivot: THREE.Group) {
     this.camera = camera;
@@ -26,6 +31,14 @@ export class CameraControls {
     this.bindEvents();
   }
 
+  isTouchGestureActive(): boolean {
+    return this.touchGestureActive;
+  }
+
+  wasTouchMoved(): boolean {
+    return this.touchMoved;
+  }
+
   private bindEvents(): void {
     this.canvas.addEventListener('pointerdown', this.onPointerDown.bind(this));
     this.canvas.addEventListener('pointermove', this.onPointerMove.bind(this));
@@ -36,12 +49,14 @@ export class CameraControls {
     this.canvas.addEventListener('touchstart', this.onTouchStart.bind(this), { passive: false });
     this.canvas.addEventListener('touchmove', this.onTouchMove.bind(this), { passive: false });
     this.canvas.addEventListener('touchend', this.onTouchEnd.bind(this));
+    this.canvas.addEventListener('touchcancel', this.onTouchCancel.bind(this));
     window.addEventListener('keydown', this.onKeyDown.bind(this));
     window.addEventListener('keyup', this.onKeyUp.bind(this));
   }
 
   private onPointerDown(e: PointerEvent): void {
     if (!this._enabled) return;
+    if (this.touchGestureActive) return;
     if (e.button === 2) {
       this.isRotating = true;
       this.previousPointer = { x: e.clientX, y: e.clientY };
@@ -51,6 +66,7 @@ export class CameraControls {
   }
 
   private onPointerMove(e: PointerEvent): void {
+    if (this.touchGestureActive) return;
     if (!this.isRotating) return;
     const dx = e.clientX - this.previousPointer.x;
     const dy = e.clientY - this.previousPointer.y;
@@ -61,13 +77,15 @@ export class CameraControls {
   }
 
   private onPointerUp(e: PointerEvent): void {
+    if (this.touchGestureActive) return;
     if (e.button === 2 || this.isRotating) {
       this.isRotating = false;
     }
   }
 
   private rotateGlobe(dx: number, dy: number): void {
-    const sensitivity = 0.005;
+    const zoomScale = this.currentDistance / CAMERA_CONFIG.minDistance;
+    const sensitivity = 0.005 * zoomScale;
 
     const yawQuat = new THREE.Quaternion().setFromAxisAngle(
       new THREE.Vector3(0, 1, 0),
@@ -109,8 +127,7 @@ export class CameraControls {
   }
 
   private applyKeyboardRotation(): void {
-    const zoomScale = this.currentDistance / CAMERA_CONFIG.minDistance;
-    const speed = CAMERA_CONFIG.keyboardRotateSpeed * zoomScale;
+    const speed = CAMERA_CONFIG.keyboardRotateSpeed;
     let dx = 0;
     let dy = 0;
 
@@ -136,25 +153,34 @@ export class CameraControls {
   }
 
   private onTouchStart(e: TouchEvent): void {
+    if (!this._enabled) return;
+    e.preventDefault();
+    this.touchGestureActive = true;
+    this.touchMoved = false;
+
     if (e.touches.length === 2) {
-      e.preventDefault();
-      this.isRotating = true;
       this.pinchStartDistance = this.getTouchDistance(e.touches);
       this.previousPointer = {
         x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
         y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
       };
-    } else if (e.touches.length === 1) {
       this.isRotating = true;
+      this.velocityX = 0;
+      this.velocityY = 0;
+    } else if (e.touches.length === 1) {
+      this.touchStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       this.previousPointer = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       this.velocityX = 0;
       this.velocityY = 0;
+      this.isRotating = false;
     }
   }
 
   private onTouchMove(e: TouchEvent): void {
     if (e.touches.length === 2) {
       e.preventDefault();
+      this.touchMoved = true;
+      this.isRotating = true;
       const newDist = this.getTouchDistance(e.touches);
       const delta = this.pinchStartDistance - newDist;
       this.targetZoom += delta * 0.02 * CAMERA_CONFIG.zoomSpeed;
@@ -171,16 +197,50 @@ export class CameraControls {
       const dy = cy - this.previousPointer.y;
       this.rotateGlobe(dx, dy);
       this.previousPointer = { x: cx, y: cy };
-    } else if (e.touches.length === 1 && this.isRotating) {
+    } else if (e.touches.length === 1) {
+      e.preventDefault();
       const dx = e.touches[0].clientX - this.previousPointer.x;
       const dy = e.touches[0].clientY - this.previousPointer.y;
-      this.rotateGlobe(dx, dy);
-      this.previousPointer = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+
+      const totalDx = e.touches[0].clientX - this.touchStartPos.x;
+      const totalDy = e.touches[0].clientY - this.touchStartPos.y;
+      const dist = Math.sqrt(totalDx * totalDx + totalDy * totalDy);
+
+      if (dist > TOUCH_MOVE_THRESHOLD) {
+        this.touchMoved = true;
+        if (!this.isRotating) {
+          this.isRotating = true;
+          this.previousPointer = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        } else {
+          this.velocityX = dx;
+          this.velocityY = dy;
+          this.rotateGlobe(dx, dy);
+          this.previousPointer = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }
+      }
     }
   }
 
-  private onTouchEnd(): void {
+  private onTouchEnd(e: TouchEvent): void {
+    if (e.touches.length === 0) {
+      this.touchGestureActive = false;
+      this.isRotating = false;
+    } else if (e.touches.length === 1) {
+      this.pinchStartDistance = 0;
+      this.previousPointer = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      this.touchStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      this.isRotating = false;
+      this.velocityX = 0;
+      this.velocityY = 0;
+    }
+  }
+
+  private onTouchCancel(): void {
+    this.touchGestureActive = false;
+    this.touchMoved = true;
     this.isRotating = false;
+    this.velocityX = 0;
+    this.velocityY = 0;
   }
 
   private getTouchDistance(touches: TouchList): number {
