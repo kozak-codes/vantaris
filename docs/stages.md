@@ -219,8 +219,15 @@
 - Only once a citizen is fully fed, rested, and full health will they continue
 - Farms from still have a base rate - they should not. Farms should only produce if (a) it is daytime on that tile and (b) a citizen is working that farm.
 
-
+- Allow us to adjust the base wage of a building like a farm. These buildings dont seem to be incentive enough for units to go to them, even when i put the Claim Compensation to 0
 - When a citizen consumes food, they should have to PAY for it - we should be able to set the global food rate in the economy tab, defaulting to 1 energy credit per food. They need to have enough money too.
+- units should have rest decrease more if their tile is currently night
+- Align the HP, hunger, and rest bars so they are all in one column as they are not even with each other right now
+- increase rest and hunger requirement by about 1.5x
+
+//--------- COMPLETED UP TO HERE
+
+- When citizens return home I dont think their animation is working properly - it should use the existing path system that works well.
 
 ## Trader rework
 
@@ -233,6 +240,18 @@
 - This means that the task may only be reserved for a certain amount of units, and instead of reserving the existing task we should make a NEW task with what that unit will be doing and reserve it that way. This should then cause the trade check in a later part of the tick to exclude resources from the request that are reserved as on the way.
 - Once we reserve that task, it locks in the price at that amount.
 - If a unit has to go home because they go below the rest, food, or health threshold then we should cancel that task and the system should automatically recalculate the unreserved transportation task.
+- Can we add a task screen on the left side that we can maximize to list all of the tasks available sorted by amount, whats reserved, and by who
+
+
+## Tile rework
+
+- Add a "base compensation multiplier" to tiles - so tundra tiles are not rewarded as much as other tiles. Tiles with buildings should be rewarded a bit more too.
+- When clicking on an unclaimed tile, allow us to adjust the compensation amount from the default amount
+- Let's change this to be one building per tile and infinite units. Autoselect the building on that tile when you click/tap it
+- Add an "exploration compensation" to the economy tab - this is useful if you want to expand your knowledge of the world quicker.
+- Remove the concept of "population" from cities - remove city base energy usage
+- Remove all city starting resources and replace with 100 bread for now
+
 
 ## Factories, supply chains, building
 
@@ -244,6 +263,8 @@
 - The building will probably have resource requirements (except for a small amount of exceptions)
 - The required resources will be set as stockpile requests
 - The building can only be worked on once all the resources are in the tile (maybe we change this later, but I'm OK with this simplification for now)
+- Only one citizen/unit may use a building at a time -- we should consider ways that we can have more efficient units at something take priority with what they choose - maybe there is a priority system for new work based on the level of the worker
+- If there is no
 - Buildings we can order to start:
 
 a) Logging Camp
@@ -251,96 +272,51 @@ b) Farm - requires timber, only works during the day
 c) Mine - requires timber + has ongoing need for timber
 d) Smithy - requires timber + has onging need for timber
 
+I know we have some other buildings too, but we can leave them as placeholders for now.
 
-
-## Tile rework
-
-- Add a "base compensation multiplier" to tiles - so tundra tiles are not rewarded as much as other tiles. Tiles with buildings should be rewarded a bit more too.
-- When clicking on an unclaimed tile, allow us to adjust the compensation amount from the default amount
-- Let's change this to be one building per tile and infinite units. Autoselect the building on that tile when you click/tap it
-- Add an "exploration compensation" to the economy tab - this is useful if you want to expand your knowledge of the world quicker.
 
 ## Unit upgrades
 
 - traders can carry more
-- laborers (not engineers) can construct buildings more efficiently
+- laborers (not engineers) can work and construct buildings more efficiently but can no longer claim tiles
 - engineers are a required labor amount to construct certain buildings
 - farmers can build farms and work at them more efficiently
 - Change "wage" to be per unit produced
 - Merchant Sailor after trader allows accessing water tiles? Perhaps this requires resources to upgrade?
+- Add a unit list in the top right below contestants. Click to focus + go to on the map + follow
+
 - How do we economize upgrades, but still make it the players choice what units will do? EXP based with the player clicking on the upgrade that they want for that unit? Will that not get tedious? Auto upgrade to in demand trade? How do we determine if a trade is in demand?
+- Perhaps we must build or establish a "guild" to convert a unit to a new type of unit, and they spend money to learn at that guild. Otherwise, they must earn experience doing other things in order to automatically upgrade to a certain unit type
+- OR - citizens have "skills" in something that gets trained into them over doing things that earn them XP like in project zomboid - they can pay to learn about a particular skill at a guild.
 
 ## Improving the way new citizens are made
 
 - sex?
-- Remove the concept of "population" from cities
-- units should have rest decrease more during night
 
 ---
 
-## OLD
+## War
 
+- Upgrade citizens to infantry units somehow - depending on how we build our unit upgrade system
+- Infantry units can push fronts, but must either go back to resupply or setup a resupply route with citizens/traders on the tile that they are defending/attacking from
+- If infantry runs out of ammunition, guns, health, etc - then they will retreat
+- Different unit types serve different purposes like cavalry, artillery, etc
 
-## ⬜ Phase 8 — Factory Supply Chains
+## Diplomacy
 
-**Status: NOT STARTED**
+Propose to nearby partners different "treaties":
 
-- [ ] Factory recipe assignment + XP system
-- [ ] Full supply chain active
-- [ ] STARVED state
-- [ ] Production queue UI
+1) Peace - cant attack each other
+2) Trade - Can send civilian units into their border & trade with their buildings
+3) Border - Can send military units into their border
 
----
+These are not levels or tiers but different things you can enable/disable.
 
-## ⬜ Phase 9 — Traders & Energy Credits
+Treaties last for X ticks and autorenew unless you explicitly choose not to auto renew
 
-**Status: NOT STARTED**
-
-- [ ] Trader unit (self-trader and broker modes)
-- [ ] Trading table UI
-- [ ] EC minting from surplus energy
-- [ ] Floating exchange rate
-
----
-
-## ⬜ Phase 10 — Diplomacy
-
-**Status: NOT STARTED**
+Breaking treaties
 
 - [ ] Four alliance tiers
 - [ ] Proposals via Player List
 - [ ] Reputation system
 - [ ] Revolt mechanic
-
----
-
-## ⬜ Phase 11 — Naval & Terrain Specialization
-
-**Status: NOT STARTED**
-
-- [ ] Navy, cavalry, artillery units
-- [ ] Sea lane control
-- [ ] River movement bonuses
-- [ ] Terrain specialization bonuses
-
----
-
-## ⬜ Phase 12 — Orbital Layer
-
-**Status: NOT STARTED**
-
-- [ ] Satellite unit (Megacity + massive energy)
-- [ ] Satellites orbit globe visually
-- [ ] Recon and strike satellite types
-- [ ] Spectator mode with Channel 66 broadcast overlay
-
----
-
-## ⬜ Phase 13 — Multi-Planet
-
-**Status: NOT STARTED**
-
-- [ ] Second planet via orbital transition
-- [ ] Inter-planet trader routes
-- [ ] Planet-unique resources
-- [ ] Victory: control both planets simultaneously

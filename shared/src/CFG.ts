@@ -333,7 +333,7 @@ export const CFG: ICFG = {
       extractorOutput: { resource: ResourceType.GRAIN, amount: 0.5 },
       cost: { food: 0, material: 0 },
       exhaustionCost: 1,
-      wagePer100Ticks: 5,
+      wagePer100Ticks: 2.5,
       target: 200,
     },
     MINE: {
@@ -342,7 +342,7 @@ export const CFG: ICFG = {
       extractorOutput: { resource: ResourceType.ORE, amount: 0.5 },
       cost: { food: 0, material: 0 },
       exhaustionCost: 1,
-      wagePer100Ticks: 5,
+      wagePer100Ticks: 2.5,
       target: 200,
     },
     OIL_WELL: {
@@ -351,7 +351,7 @@ export const CFG: ICFG = {
       extractorOutput: { resource: ResourceType.OIL, amount: 0.3 },
       cost: { food: 30, material: 20 },
       exhaustionCost: 1,
-      wagePer100Ticks: 8,
+      wagePer100Ticks: 4,
       target: 150,
     },
     LUMBER_CAMP: {
@@ -360,7 +360,7 @@ export const CFG: ICFG = {
       extractorOutput: { resource: ResourceType.TIMBER, amount: 0.5 },
       cost: { food: 0, material: 0 },
       exhaustionCost: 1,
-      wagePer100Ticks: 5,
+      wagePer100Ticks: 2.5,
       target: 200,
     },
     FACTORY: {
@@ -369,7 +369,7 @@ export const CFG: ICFG = {
       extractorOutput: null,
       cost: { food: 50, material: 30 },
       exhaustionCost: 3,
-      wagePer100Ticks: 10,
+      wagePer100Ticks: 5,
       target: 100,
     },
     CITY: {

@@ -1,7 +1,7 @@
 import { GameState } from '../state/GameState';
 import { UnitState } from '../state/UnitState';
 import { CellState } from '../state/CellState';
-import { CFG, getPassableTerrain, UnitStatus, type AdjacencyMap } from '@vantaris/shared';
+import { CFG, getPassableTerrain, getFactoryRecipes, UnitStatus, ResourceType, type AdjacencyMap } from '@vantaris/shared';
 import { findPath, buildUnitsByCellId } from '../systems/Pathfinding';
 import { assignPath, startClaiming } from '../mutations/units';
 import { getBuildingStockpile } from '../mutations/buildings';
@@ -54,10 +54,48 @@ function computeWorkSustainTicks(unit: UnitState, building: any, state: GameStat
   return Math.max(1, sustainCycles);
 }
 
+function canBuildingProduce(
+  building: any,
+  state: GameState,
+  cellPositions: Record<string, [number, number, number]>,
+): boolean {
+  const bldgConfig = CFG.BUILDINGS[building.type];
+  if (!bldgConfig) return false;
+
+  if (bldgConfig.extractorOutput) {
+    if (building.type === 'FARM') {
+      const pos = cellPositions[building.cellId];
+      if (pos) {
+        const len = Math.sqrt(pos[0] * pos[0] + pos[1] * pos[1] + pos[2] * pos[2]);
+        if (len > 0) {
+          const nx = pos[0] / len;
+          const nz = pos[2] / len;
+          const sunAngle = state.getSunAngle();
+          const dot = nx * Math.cos(sunAngle) + nz * Math.sin(sunAngle);
+          if (dot < 0) return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  if (building.type === 'FACTORY' && building.recipe) {
+    const recipe = getFactoryRecipes(CFG).find(r => r.id === building.recipe);
+    if (!recipe) return false;
+    const sp = getBuildingStockpile(building);
+    return recipe.input.every((inp: { resource: string; amount: number }) => {
+      return (sp[inp.resource] || 0) >= inp.amount;
+    });
+  }
+
+  return false;
+}
+
 function rebuildClaimTasks(
   queue: TaskQueue,
   state: GameState,
   adjacencyMap: AdjacencyMap,
+  cellPositions: Record<string, [number, number, number]>,
 ): void {
   const existingClaimCells = new Set<string>();
   for (const [, task] of queue.tasks) {
@@ -130,6 +168,8 @@ function rebuildClaimTasks(
     if (building.productionTicksRemaining > 0) continue;
     const wage = building.wagePer100Ticks;
     if (wage <= 0) continue;
+
+    if (!canBuildingProduce(building, state, cellPositions)) continue;
 
     const bldgConfig = CFG.BUILDINGS[building.type];
     const hasExtractor = bldgConfig && bldgConfig.extractorOutput;
@@ -318,7 +358,7 @@ export function processCitizenAI(
   tick: number,
   queue: TaskQueue,
 ): void {
-  rebuildClaimTasks(queue, state, adjacencyMap);
+  rebuildClaimTasks(queue, state, adjacencyMap, cellPositions);
   releaseDeadReservations(queue, state);
 
   const unitsByCellId = buildUnitsByCellId(state.units);
@@ -327,6 +367,27 @@ export function processCitizenAI(
     if (unit.ownerId === '') continue;
 
     if (unit.status === 'RETURNING') continue;
+
+    if (unit.status === 'WORKING') {
+      if (needsToReturnHome(unit)) {
+        const homeCity = state.cities.get(unit.homeCityId);
+        if (homeCity) {
+          if (unit.cellId === homeCity.cellId) {
+            unit.status = 'RETURNING';
+            unit.path = '[]';
+            unit.movementTicksRemaining = 0;
+            unit.movementTicksTotal = 0;
+          } else {
+            const path = findPath(unit.cellId, homeCity.cellId, state.cells as any, adjacencyMap, unitsByCellId, CFG.MAX_PER_HEX, cellPositions);
+            if (path && path.length > 0) {
+              assignPath(state, unit.unitId, path);
+              unit.status = 'RETURNING';
+            }
+          }
+        }
+      }
+      continue;
+    }
 
     if (unit.status !== 'IDLE') {
       if (needsToReturnHome(unit)) {
@@ -376,7 +437,9 @@ export function processCitizenAI(
         const target = building.stockpileTarget || bldgConfig?.target || 0;
         const sp = getBuildingStockpile(building);
         const totalStock = Object.values(sp).reduce((sum: number, v: number) => sum + v, 0);
-        if (target > 0 && totalStock >= target) {
+        const stockFull = target > 0 && totalStock >= target;
+        const canProduce = canBuildingProduce(building, state, cellPositions);
+        if (stockFull || !canProduce) {
           reservedTask.reservedBy = null;
           unit.status = UnitStatus.IDLE;
         } else {
