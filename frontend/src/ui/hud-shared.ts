@@ -17,7 +17,7 @@ export const BIOME_TRAVEL_NAMES: Record<string, string> = {
 };
 
 export const STATUS_DISPLAY: Record<string, string> = {
-  IDLE: 'Idle', MOVING: 'Moving', BUILDING: 'Building', CLAIMING: 'Claiming', UPGRADING: 'Upgrading', RETURNING: 'Returning',
+  IDLE: 'Idle', MOVING: 'Moving', BUILDING: 'Building', CLAIMING: 'Claiming', UPGRADING: 'Upgrading', RETURNING: 'Returning', WORKING: 'Working',
 };
 
 export const BUILDING_DISPLAY: Record<string, string> = Object.fromEntries(

@@ -28,6 +28,7 @@ export enum UnitStatus {
   CLAIMING = 'CLAIMING',
   BUILDING = 'BUILDING',
   RETURNING = 'RETURNING',
+  WORKING = 'WORKING',
 }
 
 export enum BuildingType {

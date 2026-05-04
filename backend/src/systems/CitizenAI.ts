@@ -1,7 +1,7 @@
 import { GameState } from '../state/GameState';
 import { UnitState } from '../state/UnitState';
 import { CellState } from '../state/CellState';
-import { CFG, getPassableTerrain, type AdjacencyMap } from '@vantaris/shared';
+import { CFG, getPassableTerrain, UnitStatus, type AdjacencyMap } from '@vantaris/shared';
 import { findPath, buildUnitsByCellId } from '../systems/Pathfinding';
 import { assignPath, startClaiming } from '../mutations/units';
 import { getBuildingStockpile } from '../mutations/buildings';
@@ -138,6 +138,23 @@ function rebuildClaimTasks(
       const key = `work_${building.buildingId}`;
       const player = state.players.get(building.ownerId);
       const canPay = player && player.energyCredits >= wage;
+
+      const target = building.stockpileTarget || bldgConfig.target || 0;
+      if (target > 0) {
+        const sp = getBuildingStockpile(building);
+        const totalStock = Object.values(sp).reduce((sum: number, v: number) => sum + v, 0);
+        if (totalStock >= target) {
+          if (queue.tasks.has(key)) {
+            const task = queue.tasks.get(key)!;
+            if (task.reservedBy) {
+              const unit = state.units.get(task.reservedBy);
+              if (unit) unit.status = UnitStatus.IDLE;
+            }
+            queue.tasks.delete(key);
+          }
+          continue;
+        }
+      }
 
       if (!canPay) {
         if (queue.tasks.has(key)) queue.tasks.delete(key);
@@ -353,7 +370,23 @@ export function processCitizenAI(
 
     const reservedTask = unit.unitId ? [...queue.tasks.values()].find(t => t.reservedBy === unit.unitId) : null;
     if (reservedTask && reservedTask.type === 'WORK' && reservedTask.cellId === unit.cellId) {
-      continue;
+      const building = [...state.buildings.values()].find(b => b.cellId === reservedTask.cellId && b.ownerId === unit.ownerId);
+      if (building) {
+        const bldgConfig = CFG.BUILDINGS[building.type];
+        const target = building.stockpileTarget || bldgConfig?.target || 0;
+        const sp = getBuildingStockpile(building);
+        const totalStock = Object.values(sp).reduce((sum: number, v: number) => sum + v, 0);
+        if (target > 0 && totalStock >= target) {
+          reservedTask.reservedBy = null;
+          unit.status = UnitStatus.IDLE;
+        } else {
+          unit.status = 'WORKING';
+          continue;
+        }
+      } else {
+        unit.status = 'WORKING';
+        continue;
+      }
     }
 
     if (unitConfig?.canClaim && currentCell && !currentCell.ownerId && PASSABLE_TERRAIN.includes(currentCell.biome)) {
@@ -380,8 +413,9 @@ export function processCitizenAI(
     if (task.cellId === unit.cellId) {
       if (task.type === 'CLAIM') {
         startClaiming(state, unit.unitId);
+      } else if (task.type === 'WORK') {
+        unit.status = 'WORKING';
       }
-      // WORK tasks: citizen is on-site, tickBuildingWages handles payment
     } else {
       const path = findPath(unit.cellId, task.cellId, state.cells as any, adjacencyMap, unitsByCellId, CFG.MAX_PER_HEX, cellPositions);
       if (path && path.length > 0) {
