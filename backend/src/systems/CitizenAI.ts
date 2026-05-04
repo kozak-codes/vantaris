@@ -28,6 +28,32 @@ interface TaskQueue {
   tasks: Map<string, Task>;
 }
 
+function computeWorkSustainTicks(unit: UnitState, building: any, state: GameState): number {
+  const vitals = CFG.CITIZEN_VITALS;
+  const hungerTicks = unit.hunger > 0 ? unit.hunger / vitals.HUNGER_DRAIN_PER_TICK : 0;
+  const restTicks = unit.rest > 0 ? unit.rest / vitals.REST_DRAIN_PER_TICK : 0;
+  const vitalTicks = Math.min(hungerTicks, restTicks);
+
+  let fillTicks = Infinity;
+  const bldgConfig = CFG.BUILDINGS[building.type];
+  if (bldgConfig && bldgConfig.extractorOutput) {
+    const target = building.stockpileTarget || bldgConfig.target;
+    if (target > 0) {
+      const sp = getBuildingStockpile(building);
+      const totalStock = Object.values(sp).reduce((sum: number, v: number) => sum + v, 0);
+      const remaining = Math.max(0, target - totalStock);
+      if (remaining > 0 && bldgConfig.extractorOutput.amount > 0) {
+        fillTicks = remaining / bldgConfig.extractorOutput.amount;
+      } else if (remaining <= 0) {
+        fillTicks = 0;
+      }
+    }
+  }
+
+  const sustainCycles = Math.min(vitalTicks, fillTicks) / 100;
+  return Math.max(1, sustainCycles);
+}
+
 function rebuildClaimTasks(
   queue: TaskQueue,
   state: GameState,
@@ -235,8 +261,21 @@ function reserveBestTask(
     let actionTicksB = travelTicksToAction(b.task.type, multiplier);
     const totalA = a.travelTicks + actionTicksA;
     const totalB = b.travelTicks + actionTicksB;
-    const rateA = totalA > 0 ? a.task.value / totalA : 0;
-    const rateB = totalB > 0 ? b.task.value / totalB : 0;
+
+    let valueA = a.task.value;
+    let valueB = b.task.value;
+
+    if (a.task.type === 'WORK') {
+      const bldg = [...state.buildings.values()].find(bl => bl.cellId === a.task.cellId && bl.ownerId === a.task.ownerId);
+      if (bldg) valueA *= computeWorkSustainTicks(unit, bldg, state);
+    }
+    if (b.task.type === 'WORK') {
+      const bldg = [...state.buildings.values()].find(bl => bl.cellId === b.task.cellId && bl.ownerId === b.task.ownerId);
+      if (bldg) valueB *= computeWorkSustainTicks(unit, bldg, state);
+    }
+
+    const rateA = totalA > 0 ? valueA / totalA : 0;
+    const rateB = totalB > 0 ? valueB / totalB : 0;
     return rateB - rateA;
   });
 
@@ -311,6 +350,11 @@ export function processCitizenAI(
 
     const currentCell = state.cells.get(unit.cellId);
     const unitConfig = CFG.UNITS[unit.type];
+
+    const reservedTask = unit.unitId ? [...queue.tasks.values()].find(t => t.reservedBy === unit.unitId) : null;
+    if (reservedTask && reservedTask.type === 'WORK' && reservedTask.cellId === unit.cellId) {
+      continue;
+    }
 
     if (unitConfig?.canClaim && currentCell && !currentCell.ownerId && PASSABLE_TERRAIN.includes(currentCell.biome)) {
       let adjacentToOwn = false;
