@@ -449,11 +449,7 @@ export const CFG: ICFG = {
   // ─── City / Settlement ────────────────────
   CITY: {
     INITIAL_STOCKPILE: {
-      [ResourceType.BREAD]: 80,
-      [ResourceType.GRAIN]: 60,
-      [ResourceType.ORE]: 30,
-      [ResourceType.STEEL]: 10,
-      [ResourceType.POWER]: 1000,
+      [ResourceType.BREAD]: 100,
     } as Record<string, number>,
     POPULATION_INITIAL: 10,
     POPULATION_CAP: {
@@ -524,13 +520,13 @@ export const CFG: ICFG = {
 
   CITIZEN_VITALS: {
     MAX_HEALTH: 100,
-    MAX_HUNGER: 10000,
-    MAX_REST: 10000,
+    MAX_HUNGER: 7500,
+    MAX_REST: 7500,
     HUNGER_DRAIN_PER_TICK: 1.5,
     REST_DRAIN_PER_TICK: 1.5,
     HEALTH_LOSS_WHEN_HUNGRY_PER_TICK: 0.1,
-    HUNGER_THRESHOLD: 3000,
-    REST_THRESHOLD: 3000,
+    HUNGER_THRESHOLD: 2250,
+    REST_THRESHOLD: 2250,
     HEALTH_THRESHOLD: 80,
     HUNGER_RECHARGE_PER_TICK: 100,
     REST_RECHARGE_PER_TICK: 10,

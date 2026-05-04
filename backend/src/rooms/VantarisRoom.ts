@@ -19,7 +19,7 @@ import { processCitizenAI, createTaskQueue } from '../systems/CitizenAI';
 import { spawnUnit, assignPath, stepUnit, startClaiming } from '../mutations/units';
 import type { StepResult } from '../mutations/units';
 import { createBuilding, tickBuildingProduction, canPlaceBuilding, cancelBuilding, getAvailableBuildTypes, countBuildingsOnCell, canAffordBuildingCost, tickBuildingConstruction, getResourcesInvested } from '../mutations/buildings';
-import { tickExtractorOutput, tickFactoryProcessing, tickCityResourceDrain, tickPopulation, tickCityXP, tickInflowResets, tickBuildingWages, tickCitizenVitals } from '../mutations/resources';
+import { tickExtractorOutput, tickFactoryProcessing, tickCityResourceDrain, tickCityXP, tickInflowResets, tickBuildingWages, tickCitizenVitals } from '../mutations/resources';
 import { claimCell, loseCell } from '../mutations/territory';
 
 interface CreateOptions {
@@ -224,10 +224,9 @@ export class VantarisRoom extends Room<GameState> {
     this.state.players.set(playerId, player);
 
     const city = createCity(this.state, playerId, spawnCellId);
-    city.population = CFG.CITY.POPULATION_INITIAL;
     city.homesAvailable = CFG.CITY.HOMES_PER_CITY;
 
-    player.energyCredits = CFG.CITY.INITIAL_STOCKPILE[ResourceType.POWER] || 1000;
+    player.energyCredits = 0;
     player.claimCompensation = 10;
 
     completeClaim(this.state, spawnCellId, playerId);
@@ -274,7 +273,6 @@ export class VantarisRoom extends Room<GameState> {
     this.processBuildingWages();
     this.processCitizenVitals();
     this.processCityResourceDrain();
-    this.processPopulation();
     this.processCityXP();
     this.processInflowResets();
     this.checkElimination();
@@ -410,10 +408,6 @@ export class VantarisRoom extends Room<GameState> {
 
   private processCityResourceDrain(): void {
     tickCityResourceDrain(this.state);
-  }
-
-  private processPopulation(): void {
-    tickPopulation(this.state);
   }
 
   private processCityXP(): void {
@@ -635,7 +629,6 @@ computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.IN
     if (data.buildingType === 'CITY') {
       this.state.buildings.delete(building.buildingId);
       const city = createCity(this.state, playerId, data.cellId);
-      city.population = CFG.CITY.POPULATION_INITIAL;
     }
 
     unit.status = 'BUILDING';

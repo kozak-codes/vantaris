@@ -227,7 +227,18 @@
 - If we dont have enough money to do something like claim a tile or work, then the citizen should not do that task and instead return home and idle till we have enough money (ideally they pay for food)
 - When citizens return home I dont think their animation is working properly - it should use the existing path system that works well.
 
+- Decrease max food and max rest to about 75%
+- If there is no food in a city, it should not recharge that citizens hunger. Ensure we are charging for food properly.
+- Remove the concept of "population" from cities - remove city base energy usage
+- Remove all city starting resources and replace with 100 bread for now
+- If there is no food, citizens can leave to continue work so long as they are fully rested.
+
 //--------- COMPLETED UP TO HERE
+
+- Split up citizen states after returning to EATING and RESTING and HEALING (in that order) - once they are done all that then they can continue about their day (if they cant eat then continue to next step - if they dont need healing or are not at their food threshhold then skip that)
+- remove city food and energy per tick requirement as these are now managed by the actual citizens
+- Please check that the CITIZEN pays the PLAYER/CONTESTANT credits for the food
+
 
 ## Trader rework
 
@@ -242,19 +253,20 @@
 - If a unit has to go home because they go below the rest, food, or health threshold then we should cancel that task and the system should automatically recalculate the unreserved transportation task.
 - Can we add a task screen on the left side that we can maximize to list all of the tasks available sorted by amount, whats reserved, and by who
 - Reduce the base target for each extractor by a factor of 10
+- Based on our supply/demand pricing algorithm perhaps we should consider auto pricing labor as well and how that might work (min/max labor price to optimize utility?)
+
+Let's first discuss some economics options we can use to help automate this based on indicating each locations supply/demand (target amount + min price + max price)
 
 
 ## Tile rework
 
-- Add a "base compensation multiplier" to tiles - so tundra tiles are not rewarded as much as other tiles. Tiles with buildings should be rewarded a bit more too.
+- Add a "base compensation multiplier" to tiles - so tundra tiles are not rewarded as much as other tiles. Tiles with buildings should be rewarded a bit more too. ??? OR WE CONSIDER DIFFERENT REGIONS have different claim costs, which affect the overall payout per tick for that unit - so tundra and mountains take longer to claim so citizens wont do it
 - When clicking on an unclaimed tile, allow us to adjust the compensation amount from the default amount
 - Let's change this to be one building per tile and infinite units. Autoselect the building on that tile when you click/tap it
 - Add an "exploration compensation" to the economy tab - this is useful if you want to expand your knowledge of the world quicker.
-- Remove the concept of "population" from cities - remove city base energy usage
-- Remove all city starting resources and replace with 100 bread for now
 - Add link to the building that the unit is working at
 
-## AI State rework
+## AI State rework < WE MIGHT WANT TO PUSH THIS UP!
 
 AI state is getting really large, especially after our trader and rework. Consider some ways we can improve the state system for further expansion
 

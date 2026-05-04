@@ -198,7 +198,6 @@ function deductMaterialFromCity(city: CityState, amount: number): boolean {
 export function canCityAffordProduction(city: CityState): boolean {
   const current = getCurrentProduction(city);
   if (!current) return true;
-  if (city.population < current.popCost + 1) return false;
 
   for (const [resource, amount] of Object.entries(current.resourceCost)) {
     if (resource === 'FOOD') {
@@ -285,9 +284,6 @@ export function investProductionTick(city: CityState): void {
 }
 
 export function consumeProductionCosts(city: CityState, item: ProductionItem): boolean {
-  if (city.population < item.popCost + 1) return false;
-  city.population -= item.popCost;
-
   const invested = getResourcesInvested(city);
 
   for (const [resource, amount] of Object.entries(item.resourceCost)) {

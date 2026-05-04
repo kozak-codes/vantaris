@@ -5,14 +5,32 @@ import { CFG, getPassableTerrain, getFactoryRecipes, UnitStatus, ResourceType, t
 import { findPath, buildUnitsByCellId } from '../systems/Pathfinding';
 import { assignPath, startClaiming } from '../mutations/units';
 import { getBuildingStockpile } from '../mutations/buildings';
+import { getCityStockpile } from '../mutations/resources';
 
 const PASSABLE_TERRAIN = getPassableTerrain(CFG);
 
-function needsToReturnHome(unit: UnitState): boolean {
+function needsToReturnHome(unit: UnitState, state: GameState): boolean {
   const vitals = CFG.CITIZEN_VITALS;
-  return unit.hunger <= vitals.HUNGER_THRESHOLD
-    || unit.rest <= vitals.REST_THRESHOLD
-    || unit.health < vitals.HEALTH_THRESHOLD;
+  const lowHealth = unit.health < vitals.HEALTH_THRESHOLD;
+  const lowRest = unit.rest <= vitals.REST_THRESHOLD;
+  const lowHunger = unit.hunger <= vitals.HUNGER_THRESHOLD;
+
+  if (lowHealth) return true;
+  if (lowRest) return true;
+  if (lowHunger) {
+    const city = state.cities.get(unit.homeCityId);
+    if (city) {
+      const citySp = getCityStockpile(city);
+      const hasFood = (citySp[ResourceType.GRAIN] || 0) >= vitals.HUNGER_RECHARGE_FOOD_COST
+        || (citySp[ResourceType.BREAD] || 0) >= vitals.HUNGER_RECHARGE_FOOD_COST;
+      const owner = state.players.get(unit.ownerId);
+      const foodCreditRate = owner?.foodCreditRate ?? 1;
+      const canAffordCredits = !owner || owner.energyCredits >= vitals.HUNGER_RECHARGE_FOOD_COST * foodCreditRate;
+      if (hasFood && canAffordCredits) return true;
+    }
+    return false;
+  }
+  return false;
 }
 
 interface Task {
@@ -369,7 +387,7 @@ export function processCitizenAI(
     if (unit.status === 'RETURNING') continue;
 
     if (unit.status === 'WORKING') {
-      if (needsToReturnHome(unit)) {
+      if (needsToReturnHome(unit, state)) {
         const homeCity = state.cities.get(unit.homeCityId);
         if (homeCity) {
           if (unit.cellId === homeCity.cellId) {
@@ -413,7 +431,7 @@ export function processCitizenAI(
     }
 
     if (unit.status !== 'IDLE') {
-      if (needsToReturnHome(unit)) {
+      if (needsToReturnHome(unit, state)) {
         const homeCity = state.cities.get(unit.homeCityId);
         if (homeCity) {
           if (unit.cellId === homeCity.cellId) {
@@ -433,7 +451,7 @@ export function processCitizenAI(
       continue;
     }
 
-    if (needsToReturnHome(unit)) {
+    if (needsToReturnHome(unit, state)) {
       const homeCity = state.cities.get(unit.homeCityId);
       if (!homeCity) continue;
 
