@@ -21,8 +21,8 @@ function VitalsBar({ label, value, max, color }: { label: string; value: number;
   const isLow = pct < 30;
   const barColor = isLow ? '#cc4444' : color;
   return (
-    <div class="panel-row">
-      <span class="label">{label}</span>
+    <div class="vitals-row">
+      <span class="vitals-label">{label}</span>
       <div class="vitals-bar-container">
         <div class="vitals-bar-fill" style={{ width: `${pct}%`, backgroundColor: barColor }} />
         <span class="vitals-bar-text">{Math.round(value)}/{max}</span>

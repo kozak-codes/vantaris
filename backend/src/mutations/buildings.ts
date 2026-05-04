@@ -77,6 +77,7 @@ export function createBuilding(
   building.resourcesInvested = '{"food":0,"material":0}';
   const bldgConfig = CFG.BUILDINGS[buildingType];
   building.stockpileTarget = bldgConfig?.target ?? 0;
+  building.wagePer100Ticks = bldgConfig?.wagePer100Ticks ?? 0;
 
   state.buildings.set(building.buildingId, building);
 

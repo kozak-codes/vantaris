@@ -16,4 +16,5 @@ export class BuildingState extends Schema {
   @type('number') specializationCycles: number = 0;
   @type('number') recipeTicksRemaining: number = 0;
   @type('number') recipeTicksTotal: number = 0;
+  @type('number') wagePer100Ticks: number = 0;
 }

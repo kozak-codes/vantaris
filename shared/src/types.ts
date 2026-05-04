@@ -118,6 +118,7 @@ export interface BuildingData {
   specializationCycles: number;
   recipeTicksRemaining: number;
   recipeTicksTotal: number;
+  wagePer100Ticks: number;
 }
 
 export interface CityStockpileData {
@@ -133,6 +134,7 @@ export interface PlayerResourceData {
   factoryCount: number;
   energyCredits: number;
   claimCompensation: number;
+  foodCreditRate: number;
 }
 
 export interface FactoryRecipe {

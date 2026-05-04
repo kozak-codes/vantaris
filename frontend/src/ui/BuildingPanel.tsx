@@ -4,7 +4,7 @@ import {
   myPlayerId, selectedBuildingId,
 } from '../state/signals';
 import { BUILDING_DISPLAY, RESOURCE_LABELS, EXTRACTOR_OUTPUT, FACTORY_RECIPES } from './hud-shared';
-import { sendSetFactoryRecipe, sendSetStockpileTarget } from '../network/ColyseusClient';
+import { sendSetFactoryRecipe, sendSetStockpileTarget, sendSetBuildingWage } from '../network/ColyseusClient';
 
 // Strip delivery target imports, add stockpile target
 interface BuildingPanelProps {
@@ -20,9 +20,10 @@ export const BuildingPanel: FunctionalComponent<BuildingPanelProps> = ({ buildin
     ? FACTORY_RECIPES.find(r => r.id === building.recipe)
     : null;
   const bldgConfig = CFG.BUILDINGS[building.type];
-  const wagePer100 = bldgConfig?.wagePer100Ticks ?? 0;
+  const defaultWage = bldgConfig?.wagePer100Ticks ?? 0;
   const defaultTarget = bldgConfig?.target ?? 0;
   const currentTarget = building.stockpileTarget || defaultTarget;
+  const currentWage = building.wagePer100Ticks ?? defaultWage;
 
   let productionHtml: any = null;
   if (extractorInfo) {
@@ -115,7 +116,12 @@ export const BuildingPanel: FunctionalComponent<BuildingPanelProps> = ({ buildin
           />
           <span class="economy-unit">stock</span>
         </span></div>
-        {wagePer100 > 0 && <div class="panel-row"><span class="label">Wage</span><span>⚡ {wagePer100}/100t</span></div>}
+        {defaultWage >= 0 && <div class="panel-row"><span class="label">Wage</span><span class="economy-setting">
+          <input type="number" class="economy-input" value={currentWage} min={0} step={1}
+            onInput={(e: any) => { const v = parseFloat(e.target.value); if (!isNaN(v) && v >= 0) sendSetBuildingWage(building.buildingId, v); }}
+          />
+          <span class="economy-unit">⚡/100t</span>
+        </span></div>}
       </div>
     );
   }

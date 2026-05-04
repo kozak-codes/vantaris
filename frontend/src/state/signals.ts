@@ -25,7 +25,7 @@ export const units = signal<Map<string, UnitData>>(new Map());
 export const cities = signal<Map<string, CityData>>(new Map());
 export const buildings = signal<Map<string, BuildingData>>(new Map());
 export const players = signal<Map<string, PlayerSummary>>(new Map());
-export const resources = signal<PlayerResourceData>({ food: 0, energy: 0, foodPerTick: 0, energyPerTick: 0, totalPopulation: 0, factoryCount: 0, energyCredits: 0, claimCompensation: 0 });
+export const resources = signal<PlayerResourceData>({ food: 0, energy: 0, foodPerTick: 0, energyPerTick: 0, totalPopulation: 0, factoryCount: 0, energyCredits: 0, claimCompensation: 0, foodCreditRate: 1 });
 
 export const eliminationEvent = signal<{ color: string; displayName: string; eliminatedTick: number } | null>(null);
 export const gameWonEvent = signal<{ color: string; displayName: string } | null>(null);

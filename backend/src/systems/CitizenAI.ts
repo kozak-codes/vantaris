@@ -102,10 +102,10 @@ function rebuildClaimTasks(
 
   for (const [, building] of state.buildings) {
     if (building.productionTicksRemaining > 0) continue;
-    const bldgConfig = CFG.BUILDINGS[building.type];
-    if (!bldgConfig || bldgConfig.wagePer100Ticks <= 0) continue;
+    const wage = building.wagePer100Ticks;
+    if (wage <= 0) continue;
 
-    const target = building.stockpileTarget || bldgConfig.target;
+    const target = building.stockpileTarget || 0;
     if (target <= 0) continue;
 
     const sp = getBuildingStockpile(building);
@@ -118,7 +118,6 @@ function rebuildClaimTasks(
 
     const key = `work_${building.buildingId}`;
     const player = state.players.get(building.ownerId);
-    const wage = bldgConfig.wagePer100Ticks;
     const canPay = player && player.energyCredits >= wage;
 
     if (!canPay) {
@@ -138,7 +137,7 @@ function rebuildClaimTasks(
     } else {
       const task = queue.tasks.get(key)!;
       const currentPlayer = state.players.get(building.ownerId);
-      task.value = bldgConfig.wagePer100Ticks;
+      task.value = wage;
       task.ownerId = building.ownerId;
       if (!currentPlayer || currentPlayer.energyCredits < task.value) {
         task.reservedBy = null;

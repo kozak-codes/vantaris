@@ -158,6 +158,12 @@ export function sendSetStockpileTarget(buildingId: string, target: number): void
   }
 }
 
+export function sendSetBuildingWage(buildingId: string, wage: number): void {
+  if (currentRoom) {
+    currentRoom.send('setBuildingWage', { buildingId, wage });
+  }
+}
+
 export function sendRenameCity(cityId: string, name: string): void {
   if (currentRoom) {
     currentRoom.send('renameCity', { cityId, name });
@@ -203,6 +209,12 @@ export function sendUpdateCamera(qx: number, qy: number, qz: number, qw: number,
 export function sendSetClaimCompensation(value: number): void {
   if (currentRoom) {
     currentRoom.send('setClaimCompensation', { value });
+  }
+}
+
+export function sendSetFoodCreditRate(value: number): void {
+  if (currentRoom) {
+    currentRoom.send('setFoodCreditRate', { value });
   }
 }
 

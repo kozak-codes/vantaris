@@ -24,16 +24,16 @@ export function tickBuildingWages(state: GameState, tick: number): void {
   for (const [, building] of state.buildings) {
     if (building.productionTicksRemaining > 0) continue;
 
-    const bldgConfig = CFG.BUILDINGS[building.type];
-    if (!bldgConfig || bldgConfig.wagePer100Ticks <= 0) continue;
+    const wage = building.wagePer100Ticks;
+    if (wage <= 0) continue;
 
     const sp = getBuildingStockpile(building);
     const totalStock = Object.values(sp).reduce((sum, v) => sum + v, 0);
-    const target = building.stockpileTarget || bldgConfig.target;
+    const target = building.stockpileTarget || 0;
     if (target <= 0 || totalStock < target) continue;
 
     const owner = state.players.get(building.ownerId);
-    if (!owner || owner.energyCredits < bldgConfig.wagePer100Ticks) continue;
+    if (!owner || owner.energyCredits < wage) continue;
 
     let citizenOnTile: string | null = null;
     for (const [, unit] of state.units) {
@@ -45,8 +45,8 @@ export function tickBuildingWages(state: GameState, tick: number): void {
 
     if (citizenOnTile) {
       const unit = state.units.get(citizenOnTile)!;
-      owner.energyCredits -= bldgConfig.wagePer100Ticks;
-      unit.energyCredits += bldgConfig.wagePer100Ticks;
+      owner.energyCredits -= wage;
+      unit.energyCredits += wage;
     }
   }
 }
@@ -124,8 +124,9 @@ export function resetCityInflows(city: CityState): void {
   setCityInflows(city, []);
 }
 
-export function tickCitizenVitals(state: GameState): void {
+export function tickCitizenVitals(state: GameState, cellPositions: Record<string, [number, number, number]>): void {
   const deadUnits: string[] = [];
+  const sunAngle = state.getSunAngle();
 
   for (const [, unit] of state.units) {
     const vitals = CFG.CITIZEN_VITALS;
@@ -133,8 +134,25 @@ export function tickCitizenVitals(state: GameState): void {
     if (unit.hunger > 0) {
       unit.hunger = Math.max(0, unit.hunger - vitals.HUNGER_DRAIN_PER_TICK);
     }
+
+    let restDrain = vitals.REST_DRAIN_PER_TICK;
+    const unitCell = state.cells.get(unit.cellId);
+    if (unitCell) {
+      const cellPos = cellPositions[unit.cellId];
+      if (cellPos) {
+        const len = Math.sqrt(cellPos[0] * cellPos[0] + cellPos[1] * cellPos[1] + cellPos[2] * cellPos[2]);
+        if (len > 0) {
+          const nx = cellPos[0] / len;
+          const nz = cellPos[2] / len;
+          const dot = nx * Math.cos(sunAngle) + nz * Math.sin(sunAngle);
+          if (dot < -0.2) {
+            restDrain = vitals.REST_DRAIN_PER_TICK * 1.5;
+          }
+        }
+      }
+    }
     if (unit.rest > 0) {
-      unit.rest = Math.max(0, unit.rest - vitals.REST_DRAIN_PER_TICK);
+      unit.rest = Math.max(0, unit.rest - restDrain);
     }
 
     if (unit.hunger <= 0) {
@@ -150,19 +168,28 @@ export function tickCitizenVitals(state: GameState): void {
       const city = state.cities.get(unit.homeCityId);
       if (city) {
         if (unit.hunger < vitals.MAX_HUNGER && city.homesAvailable > 0) {
+          const owner = state.players.get(unit.ownerId);
+          const foodCreditRate = owner?.foodCreditRate ?? 1;
           const foodCost = vitals.HUNGER_RECHARGE_FOOD_COST;
+          const creditCost = foodCost * foodCreditRate;
           const citySp = getCityStockpile(city);
           const grainAvailable = citySp[ResourceType.GRAIN] || 0;
           const breadAvailable = citySp[ResourceType.BREAD] || 0;
+          const canAffordCredits = !owner || owner.energyCredits >= creditCost;
 
-          if (grainAvailable >= foodCost) {
+          let fed = false;
+          if (canAffordCredits && grainAvailable >= foodCost) {
             citySp[ResourceType.GRAIN] = grainAvailable - foodCost;
             unit.hunger = Math.min(vitals.MAX_HUNGER, unit.hunger + vitals.HUNGER_RECHARGE_PER_TICK);
+            if (owner) owner.energyCredits -= creditCost;
             setCityStockpile(city, citySp);
-          } else if (breadAvailable >= foodCost) {
+            fed = true;
+          } else if (canAffordCredits && breadAvailable >= foodCost) {
             citySp[ResourceType.BREAD] = breadAvailable - foodCost;
             unit.hunger = Math.min(vitals.MAX_HUNGER, unit.hunger + vitals.HUNGER_RECHARGE_PER_TICK);
+            if (owner) owner.energyCredits -= creditCost;
             setCityStockpile(city, citySp);
+            fed = true;
           }
         }
 

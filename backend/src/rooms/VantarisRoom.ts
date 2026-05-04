@@ -149,6 +149,13 @@ export class VantarisRoom extends Room<GameState> {
       this.handleSetStockpileTarget(client, data);
     });
 
+    this.onMessage('setBuildingWage', (client, data: { buildingId: string; wage: number }) => {
+      const playerId = client.sessionId;
+      const building = this.state.buildings.get(data.buildingId);
+      if (!building || building.ownerId !== playerId) return;
+      building.wagePer100Ticks = Math.max(0, data.wage);
+    });
+
     this.onMessage('revealRuin', (client, data: { cellId: string }) => {
       const cell = this.state.cells.get(data.cellId);
       if (cell && cell.ruin && !cell.ruinRevealed) {
@@ -189,6 +196,13 @@ export class VantarisRoom extends Room<GameState> {
       const player = this.state.players.get(client.sessionId);
       if (player) {
         player.claimCompensation = Math.max(0, data.value);
+      }
+    });
+
+    this.onMessage('setFoodCreditRate', (client, data: { value: number }) => {
+      const player = this.state.players.get(client.sessionId);
+      if (player) {
+        player.foodCreditRate = Math.max(0, data.value);
       }
     });
   }
@@ -391,7 +405,7 @@ export class VantarisRoom extends Room<GameState> {
   }
 
   private processCitizenVitals(): void {
-    tickCitizenVitals(this.state);
+    tickCitizenVitals(this.state, this.cellPositions);
   }
 
   private processCityResourceDrain(): void {

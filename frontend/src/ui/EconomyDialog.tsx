@@ -1,7 +1,7 @@
 import { FunctionalComponent } from 'preact';
 import { economyOpen } from './ResourceBar';
 import { resources, myPlayerId, units } from '../state/signals';
-import { sendSetClaimCompensation } from '../network/ColyseusClient';
+import { sendSetClaimCompensation, sendSetFoodCreditRate } from '../network/ColyseusClient';
 import { CFG } from '@vantaris/shared';
 import { typeLabel } from './hud-shared';
 
@@ -52,6 +52,12 @@ export const EconomyDialog: FunctionalComponent = () => {
                 onInput={(e: any) => { const v = parseFloat(e.target.value); if (!isNaN(v) && v >= 0) sendSetClaimCompensation(v); }}
               />
               <span class="economy-unit">⚡/claim</span>
+            </span></div>
+            <div class="panel-row"><span class="label">Food Credit Rate</span><span class="economy-setting">
+              <input type="number" class="economy-input" value={r.foodCreditRate} min={0} step={0.5}
+                onInput={(e: any) => { const v = parseFloat(e.target.value); if (!isNaN(v) && v >= 0) sendSetFoodCreditRate(v); }}
+              />
+              <span class="economy-unit">⚡/food</span>
             </span></div>
           </div>
           <div class="panel-section">

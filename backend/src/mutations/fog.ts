@@ -148,7 +148,7 @@ export function buildPlayerSlice(
       cities: [],
       buildings: [],
       players: [],
-      resources: { food: 0, energy: 0, foodPerTick: 0, energyPerTick: 0, totalPopulation: 0, factoryCount: 0, energyCredits: 0, claimCompensation: 0 },
+      resources: { food: 0, energy: 0, foodPerTick: 0, energyPerTick: 0, totalPopulation: 0, factoryCount: 0, energyCredits: 0, claimCompensation: 0, foodCreditRate: 1 },
     };
   }
 
@@ -182,6 +182,7 @@ export function buildPlayerSlice(
               specializationCycles: building.specializationCycles,
               recipeTicksRemaining: building.recipeTicksRemaining,
               recipeTicksTotal: getRecipeTicksTotal(building),
+              wagePer100Ticks: building.wagePer100Ticks,
             });
           }
         }
@@ -312,12 +313,13 @@ export function buildPlayerSlice(
           resourcesInvested: getResourcesInvested(building),
           stockpileTarget: building.stockpileTarget,
           specializationRecipe: building.specializationRecipe,
-          specializationCycles: building.specializationCycles,
-          recipeTicksRemaining: building.recipeTicksRemaining,
-          recipeTicksTotal: getRecipeTicksTotal(building),
-        });
-    }
-  }
+           specializationCycles: building.specializationCycles,
+           recipeTicksRemaining: building.recipeTicksRemaining,
+           recipeTicksTotal: getRecipeTicksTotal(building),
+           wagePer100Ticks: building.wagePer100Ticks,
+         });
+     }
+   }
 
   const players: PlayerSummary[] = [];
   for (const [pid, ps] of state.players) {
@@ -378,6 +380,7 @@ export function buildPlayerSlice(
     factoryCount: factCount,
     energyCredits: player ? player.energyCredits : 0,
     claimCompensation: player ? player.claimCompensation : 0,
+    foodCreditRate: player ? player.foodCreditRate : 1,
   };
 
   return {

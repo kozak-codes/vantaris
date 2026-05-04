@@ -16,6 +16,7 @@ export class PlayerState extends Schema {
   @type(FogState) fog: FogState = new FogState();
   @type('number') energyCredits: number = 0;
   @type('number') claimCompensation: number = 0;
+  @type('number') foodCreditRate: number = 1;
   @type('string') tradingTable: string = '{}';
   @type('number') totalPopulation: number = 0;
 }

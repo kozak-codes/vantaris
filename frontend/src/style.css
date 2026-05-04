@@ -953,6 +953,21 @@ html, body {
   margin-top: 6px;
 }
 
+.vitals-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0;
+}
+
+.vitals-label {
+  font-size: 12px;
+  color: #99aabb;
+  min-width: 48px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
 .vitals-bar-container {
   flex: 1;
   position: relative;
@@ -960,7 +975,6 @@ html, body {
   background: rgba(255, 255, 255, 0.08);
   border-radius: 3px;
   overflow: hidden;
-  margin-left: 8px;
 }
 
 .vitals-bar-fill {
