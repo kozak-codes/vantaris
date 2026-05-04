@@ -330,7 +330,7 @@ export const CFG: ICFG = {
     FARM: {
       ticks: 200,
       placement: ["PLAINS", "FOREST"],
-      extractorOutput: { resource: ResourceType.GRAIN, amount: 3 },
+      extractorOutput: { resource: ResourceType.GRAIN, amount: 0.5 },
       cost: { food: 0, material: 0 },
       exhaustionCost: 1,
       wagePer100Ticks: 5,
@@ -339,7 +339,7 @@ export const CFG: ICFG = {
     MINE: {
       ticks: 300,
       placement: ["MOUNTAIN", "DESERT"],
-      extractorOutput: { resource: ResourceType.ORE, amount: 3 },
+      extractorOutput: { resource: ResourceType.ORE, amount: 0.5 },
       cost: { food: 0, material: 0 },
       exhaustionCost: 1,
       wagePer100Ticks: 5,
@@ -348,7 +348,7 @@ export const CFG: ICFG = {
     OIL_WELL: {
       ticks: 350,
       placement: ["DESERT", "TUNDRA"],
-      extractorOutput: { resource: ResourceType.OIL, amount: 2 },
+      extractorOutput: { resource: ResourceType.OIL, amount: 0.3 },
       cost: { food: 30, material: 20 },
       exhaustionCost: 1,
       wagePer100Ticks: 8,
@@ -357,7 +357,7 @@ export const CFG: ICFG = {
     LUMBER_CAMP: {
       ticks: 250,
       placement: ["FOREST", "TUNDRA"],
-      extractorOutput: { resource: ResourceType.TIMBER, amount: 3 },
+      extractorOutput: { resource: ResourceType.TIMBER, amount: 0.5 },
       cost: { food: 0, material: 0 },
       exhaustionCost: 1,
       wagePer100Ticks: 5,
