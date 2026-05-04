@@ -252,6 +252,9 @@
 - Remove the concept of "population" from cities - remove city base energy usage
 - Remove all city starting resources and replace with 100 bread for now
 
+## AI State rework
+
+AI state is getting really large, especially after our trader and rework. Consider some ways we can improve the state system for further expansion
 
 ## Factories, supply chains, building
 

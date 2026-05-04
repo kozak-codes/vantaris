@@ -385,8 +385,31 @@ export function processCitizenAI(
             }
           }
         }
+        continue;
       }
-      continue;
+
+      if (tick % 100 === 0) {
+        const currentTask = [...queue.tasks.values()].find(t => t.reservedBy === unit.unitId);
+        const currentTaskValue = currentTask ? currentTask.value : 0;
+
+        queue.tasks.forEach(t => { if (t.reservedBy === unit.unitId) t.reservedBy = null; });
+
+        const bestTask = reserveBestTask(unit, queue, state, adjacencyMap, cellPositions, unitsByCellId);
+        if (bestTask && bestTask.value > currentTaskValue * 1.2) {
+          unit.status = UnitStatus.IDLE;
+        } else {
+          if (bestTask && bestTask !== currentTask) {
+            bestTask.reservedBy = null;
+          }
+          if (currentTask) {
+            currentTask.reservedBy = unit.unitId;
+          }
+          unit.status = 'WORKING';
+          continue;
+        }
+      } else {
+        continue;
+      }
     }
 
     if (unit.status !== 'IDLE') {
