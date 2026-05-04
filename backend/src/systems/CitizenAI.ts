@@ -105,42 +105,74 @@ function rebuildClaimTasks(
     const wage = building.wagePer100Ticks;
     if (wage <= 0) continue;
 
-    const target = building.stockpileTarget || 0;
-    if (target <= 0) continue;
+    const bldgConfig = CFG.BUILDINGS[building.type];
+    const hasExtractor = bldgConfig && bldgConfig.extractorOutput;
 
-    const sp = getBuildingStockpile(building);
-    const totalStock = Object.values(sp).reduce((sum, v) => sum + v, 0);
-    if (totalStock < target) {
+    if (hasExtractor) {
       const key = `work_${building.buildingId}`;
-      if (queue.tasks.has(key)) queue.tasks.delete(key);
-      continue;
-    }
+      const player = state.players.get(building.ownerId);
+      const canPay = player && player.energyCredits >= wage;
 
-    const key = `work_${building.buildingId}`;
-    const player = state.players.get(building.ownerId);
-    const canPay = player && player.energyCredits >= wage;
+      if (!canPay) {
+        if (queue.tasks.has(key)) queue.tasks.delete(key);
+        continue;
+      }
 
-    if (!canPay) {
-      if (queue.tasks.has(key)) queue.tasks.delete(key);
-      continue;
-    }
-
-    if (!queue.tasks.has(key)) {
-      queue.tasks.set(key, {
-        type: 'WORK',
-        cellId: building.cellId,
-        ownerId: building.ownerId,
-        reservedBy: null,
-        value: wage,
-        taskKey: key,
-      });
+      if (!queue.tasks.has(key)) {
+        queue.tasks.set(key, {
+          type: 'WORK',
+          cellId: building.cellId,
+          ownerId: building.ownerId,
+          reservedBy: null,
+          value: wage,
+          taskKey: key,
+        });
+      } else {
+        const task = queue.tasks.get(key)!;
+        task.value = wage;
+        task.ownerId = building.ownerId;
+        if (!player || player.energyCredits < task.value) {
+          task.reservedBy = null;
+        }
+      }
     } else {
-      const task = queue.tasks.get(key)!;
-      const currentPlayer = state.players.get(building.ownerId);
-      task.value = wage;
-      task.ownerId = building.ownerId;
-      if (!currentPlayer || currentPlayer.energyCredits < task.value) {
-        task.reservedBy = null;
+      const target = building.stockpileTarget || 0;
+      if (target <= 0) continue;
+
+      const sp = getBuildingStockpile(building);
+      const totalStock = Object.values(sp).reduce((sum, v) => sum + v, 0);
+      if (totalStock < target) {
+        const key = `work_${building.buildingId}`;
+        if (queue.tasks.has(key)) queue.tasks.delete(key);
+        continue;
+      }
+
+      const key = `work_${building.buildingId}`;
+      const player = state.players.get(building.ownerId);
+      const canPay = player && player.energyCredits >= wage;
+
+      if (!canPay) {
+        if (queue.tasks.has(key)) queue.tasks.delete(key);
+        continue;
+      }
+
+      if (!queue.tasks.has(key)) {
+        queue.tasks.set(key, {
+          type: 'WORK',
+          cellId: building.cellId,
+          ownerId: building.ownerId,
+          reservedBy: null,
+          value: wage,
+          taskKey: key,
+        });
+      } else {
+        const task = queue.tasks.get(key)!;
+        const currentPlayer = state.players.get(building.ownerId);
+        task.value = wage;
+        task.ownerId = building.ownerId;
+        if (!currentPlayer || currentPlayer.energyCredits < task.value) {
+          task.reservedBy = null;
+        }
       }
     }
   }
