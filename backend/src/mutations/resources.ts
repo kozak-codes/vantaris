@@ -164,51 +164,62 @@ export function tickCitizenVitals(state: GameState, cellPositions: Record<string
       continue;
     }
 
-    if (unit.status === 'RETURNING') {
-      const city = state.cities.get(unit.homeCityId);
-      if (city) {
-        if (unit.hunger < vitals.MAX_HUNGER && city.homesAvailable > 0) {
-          const owner = state.players.get(unit.ownerId);
-          const foodCreditRate = owner?.foodCreditRate ?? 1;
-          const foodCost = vitals.HUNGER_RECHARGE_FOOD_COST;
-          const creditCost = foodCost * foodCreditRate;
-          const citySp = getCityStockpile(city);
-          const grainAvailable = citySp[ResourceType.GRAIN] || 0;
-          const breadAvailable = citySp[ResourceType.BREAD] || 0;
-          const canAffordCredits = !owner || owner.energyCredits >= creditCost;
+    const city = state.cities.get(unit.homeCityId);
+    if (!city) continue;
 
-          if (canAffordCredits && grainAvailable >= foodCost) {
-            citySp[ResourceType.GRAIN] = grainAvailable - foodCost;
-            unit.hunger = Math.min(vitals.MAX_HUNGER, unit.hunger + vitals.HUNGER_RECHARGE_PER_TICK);
-            if (owner) owner.energyCredits -= creditCost;
-            setCityStockpile(city, citySp);
-          } else if (canAffordCredits && breadAvailable >= foodCost) {
-            citySp[ResourceType.BREAD] = breadAvailable - foodCost;
-            unit.hunger = Math.min(vitals.MAX_HUNGER, unit.hunger + vitals.HUNGER_RECHARGE_PER_TICK);
-            if (owner) owner.energyCredits -= creditCost;
-            setCityStockpile(city, citySp);
-          }
+    // ── EATING ──────────────────────────────────────
+    if (unit.status === 'RETURNING' || unit.status === 'EATING') {
+      if (unit.hunger < vitals.MAX_HUNGER) {
+        unit.status = 'EATING';
+        const owner = state.players.get(unit.ownerId);
+        const foodCreditRate = owner?.foodCreditRate ?? 1;
+        const foodCost = vitals.HUNGER_RECHARGE_FOOD_COST;
+        const creditCost = foodCost * foodCreditRate;
+        const citySp = getCityStockpile(city);
+        const grainAvailable = citySp[ResourceType.GRAIN] || 0;
+        const breadAvailable = citySp[ResourceType.BREAD] || 0;
+        const canAffordCredits = unit.energyCredits >= creditCost;
+
+        if (canAffordCredits && grainAvailable >= foodCost) {
+          citySp[ResourceType.GRAIN] = grainAvailable - foodCost;
+          unit.hunger = Math.min(vitals.MAX_HUNGER, unit.hunger + vitals.HUNGER_RECHARGE_PER_TICK);
+          unit.energyCredits -= creditCost;
+          if (owner) owner.energyCredits += creditCost;
+          setCityStockpile(city, citySp);
+        } else if (canAffordCredits && breadAvailable >= foodCost) {
+          citySp[ResourceType.BREAD] = breadAvailable - foodCost;
+          unit.hunger = Math.min(vitals.MAX_HUNGER, unit.hunger + vitals.HUNGER_RECHARGE_PER_TICK);
+          unit.energyCredits -= creditCost;
+          if (owner) owner.energyCredits += creditCost;
+          setCityStockpile(city, citySp);
+        } else {
+          unit.status = 'RESTING';
         }
-
-        if (unit.rest < vitals.MAX_REST) {
-          unit.rest = Math.min(vitals.MAX_REST, unit.rest + vitals.REST_RECHARGE_PER_TICK);
-        }
-
-        if (unit.health < vitals.MAX_HEALTH && unit.hunger > vitals.HUNGER_THRESHOLD) {
-          unit.health = Math.min(vitals.MAX_HEALTH, unit.health + vitals.HEALTH_RECHARGE_PER_TICK);
-        }
-
-        const isReadyToWork = unit.rest >= vitals.MAX_REST
-          && unit.health >= vitals.HEALTH_THRESHOLD
-          && (unit.hunger >= vitals.MAX_HUNGER || unit.hunger > vitals.HUNGER_THRESHOLD);
-
-        if (isReadyToWork) {
-          unit.status = UnitStatus.IDLE;
-          unit.path = '[]';
-          unit.movementTicksRemaining = 0;
-          unit.movementTicksTotal = 0;
-        }
+        continue;
       }
+      unit.status = 'RESTING';
+      continue;
+    }
+
+    // ── RESTING ─────────────────────────────────────
+    if (unit.status === 'RESTING') {
+      if (unit.rest < vitals.MAX_REST) {
+        unit.rest = Math.min(vitals.MAX_REST, unit.rest + vitals.REST_RECHARGE_PER_TICK);
+        continue;
+      }
+
+      if (unit.health < vitals.HEALTH_THRESHOLD && unit.hunger > vitals.HUNGER_THRESHOLD) {
+        unit.health = Math.min(vitals.MAX_HEALTH, unit.health + vitals.HEALTH_RECHARGE_PER_TICK);
+        continue;
+      }
+
+      if (unit.health >= vitals.HEALTH_THRESHOLD && unit.rest >= vitals.MAX_REST) {
+        unit.status = UnitStatus.IDLE;
+        unit.path = '[]';
+        unit.movementTicksRemaining = 0;
+        unit.movementTicksTotal = 0;
+      }
+      continue;
     }
   }
 
@@ -311,43 +322,9 @@ export function tickCityResourceDrain(state: GameState): void {
   }
 }
 
-export function tickPopulation(state: GameState): void {
-  for (const [, city] of state.cities) {
-    const foodSatisfaction = city.foodPerTick;
-    const popCap = getPopulationCap(city.tier);
-
-    if (foodSatisfaction >= 1.0 && city.population < popCap) {
-      const capacityRatio = city.population / popCap;
-      const growthFactor = (1 - capacityRatio) * (foodSatisfaction - 1);
-      const growth = CFG.CITY.POPULATION_GROWTH_RATE * city.population * growthFactor;
-      city.population = Math.min(popCap, city.population + Math.max(0, growth));
-    } else if (foodSatisfaction < CFG.CITY.POPULATION_DECLINE_THRESHOLD && city.population > 0) {
-      if (foodSatisfaction <= CFG.CITY.POPULATION_STARVATION_THRESHOLD) {
-        city.population = Math.max(0, city.population - CFG.CITY.POPULATION_STARVATION_RATE * city.population);
-      } else {
-        city.population = Math.max(0, city.population - CFG.CITY.POPULATION_DECLINE_RATE * city.population);
-      }
-    }
-
-    if (city.population >= popCap) {
-      city.population = Math.floor(popCap);
-    }
-
-    if (city.population < 1) {
-      city.population = 0;
-    }
-  }
-}
-
 export function tickCityXP(state: GameState): void {
   for (const [, city] of state.cities) {
-    const baseXP = Math.floor(city.population / 10) * CFG.CITY.XP_PER_POP_PER_10;
-    let xp = baseXP;
-
-    if (city.foodPerTick >= 1.0) xp = Math.floor(xp * CFG.CITY.XP_FOOD_MULTIPLIER);
-    if (city.energyPerTick >= 1.0) xp = Math.floor(xp * CFG.CITY.XP_ENERGY_MULTIPLIER);
-
-    city.xp += xp;
+    city.xp += 1;
 
     for (let i = CFG.CITY.TIER_XP_THRESHOLDS.length - 1; i >= 0; i--) {
       if (city.xp >= CFG.CITY.TIER_XP_THRESHOLDS[i] && i + 1 > city.tier) {
@@ -356,10 +333,6 @@ export function tickCityXP(state: GameState): void {
       }
     }
   }
-}
-
-function getPopulationCap(tier: number): number {
-  return CFG.CITY.POPULATION_CAP[tier] ?? 50;
 }
 
 export function tickInflowResets(state: GameState): void {

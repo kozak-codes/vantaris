@@ -257,6 +257,9 @@
 
 Let's first discuss some economics options we can use to help automate this based on indicating each locations supply/demand (target amount + min price + max price)
 
+## AI State rework < WE MIGHT WANT TO PUSH THIS UP!
+
+AI state is getting really large, especially after our trader rework. Consider some ways we can improve the state system for further expansion
 
 ## Tile rework
 
@@ -266,9 +269,6 @@ Let's first discuss some economics options we can use to help automate this base
 - Add an "exploration compensation" to the economy tab - this is useful if you want to expand your knowledge of the world quicker.
 - Add link to the building that the unit is working at
 
-## AI State rework < WE MIGHT WANT TO PUSH THIS UP!
-
-AI state is getting really large, especially after our trader and rework. Consider some ways we can improve the state system for further expansion
 
 ## Factories, supply chains, building
 

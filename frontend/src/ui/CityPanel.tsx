@@ -91,8 +91,6 @@ export const CityPanel: FunctionalComponent<CityPanelProps> = ({ city, tileId, b
         )}
         <div class="panel-row"><span class="label">Owner</span><span style={{ color: ownerColor }}>{ownerName}{isMyCity ? ' (You)' : ''}</span></div>
         <div class="panel-row"><span class="label">Tier</span><span>{tierName} (Lv.{city.tier})</span></div>
-        <div class="panel-row"><span class="label">Population</span><span>{city.population}</span></div>
-        <div class="panel-row"><span class="label">Garrison</span><span>{unitsHere} / {maxUnits}</span></div>
         <div class="panel-row"><span class="label">Homes</span><span>{city.homesAvailable}</span></div>
         <div class="panel-row"><span class="label">Terrain</span><span>{BIOME_TRAVEL_NAMES[biome] || biome}</span></div>
         <div class="panel-row"><span class="label">XP</span><span>{city.xp} / {city.xpToNext}</span></div>

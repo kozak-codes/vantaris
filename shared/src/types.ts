@@ -29,6 +29,8 @@ export enum UnitStatus {
   BUILDING = 'BUILDING',
   RETURNING = 'RETURNING',
   WORKING = 'WORKING',
+  EATING = 'EATING',
+  RESTING = 'RESTING',
 }
 
 export enum BuildingType {

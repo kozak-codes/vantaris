@@ -384,7 +384,7 @@ export function processCitizenAI(
   for (const [, unit] of state.units) {
     if (unit.ownerId === '') continue;
 
-    if (unit.status === 'RETURNING') continue;
+    if (unit.status === 'RETURNING' || unit.status === 'EATING' || unit.status === 'RESTING') continue;
 
     if (unit.status === 'WORKING') {
       if (needsToReturnHome(unit, state)) {
