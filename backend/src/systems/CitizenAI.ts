@@ -8,6 +8,13 @@ import { getBuildingStockpile } from '../mutations/buildings';
 
 const PASSABLE_TERRAIN = getPassableTerrain(CFG);
 
+function needsToReturnHome(unit: UnitState): boolean {
+  const vitals = CFG.CITIZEN_VITALS;
+  return unit.hunger <= vitals.HUNGER_THRESHOLD
+    || unit.rest <= vitals.REST_THRESHOLD
+    || unit.health < vitals.HEALTH_THRESHOLD;
+}
+
 interface Task {
   type: 'CLAIM' | 'WORK';
   cellId: string;
@@ -231,7 +238,45 @@ export function processCitizenAI(
 
   for (const [, unit] of state.units) {
     if (unit.ownerId === '') continue;
-    if (unit.status !== 'IDLE') continue;
+
+    if (unit.status === 'RETURNING') continue;
+
+    if (unit.status !== 'IDLE') {
+      if (needsToReturnHome(unit)) {
+        const homeCity = state.cities.get(unit.homeCityId);
+        if (homeCity) {
+          if (unit.cellId === homeCity.cellId) {
+            unit.status = 'RETURNING';
+            unit.path = '[]';
+            unit.movementTicksRemaining = 0;
+            unit.movementTicksTotal = 0;
+          } else {
+            const path = findPath(unit.cellId, homeCity.cellId, state.cells as any, adjacencyMap, unitsByCellId, CFG.MAX_PER_HEX, cellPositions);
+            if (path && path.length > 0) {
+              assignPath(state, unit.unitId, path);
+              unit.status = 'RETURNING';
+            }
+          }
+        }
+      }
+      continue;
+    }
+
+    if (needsToReturnHome(unit)) {
+      const homeCity = state.cities.get(unit.homeCityId);
+      if (!homeCity) continue;
+
+      if (unit.cellId === homeCity.cellId) {
+        unit.status = 'RETURNING';
+      } else {
+        const path = findPath(unit.cellId, homeCity.cellId, state.cells as any, adjacencyMap, unitsByCellId, CFG.MAX_PER_HEX, cellPositions);
+        if (path && path.length > 0) {
+          assignPath(state, unit.unitId, path);
+          unit.status = 'RETURNING';
+        }
+      }
+      continue;
+    }
 
     const currentCell = state.cells.get(unit.cellId);
     const unitConfig = CFG.UNITS[unit.type];

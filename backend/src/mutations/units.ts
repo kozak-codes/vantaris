@@ -21,6 +21,7 @@ export function spawnUnit(
   cellId: string,
   unitType: string = 'INFANTRY',
   engineerLevel: number = 1,
+  homeCityId: string = '',
 ): UnitState {
   const unit = new UnitState();
   unit.unitId = `unit_${unitIdCounter++}`;
@@ -36,6 +37,10 @@ export function spawnUnit(
   unit.engineerLevel = unitType === 'ENGINEER' ? engineerLevel : 0;
   unit.buildExhaustion = 0;
   unit.name = getNextUnitName();
+  unit.health = CFG.CITIZEN_VITALS.MAX_HEALTH;
+  unit.hunger = CFG.CITIZEN_VITALS.MAX_HUNGER;
+  unit.rest = CFG.CITIZEN_VITALS.MAX_REST;
+  unit.homeCityId = homeCityId;
 
   state.units.set(unit.unitId, unit);
   return unit;
@@ -77,7 +82,7 @@ export function stepUnit(
   _adjacencyMap: AdjacencyMap,
 ): StepResult | null {
   const unit = state.units.get(unitId);
-  if (!unit || unit.status !== UnitStatus.MOVING) return null;
+  if (!unit || (unit.status !== UnitStatus.MOVING && unit.status !== 'RETURNING')) return null;
 
   unit.movementTicksRemaining--;
 
@@ -85,7 +90,9 @@ export function stepUnit(
     const path: string[] = JSON.parse(unit.path);
 
     if (path.length === 0) {
-      unit.status = UnitStatus.IDLE;
+      if (unit.status !== 'RETURNING') {
+        unit.status = UnitStatus.IDLE;
+      }
       unit.path = '[]';
       unit.movementTicksTotal = 0;
       return { arrived: true, cellId: unit.cellId };
@@ -96,7 +103,9 @@ export function stepUnit(
     unit.path = JSON.stringify(path);
 
     if (path.length === 0) {
-      unit.status = UnitStatus.IDLE;
+      if (unit.status !== 'RETURNING') {
+        unit.status = UnitStatus.IDLE;
+      }
       unit.path = '[]';
       unit.movementTicksRemaining = 0;
       unit.movementTicksTotal = 0;

@@ -16,4 +16,8 @@ export class UnitState extends Schema {
   @type('string') name: string = '';
   @type('number') energyCredits: number = 0;
   @type('number') inventoryWeight: number = 0;
+  @type('number') health: number = 100;
+  @type('number') hunger: number = 1000;
+  @type('number') rest: number = 1000;
+  @type('string') homeCityId: string = '';
 }

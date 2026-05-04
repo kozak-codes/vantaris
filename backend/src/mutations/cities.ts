@@ -77,8 +77,10 @@ export function createCity(
   city.xp = 0;
   city.population = CFG.CITY.POPULATION_INITIAL;
 
-  setRepeatQueue(city, ['CITIZEN']);
+  setRepeatQueue(city, []);
   setPriorityQueue(city, []);
+
+  city.homesAvailable = CFG.CITY.HOMES_PER_CITY;
 
   initCityStockpile(city);
 

@@ -1,7 +1,8 @@
 import { GameState } from '../state/GameState';
 import { CityState } from '../state/CityState';
 import { BuildingState } from '../state/BuildingState';
-import { ResourceType, CFG, getExtractorOutput, getFactoryRecipes } from '@vantaris/shared';
+import { UnitState } from '../state/UnitState';
+import { ResourceType, CFG, getExtractorOutput, getFactoryRecipes, UnitStatus } from '@vantaris/shared';
 import { getBuildingStockpile, setBuildingStockpile, getBuildingStockpileAmount, addToBuildingStockpile } from './buildings';
 import type { AdjacencyMap, ResourceInflowEntry } from '@vantaris/shared';
 
@@ -123,12 +124,116 @@ export function resetCityInflows(city: CityState): void {
   setCityInflows(city, []);
 }
 
-export function tickExtractorOutput(state: GameState): void {
+export function tickCitizenVitals(state: GameState): void {
+  const deadUnits: string[] = [];
+
+  for (const [, unit] of state.units) {
+    const vitals = CFG.CITIZEN_VITALS;
+
+    if (unit.hunger > 0) {
+      unit.hunger = Math.max(0, unit.hunger - vitals.HUNGER_DRAIN_PER_TICK);
+    }
+    if (unit.rest > 0) {
+      unit.rest = Math.max(0, unit.rest - vitals.REST_DRAIN_PER_TICK);
+    }
+
+    if (unit.hunger <= 0) {
+      unit.health = Math.max(0, unit.health - vitals.HEALTH_LOSS_WHEN_HUNGRY_PER_TICK);
+    }
+
+    if (unit.health <= 0) {
+      deadUnits.push(unit.unitId);
+      continue;
+    }
+
+    if (unit.status === 'RETURNING' || (unit.cellId && isAtHomeCity(unit, state))) {
+      const city = state.cities.get(unit.homeCityId);
+      if (city) {
+        const isFullVitals = unit.hunger >= vitals.MAX_HUNGER
+          && unit.rest >= vitals.MAX_REST
+          && unit.health >= vitals.MAX_HEALTH;
+
+        if (unit.hunger < vitals.MAX_HUNGER && city.homesAvailable > 0) {
+          const foodCost = vitals.HUNGER_RECHARGE_FOOD_COST;
+          const citySp = getCityStockpile(city);
+          const grainAvailable = citySp[ResourceType.GRAIN] || 0;
+          const breadAvailable = citySp[ResourceType.BREAD] || 0;
+
+          if (grainAvailable >= foodCost) {
+            citySp[ResourceType.GRAIN] = grainAvailable - foodCost;
+            unit.hunger = Math.min(vitals.MAX_HUNGER, unit.hunger + vitals.HUNGER_RECHARGE_PER_TICK);
+            setCityStockpile(city, citySp);
+          } else if (breadAvailable >= foodCost) {
+            citySp[ResourceType.BREAD] = breadAvailable - foodCost;
+            unit.hunger = Math.min(vitals.MAX_HUNGER, unit.hunger + vitals.HUNGER_RECHARGE_PER_TICK);
+            setCityStockpile(city, citySp);
+          }
+        }
+
+        if (unit.rest < vitals.MAX_REST) {
+          unit.rest = Math.min(vitals.MAX_REST, unit.rest + vitals.REST_RECHARGE_PER_TICK);
+        }
+
+        if (unit.health < vitals.MAX_HEALTH && unit.hunger >= vitals.MAX_HUNGER) {
+          unit.health = Math.min(vitals.MAX_HEALTH, unit.health + vitals.HEALTH_RECHARGE_PER_TICK);
+        }
+
+        if (isFullVitals) {
+          unit.status = UnitStatus.IDLE;
+          unit.path = '[]';
+          unit.movementTicksRemaining = 0;
+          unit.movementTicksTotal = 0;
+        } else {
+          unit.status = 'RETURNING';
+        }
+      }
+    }
+  }
+
+  for (const unitId of deadUnits) {
+    state.units.delete(unitId);
+  }
+}
+
+function isAtHomeCity(unit: UnitState, state: GameState): boolean {
+  if (!unit.homeCityId) return false;
+  const city = state.cities.get(unit.homeCityId);
+  if (!city) return false;
+  return city.cellId === unit.cellId;
+}
+
+export function tickExtractorOutput(state: GameState, cellPositions: Record<string, [number, number, number]>): void {
+  const sunAngle = state.getSunAngle();
+  const sunDirX = Math.cos(sunAngle);
+  const sunDirZ = Math.sin(sunAngle);
+
   for (const [, building] of state.buildings) {
     if (building.productionTicksRemaining > 0) continue;
 
     const output = EXTRACTOR_OUTPUT[building.type];
     if (!output) continue;
+
+    if (building.type === 'FARM') {
+      const pos = cellPositions[building.cellId];
+      if (pos) {
+        const len = Math.sqrt(pos[0] * pos[0] + pos[1] * pos[1] + pos[2] * pos[2]);
+        if (len > 0) {
+          const nx = pos[0] / len;
+          const nz = pos[2] / len;
+          const dot = nx * sunDirX + nz * sunDirZ;
+          if (dot < 0) continue;
+        }
+      }
+
+      let hasWorker = false;
+      for (const [, unit] of state.units) {
+        if (unit.cellId === building.cellId && unit.ownerId === building.ownerId) {
+          hasWorker = true;
+          break;
+        }
+      }
+      if (!hasWorker) continue;
+    }
 
     addToBuildingStockpile(building, output.resource, output.amount);
   }

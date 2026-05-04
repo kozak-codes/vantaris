@@ -47,7 +47,7 @@ export type {
 
 export { buildAdjacencyMap } from './hexAdjacency';
 
-export { CFG, type ICFG, type TerrainConfig, type UnitConfig, type BuildingConfig, type ResourceConfig } from './CFG';
+export { CFG, type ICFG, type TerrainConfig, type UnitConfig, type BuildingConfig, type ResourceConfig, type CitizenVitalsConfig } from './CFG';
 
 export {
   getPassableTerrain,

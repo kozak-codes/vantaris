@@ -14,7 +14,21 @@ interface UnitPanelProps {
   biome: string;
   ownerName: string;
   ownerColor: string;
-  isRevealed: boolean;
+}
+
+function VitalsBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
+  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
+  const isLow = pct < 30;
+  const barColor = isLow ? '#cc4444' : color;
+  return (
+    <div class="panel-row">
+      <span class="label">{label}</span>
+      <div class="vitals-bar-container">
+        <div class="vitals-bar-fill" style={{ width: `${pct}%`, backgroundColor: barColor }} />
+        <span class="vitals-bar-text">{Math.round(value)}/{max}</span>
+      </div>
+    </div>
+  );
 }
 
 export const UnitPanel: FunctionalComponent<UnitPanelProps> = ({ unit, tileId, biome, ownerName, ownerColor }) => {
@@ -28,6 +42,8 @@ export const UnitPanel: FunctionalComponent<UnitPanelProps> = ({ unit, tileId, b
     statusText = `Building — ${unit.buildTicksRemaining} ticks`;
   } else if (unit.status === 'CLAIMING') {
     statusText = `Claiming — ${unit.claimTicksRemaining} ticks`;
+  } else if (unit.status === 'RETURNING') {
+    statusText = 'Returning home';
   }
 
   let progressHtml = <></>;
@@ -58,6 +74,9 @@ export const UnitPanel: FunctionalComponent<UnitPanelProps> = ({ unit, tileId, b
   const unitConfig = CFG.UNITS[unit.type];
   const maxWeight = unitConfig?.maxWeight ?? 0;
 
+  const vitals = CFG.CITIZEN_VITALS;
+  const showVitals = isMyUnit && (unit.type === 'CITIZEN' || unit.type === 'INFANTRY' || unit.type === 'ENGINEER' || unit.type === 'TRADER');
+
   return (
     <div id="hud-tile-panel" class="panel">
       <div class="panel-header">
@@ -72,6 +91,14 @@ export const UnitPanel: FunctionalComponent<UnitPanelProps> = ({ unit, tileId, b
         {isMyUnit && maxWeight > 0 && <div class="panel-row"><span class="label">Carry</span><span>{unit.inventoryWeight}/{maxWeight}</span></div>}
         {showStack && <div class="panel-row"><span class="label">Stack</span><span>{unitsHere.length} units</span></div>}
       </div>
+      {showVitals && (
+        <div class="panel-section">
+          <div class="panel-subtitle">Vitals</div>
+          <VitalsBar label="HP" value={unit.health} max={vitals.MAX_HEALTH} color="#44cc44" />
+          <VitalsBar label="Hunger" value={unit.hunger} max={vitals.MAX_HUNGER} color="#ccaa44" />
+          <VitalsBar label="Rest" value={unit.rest} max={vitals.MAX_REST} color="#4488cc" />
+        </div>
+      )}
       {progressHtml}
       <div class="panel-section panel-back-link">
         <button class="panel-btn panel-btn-secondary" onClick={() => deselectEntity()}>← Tile info</button>

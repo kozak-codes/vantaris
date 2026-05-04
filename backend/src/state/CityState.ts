@@ -26,4 +26,6 @@ export class CityState extends Schema {
   @type('string') stockpile: string = '[]';
   @type('string') resourceInflows: string = '[]';
   @type('number') lastInflowResetTick: number = 0;
+
+  @type('number') homesAvailable: number = 6;
 }

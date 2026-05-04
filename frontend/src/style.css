@@ -953,6 +953,39 @@ html, body {
   margin-top: 6px;
 }
 
+.vitals-bar-container {
+  flex: 1;
+  position: relative;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-left: 8px;
+}
+
+.vitals-bar-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.vitals-bar-text {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  color: #eee;
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
+}
+
 .unit-row {
   align-items: center;
   gap: 6px;

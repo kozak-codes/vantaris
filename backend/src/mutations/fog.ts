@@ -249,6 +249,10 @@ export function buildPlayerSlice(
         name: unit.name,
         energyCredits: unit.energyCredits,
         inventoryWeight: unit.inventoryWeight,
+        health: unit.health,
+        hunger: unit.hunger,
+        rest: unit.rest,
+        homeCityId: unit.homeCityId,
       });
     }
   }
@@ -286,6 +290,7 @@ export function buildPlayerSlice(
           energyPerTick: city.energyPerTick,
           stockpile: stockpileMapToEntries(citySp),
           resourceInflows: resourceInflows,
+          homesAvailable: city.homesAvailable,
         });
       }
     }

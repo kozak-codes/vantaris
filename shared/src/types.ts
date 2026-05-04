@@ -27,6 +27,7 @@ export enum UnitStatus {
   MOVING = 'MOVING',
   CLAIMING = 'CLAIMING',
   BUILDING = 'BUILDING',
+  RETURNING = 'RETURNING',
 }
 
 export enum BuildingType {
@@ -274,6 +275,10 @@ export interface UnitData {
   name: string;
   energyCredits: number;
   inventoryWeight: number;
+  health: number;
+  hunger: number;
+  rest: number;
+  homeCityId: string;
 }
 
 export interface ProductionItem {
@@ -302,6 +307,7 @@ export interface CityData {
   energyPerTick: number;
   stockpile: StockpileEntry[];
   resourceInflows: ResourceInflowEntry[];
+  homesAvailable: number;
 }
 
 export interface PlayerSummary {

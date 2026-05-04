@@ -36,7 +36,7 @@ const TilePanelContainer: FunctionalComponent = () => {
   if (selBuilding) {
     return <BuildingPanel building={selBuilding} />;
   } else if (unit) {
-    return <UnitPanel unit={unit} tileId={tileId} biome={biome} ownerName={ownerName} ownerColor={ownerColor} isRevealed={isRevealed} />;
+    return <UnitPanel unit={unit} tileId={tileId} biome={biome} ownerName={ownerName} ownerColor={ownerColor} />;
   } else if (city) {
     return <CityPanel city={city} tileId={tileId} biome={biome} ownerName={ownerName} ownerColor={ownerColor} isRevealed={isRevealed} />;
   } else {

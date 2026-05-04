@@ -62,6 +62,22 @@ export interface UnitConfig {
   maxWeight?: number;
 }
 
+export interface CitizenVitalsConfig {
+  MAX_HEALTH: number;
+  MAX_HUNGER: number;
+  MAX_REST: number;
+  HUNGER_DRAIN_PER_TICK: number;
+  REST_DRAIN_PER_TICK: number;
+  HEALTH_LOSS_WHEN_HUNGRY_PER_TICK: number;
+  HUNGER_THRESHOLD: number;
+  REST_THRESHOLD: number;
+  HEALTH_THRESHOLD: number;
+  HUNGER_RECHARGE_PER_TICK: number;
+  REST_RECHARGE_PER_TICK: number;
+  HEALTH_RECHARGE_PER_TICK: number;
+  HUNGER_RECHARGE_FOOD_COST: number;
+}
+
 export interface BuildingConfig {
   ticks: number;
   placement: string[];
@@ -121,6 +137,8 @@ export interface ICFG {
     XP_FOOD_MULTIPLIER: number;
     XP_ENERGY_MULTIPLIER: number;
     VALID_SPAWN_TERRAIN: TerrainType[];
+    HOMES_PER_CITY: number;
+    STARTING_CITIZENS: number;
   };
   SUPPLY_CHAIN: {
     MAX_HOPS: number;
@@ -143,6 +161,7 @@ export interface ICFG {
     CITY_GLOW_COLOR: string;
     NIGHT_COLOR_MIX: number;
   };
+  CITIZEN_VITALS: CitizenVitalsConfig;
   STOCKPILE_RAID_FRACTION: number;
   ENERGY_CREDITS_INITIAL: number;
   PLAYER_COLORS: string[];
@@ -466,6 +485,8 @@ export const CFG: ICFG = {
     XP_FOOD_MULTIPLIER: 1.5,
     XP_ENERGY_MULTIPLIER: 1.3,
     VALID_SPAWN_TERRAIN: [TerrainType.PLAINS] as TerrainType[],
+    HOMES_PER_CITY: 6,
+    STARTING_CITIZENS: 3,
   },
 
   // ─── Resource Category Labels ──────────────
@@ -499,6 +520,22 @@ export const CFG: ICFG = {
     CITY_GLOW_INTENSITY: 0.4,
     CITY_GLOW_COLOR: "#ffcc44",
     NIGHT_COLOR_MIX: 0.25,
+  },
+
+  CITIZEN_VITALS: {
+    MAX_HEALTH: 100,
+    MAX_HUNGER: 1000,
+    MAX_REST: 1000,
+    HUNGER_DRAIN_PER_TICK: 1,
+    REST_DRAIN_PER_TICK: 1,
+    HEALTH_LOSS_WHEN_HUNGRY_PER_TICK: 0.1,
+    HUNGER_THRESHOLD: 200,
+    REST_THRESHOLD: 200,
+    HEALTH_THRESHOLD: 80,
+    HUNGER_RECHARGE_PER_TICK: 50,
+    REST_RECHARGE_PER_TICK: 5,
+    HEALTH_RECHARGE_PER_TICK: 0.5,
+    HUNGER_RECHARGE_FOOD_COST: 5,
   },
 
   // ─── Misc ─────────────────────────────────

@@ -19,7 +19,7 @@ import { processCitizenAI, createTaskQueue } from '../systems/CitizenAI';
 import { spawnUnit, assignPath, stepUnit, startClaiming } from '../mutations/units';
 import type { StepResult } from '../mutations/units';
 import { createBuilding, tickBuildingProduction, canPlaceBuilding, cancelBuilding, getAvailableBuildTypes, countBuildingsOnCell, canAffordBuildingCost, tickBuildingConstruction, getResourcesInvested } from '../mutations/buildings';
-import { tickExtractorOutput, tickFactoryProcessing, tickCityResourceDrain, tickPopulation, tickCityXP, tickInflowResets, tickBuildingWages } from '../mutations/resources';
+import { tickExtractorOutput, tickFactoryProcessing, tickCityResourceDrain, tickPopulation, tickCityXP, tickInflowResets, tickBuildingWages, tickCitizenVitals } from '../mutations/resources';
 import { claimCell, loseCell } from '../mutations/territory';
 
 interface CreateOptions {
@@ -211,11 +211,18 @@ export class VantarisRoom extends Room<GameState> {
 
     const city = createCity(this.state, playerId, spawnCellId);
     city.population = CFG.CITY.POPULATION_INITIAL;
+    city.homesAvailable = CFG.CITY.HOMES_PER_CITY;
 
     player.energyCredits = CFG.CITY.INITIAL_STOCKPILE[ResourceType.POWER] || 1000;
     player.claimCompensation = 10;
 
     completeClaim(this.state, spawnCellId, playerId);
+
+    setRepeatQueue(city, []);
+
+    for (let i = 0; i < CFG.CITY.STARTING_CITIZENS; i++) {
+      spawnUnit(this.state, playerId, spawnCellId, 'CITIZEN', 1, city.cityId);
+    }
 
       computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, CFG.UNITS.CITIZEN.visionRange);
 
@@ -251,6 +258,7 @@ export class VantarisRoom extends Room<GameState> {
     this.processExtractorOutput();
     this.processFactoryProcessing();
     this.processBuildingWages();
+    this.processCitizenVitals();
     this.processCityResourceDrain();
     this.processPopulation();
     this.processCityXP();
@@ -302,7 +310,7 @@ export class VantarisRoom extends Room<GameState> {
         const unitsOnCell = this.countUnitsOnCell(city.cellId);
         if (unitsOnCell < CFG.MAX_PER_HEX) {
           consumeProductionCosts(city, completed);
-          spawnUnit(this.state, city.ownerId, city.cellId, completed.type);
+          spawnUnit(this.state, city.ownerId, city.cellId, completed.type, 1, city.cityId);
         }
       }
     }
@@ -310,12 +318,20 @@ export class VantarisRoom extends Room<GameState> {
 
   private processUnitMovement(): void {
     for (const [, unit] of this.state.units) {
-      if (unit.status === 'MOVING') {
+      if (unit.status === 'MOVING' || unit.status === 'RETURNING') {
         const result = stepUnit(this.state, unit.unitId, this.adjacencyMap);
         if (result && result.arrived) {
           const cell = this.state.cells.get(result.cellId);
           if (cell && cell.ruin && !cell.ruinRevealed) {
             cell.ruinRevealed = true;
+          }
+          if (unit.status === 'RETURNING') {
+            const homeCity = this.state.cities.get(unit.homeCityId);
+            if (homeCity && unit.cellId === homeCity.cellId) {
+              unit.path = '[]';
+              unit.movementTicksRemaining = 0;
+              unit.movementTicksTotal = 0;
+            }
           }
         }
       }
@@ -363,7 +379,7 @@ export class VantarisRoom extends Room<GameState> {
   }
 
   private processExtractorOutput(): void {
-    tickExtractorOutput(this.state);
+    tickExtractorOutput(this.state, this.cellPositions);
   }
 
   private processFactoryProcessing(): void {
@@ -372,6 +388,10 @@ export class VantarisRoom extends Room<GameState> {
 
   private processBuildingWages(): void {
     tickBuildingWages(this.state, this.state.tick);
+  }
+
+  private processCitizenVitals(): void {
+    tickCitizenVitals(this.state);
   }
 
   private processCityResourceDrain(): void {

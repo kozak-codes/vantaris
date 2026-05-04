@@ -202,6 +202,57 @@
 
 ---
 
+- Change 12
+
+## Food rework
+
+- Start the game with 3 citizens and citizen production in your first city turned OFF.
+- Add a health, hunger, and rest bar to citizens.
+- A citizen has 1000 ticks of "rest" until they will no longer do work.
+- A citizen has 1000 ticks of "hunger" - if they are hungry, they will start to lose health at a rate of 0.1 per tick
+- A citizen has 100 health. If they run out of health - they die.
+- A citizen has a "home" city
+- Cities have 6 homes available for citizens
+- If a citizen falls below a certain threshold of food, hunger, or has less than full health they will return back to the city to recharge
+- A citizens food will recharge extremely quickly, using "food" in the process
+- A citizens rest will recharge quite slowly
+- Only once a citizen is fully fed, rested, and full health will they continue
+- Farms from still have a base rate - they should not. Farms should only produce if (a) it is daytime on that tile and (b) a citizen is working that farm.
+
+
+- When a citizen consumes food, they should have to PAY for it - we should be able to set the global food rate in the economy tab, defaulting to 1 energy credit per food. They need to have enough money too.
+
+## Trader rework
+
+- Let's update the base stockpile component which we should be using on all buildings so that we can choose a "target" amount that we want at that particular location. We should be using the same component for ALL buildings. Some buildings their inputs/outputs locked to always show but we should be able to add other items there too if we want.
+- This target and info about items should be summarized on the building view, but editable in a dialog.
+- Each building has a different max stockpile size - cities can hold a lot
+- You should be able to customize the min/max price we want to buy/sell for something and I'd like your opinion on an effective way that we can automatically set buy/sell prices on these things
+- Based on buy/sell pairings, citizens will evaluate these pairings in your own cities (in the future we may allow trade agreements as well with other players - we'll get to that later) and choose the pairings with the most arbitrage per tick (including current location - start -> end -> back home) - they MUST have enough food on them to make that journey for it to count. Then, since this is a task, the citizen will reserve that task.
+- The citizen has a max carry capacity and should only be able to carry what they can hold. (We may change this so traders have more carry capacity)
+
+## Tile rework
+
+- Add a "base compensation multiplier" to tiles - so tundra tiles are not rewarded as much as other tiles
+- When clicking on an unclaimed tile, allow us to adjust the compensation amount from the default amount
+- Let's change this to be one building per tile and infinite units. Autoselect the building on that tile when you click/tap it
+
+## Unit upgrades
+
+- traders can carry more
+- engineers can build factories and work at them more efficiently
+- farmers can build farms and work at them more efficiently
+- Change "wage" to be per unit produced
+
+## Improving the way new citizens are made
+
+- sex?
+- Remove the concept of "population" from cities
+
+
+
+
+
 ## ⬜ Phase 8 — Factory Supply Chains
 
 **Status: NOT STARTED**
