@@ -230,27 +230,55 @@
 - You should be able to customize the min/max price we want to buy/sell for something and I'd like your opinion on an effective way that we can automatically set buy/sell prices on these things
 - Based on buy/sell pairings, citizens will evaluate these pairings in your own cities (in the future we may allow trade agreements as well with other players - we'll get to that later) and choose the pairings with the most arbitrage per tick (including current location - start -> end -> back home) - they MUST have enough food on them to make that journey for it to count. Then, since this is a task, the citizen will reserve that task.
 - The citizen has a max carry capacity and should only be able to carry what they can hold. (We may change this so traders have more carry capacity)
+- This means that the task may only be reserved for a certain amount of units, and instead of reserving the existing task we should make a NEW task with what that unit will be doing and reserve it that way. This should then cause the trade check in a later part of the tick to exclude resources from the request that are reserved as on the way.
+- Once we reserve that task, it locks in the price at that amount.
+- If a unit has to go home because they go below the rest, food, or health threshold then we should cancel that task and the system should automatically recalculate the unreserved transportation task.
+
+## Factories, supply chains, building
+
+- Remove the concept of a generic factory
+- Instead you "order" a building. Your list of orders like buildings (unit upgrades?) etc are on the right hand side
+- Click on an empty tile to order a building
+- After you order a building, it will create a construction site for that building
+- Labor is set at a base wage per tick like other buildings
+- The building will probably have resource requirements (except for a small amount of exceptions)
+- The required resources will be set as stockpile requests
+- The building can only be worked on once all the resources are in the tile (maybe we change this later, but I'm OK with this simplification for now)
+- Buildings we can order to start:
+
+a) Logging Camp
+b) Farm - requires timber, only works during the day
+c) Mine - requires timber + has ongoing need for timber
+d) Smithy - requires timber + has onging need for timber
+
+
 
 ## Tile rework
 
-- Add a "base compensation multiplier" to tiles - so tundra tiles are not rewarded as much as other tiles
+- Add a "base compensation multiplier" to tiles - so tundra tiles are not rewarded as much as other tiles. Tiles with buildings should be rewarded a bit more too.
 - When clicking on an unclaimed tile, allow us to adjust the compensation amount from the default amount
 - Let's change this to be one building per tile and infinite units. Autoselect the building on that tile when you click/tap it
+- Add an "exploration compensation" to the economy tab - this is useful if you want to expand your knowledge of the world quicker.
 
 ## Unit upgrades
 
 - traders can carry more
-- engineers can build factories and work at them more efficiently
+- laborers (not engineers) can construct buildings more efficiently
+- engineers are a required labor amount to construct certain buildings
 - farmers can build farms and work at them more efficiently
 - Change "wage" to be per unit produced
+- Merchant Sailor after trader allows accessing water tiles? Perhaps this requires resources to upgrade?
+- How do we economize upgrades, but still make it the players choice what units will do? EXP based with the player clicking on the upgrade that they want for that unit? Will that not get tedious? Auto upgrade to in demand trade? How do we determine if a trade is in demand?
 
 ## Improving the way new citizens are made
 
 - sex?
 - Remove the concept of "population" from cities
+- units should have rest decrease more during night
 
+---
 
-
+## OLD
 
 
 ## ⬜ Phase 8 — Factory Supply Chains

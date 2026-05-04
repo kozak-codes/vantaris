@@ -146,13 +146,9 @@ export function tickCitizenVitals(state: GameState): void {
       continue;
     }
 
-    if (unit.status === 'RETURNING' || (unit.cellId && isAtHomeCity(unit, state))) {
+    if (unit.status === 'RETURNING') {
       const city = state.cities.get(unit.homeCityId);
       if (city) {
-        const isFullVitals = unit.hunger >= vitals.MAX_HUNGER
-          && unit.rest >= vitals.MAX_REST
-          && unit.health >= vitals.MAX_HEALTH;
-
         if (unit.hunger < vitals.MAX_HUNGER && city.homesAvailable > 0) {
           const foodCost = vitals.HUNGER_RECHARGE_FOOD_COST;
           const citySp = getCityStockpile(city);
@@ -178,13 +174,15 @@ export function tickCitizenVitals(state: GameState): void {
           unit.health = Math.min(vitals.MAX_HEALTH, unit.health + vitals.HEALTH_RECHARGE_PER_TICK);
         }
 
+        const isFullVitals = unit.hunger >= vitals.MAX_HUNGER
+          && unit.rest >= vitals.MAX_REST
+          && unit.health >= vitals.MAX_HEALTH;
+
         if (isFullVitals) {
           unit.status = UnitStatus.IDLE;
           unit.path = '[]';
           unit.movementTicksRemaining = 0;
           unit.movementTicksTotal = 0;
-        } else {
-          unit.status = 'RETURNING';
         }
       }
     }
@@ -193,13 +191,6 @@ export function tickCitizenVitals(state: GameState): void {
   for (const unitId of deadUnits) {
     state.units.delete(unitId);
   }
-}
-
-function isAtHomeCity(unit: UnitState, state: GameState): boolean {
-  if (!unit.homeCityId) return false;
-  const city = state.cities.get(unit.homeCityId);
-  if (!city) return false;
-  return city.cellId === unit.cellId;
 }
 
 export function tickExtractorOutput(state: GameState, cellPositions: Record<string, [number, number, number]>): void {
