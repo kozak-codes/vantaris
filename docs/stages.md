@@ -224,10 +224,10 @@
 - units should have rest decrease more if their tile is currently night
 - Align the HP, hunger, and rest bars so they are all in one column as they are not even with each other right now
 - increase rest and hunger requirement by about 1.5x
+- If we dont have enough money to do something like claim a tile or work, then the citizen should not do that task and instead return home and idle till we have enough money (ideally they pay for food)
+- When citizens return home I dont think their animation is working properly - it should use the existing path system that works well.
 
 //--------- COMPLETED UP TO HERE
-
-- When citizens return home I dont think their animation is working properly - it should use the existing path system that works well.
 
 ## Trader rework
 
@@ -241,6 +241,7 @@
 - Once we reserve that task, it locks in the price at that amount.
 - If a unit has to go home because they go below the rest, food, or health threshold then we should cancel that task and the system should automatically recalculate the unreserved transportation task.
 - Can we add a task screen on the left side that we can maximize to list all of the tasks available sorted by amount, whats reserved, and by who
+- Reduce the base target for each extractor by a factor of 10
 
 
 ## Tile rework
@@ -251,6 +252,7 @@
 - Add an "exploration compensation" to the economy tab - this is useful if you want to expand your knowledge of the world quicker.
 - Remove the concept of "population" from cities - remove city base energy usage
 - Remove all city starting resources and replace with 100 bread for now
+- Add link to the building that the unit is working at
 
 ## AI State rework
 

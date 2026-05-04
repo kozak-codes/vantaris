@@ -494,7 +494,17 @@ export function processCitizenAI(
     }
 
     const task = reserveBestTask(unit, queue, state, adjacencyMap, cellPositions, unitsByCellId);
-    if (!task) continue;
+    if (!task) {
+      const homeCity = state.cities.get(unit.homeCityId);
+      if (homeCity && unit.cellId !== homeCity.cellId) {
+        const path = findPath(unit.cellId, homeCity.cellId, state.cells as any, adjacencyMap, unitsByCellId, CFG.MAX_PER_HEX, cellPositions);
+        if (path && path.length > 0) {
+          assignPath(state, unit.unitId, path);
+          unit.status = 'RETURNING';
+        }
+      }
+      continue;
+    }
 
     if (task.cellId === unit.cellId) {
       if (task.type === 'CLAIM') {

@@ -82,7 +82,7 @@ export class UnitRenderer {
         const mat = uv.icon.material as THREE.MeshBasicMaterial;
         mat.color.set(color);
 
-        if (unit.status === 'MOVING' && unit.path && unit.path.length > 0) {
+        if ((unit.status === 'MOVING' || unit.status === 'RETURNING') && unit.path && unit.path.length > 0) {
           const nextCellId = unit.path[0];
           const prev = this.movingUnits.get(unitId);
 

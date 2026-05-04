@@ -140,7 +140,7 @@ export class SelectionRenderer {
     if (!this.currentUnitId) return;
 
     const unit = clientState.units.get(this.currentUnitId);
-    if (!unit || unit.status !== 'MOVING' || !unit.path || unit.path.length === 0) return;
+    if (!unit || (unit.status !== 'MOVING' && unit.status !== 'RETURNING') || !unit.path || unit.path.length === 0) return;
 
     const points: THREE.Vector3[] = [];
 
