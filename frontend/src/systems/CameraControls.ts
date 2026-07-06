@@ -19,6 +19,7 @@ export class CameraControls {
   private touchGestureActive = false;
   private touchMoved = false;
   private touchStartPos = { x: 0, y: 0 };
+  private lookTarget: THREE.Vector3 | null = null;
 
   constructor(camera: THREE.PerspectiveCamera, canvas: HTMLCanvasElement, pivot: THREE.Group) {
     this.camera = camera;
@@ -124,6 +125,10 @@ export class CameraControls {
       this.velocityX = 0;
       this.velocityY = 0;
     }
+  }
+
+  setTargetZoom(zoom: number): void {
+    this.targetZoom = THREE.MathUtils.clamp(zoom, CAMERA_CONFIG.minDistance, CAMERA_CONFIG.maxDistance);
   }
 
   private applyKeyboardRotation(): void {
@@ -251,10 +256,30 @@ export class CameraControls {
 
   private updateCameraPosition(): void {
     this.camera.position.set(0, 0, this.currentDistance);
-    this.camera.lookAt(0, 0, 0);
+    if (this.lookTarget) {
+      this.camera.lookAt(this.lookTarget);
+    } else {
+      this.camera.lookAt(0, 0, 0);
+    }
+  }
+
+  setLookTarget(target: THREE.Vector3 | null): void {
+    this.lookTarget = target ? target.clone() : null;
+    this.updateCameraPosition();
   }
 
   update(): void {
+    if (this.tween && this.tween.active) {
+      this.tween.elapsed += 16.67;
+      const t = Math.min(1, this.tween.elapsed / this.tween.duration);
+      const e = t * (2 - t); // ease-out quadratic
+      this.pivot.quaternion.slerpQuaternions(this.tween.fromQuat, this.tween.toQuat, e);
+      this.currentDistance = this.tween.fromDist + (this.tween.toDist - this.tween.fromDist) * e;
+      this.updateCameraPosition();
+      if (t >= 1) this.tween.active = false;
+      return;
+    }
+
     this.applyKeyboardRotation();
 
     if (!this.isRotating) {
@@ -299,12 +324,58 @@ export class CameraControls {
   }
 
   focusCell(center: [number, number, number]): void {
-    const target = new THREE.Vector3(center[0], center[1], center[2]);
+    // Orient the hex's surface normal straight at the camera, computed cleanly
+    // from identity rather than stacked onto the current rotation.
+    const cellNormal = new THREE.Vector3(center[0], center[1], center[2]).normalize();
     const defaultForward = new THREE.Vector3(0, 0, 1);
-    const quat = new THREE.Quaternion().setFromUnitVectors(target.clone().normalize(), defaultForward);
-    this.pivot.quaternion.premultiply(quat);
+    const quat = new THREE.Quaternion().setFromUnitVectors(cellNormal, defaultForward);
+    this.pivot.quaternion.copy(quat);
     this.targetZoom = CAMERA_CONFIG.minDistance + (CAMERA_CONFIG.maxDistance - CAMERA_CONFIG.minDistance) * 0.35;
     this.currentDistance = this.targetZoom;
     this.updateCameraPosition();
+  }
+
+  private tween: {
+    active: boolean;
+    fromQuat: THREE.Quaternion;
+    toQuat: THREE.Quaternion;
+    fromDist: number;
+    toDist: number;
+    elapsed: number;
+    duration: number;
+  } | null = null;
+
+  focusCellZoomed(center: [number, number, number], zoomDistance: number, durationMs = 700): void {
+    // Orient the hex's surface normal straight at the camera. Compute a clean
+    // quaternion from identity (not premultiplied onto current rotation) so the
+    // tile view is upright regardless of how the globe was rotated before.
+    const cellNormal = new THREE.Vector3(center[0], center[1], center[2]).normalize();
+    const defaultForward = new THREE.Vector3(0, 0, 1);
+    const toQuat = new THREE.Quaternion().setFromUnitVectors(cellNormal, defaultForward);
+    this.tween = {
+      active: true,
+      fromQuat: this.pivot.quaternion.clone(),
+      toQuat,
+      fromDist: this.currentDistance,
+      toDist: zoomDistance,
+      elapsed: 0,
+      duration: durationMs,
+    };
+    this.targetZoom = zoomDistance;
+  }
+
+  returnToWorldView(durationMs = 600): void {
+    this.targetZoom = CAMERA_CONFIG.minDistance + (CAMERA_CONFIG.maxDistance - CAMERA_CONFIG.minDistance) * 0.4;
+    if (this.tween) this.tween = null;
+    // Smoothly ease zoom back; rotation left where it was so the player sees the same area.
+    this.tween = {
+      active: true,
+      fromQuat: this.pivot.quaternion.clone(),
+      toQuat: this.pivot.quaternion.clone(),
+      fromDist: this.currentDistance,
+      toDist: this.targetZoom,
+      elapsed: 0,
+      duration: durationMs,
+    };
   }
 }

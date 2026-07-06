@@ -2,35 +2,11 @@
 // cfgHelpers.ts — Pure derived computations from a
 // given ICFG.  Every function takes `cfg` as its
 // first argument and returns a new value with no
-// side effects.  This enables future game
-// configuration by swapping the CFG object.
-//
-// DRY PRINCIPLE (mandatory):
-//   If a pattern appears more than twice, refactor
-//   it into a shared procedural helper.  For example,
-//   getInfantryBuildableTypes / getEngineerBuildableTypes
-//   both walk cfg.UNITS[type].buildable — so the
-//   unified getUnitBuildableTypes() is the canonical
-//   caller.  When adding new unit types (TRADER, etc.),
-//   only getUnitBuildableTypes needs to know about
-//   the new type — the others are already DRY.
-//
-//   Similarly, iterating cfg.RESOURCES to filter by
-//   tier/category/value is factored into
-//   getResourcesByTier / getResourcesByCategory
-//   rather than duplicating the loop everywhere.
-//
-// ADDING NEW HELPERS:
-//   1. Keep the function pure (no global CFG access).
-//   2. Take cfg: ICFG as the first parameter.
-//   3. If you find yourself writing a similar loop
-//      for the third time, extract a shared helper.
-//   4. Write unit tests for new helpers — see
-//      shared/src/__tests__/cfgHelpers.test.ts.
+// side effects.
 // ──────────────────────────────────────────────
 
-import type { ICFG, TerrainConfig, BuildingConfig, ResourceConfig, UnitConfig } from './CFG';
-import { ResourceType, type ResourceType as RT } from './types';
+import type { ICFG, TerrainConfig, ResourceConfig } from './CFG';
+import { type ResourceType as RT } from './types';
 
 // ─── Internal shared helpers (DRY) ───────────
 
@@ -77,46 +53,12 @@ export function getCellBuildingCapacity(cfg: ICFG): Record<string, number> {
   return result;
 }
 
-// ─── Building helpers ────────────────────────
-
-export function getBuildingTicks(cfg: ICFG): Record<string, number> {
-  const result: Record<string, number> = {};
-  for (const [key, val] of Object.entries(cfg.BUILDINGS) as [string, BuildingConfig][]) {
-    result[key] = val.ticks;
-  }
-  return result;
-}
-
-export function getBuildingCosts(cfg: ICFG): Record<string, { food: number; material: number; exhaustionCost: number }> {
-  const result: Record<string, { food: number; material: number; exhaustionCost: number }> = {};
-  for (const [key, val] of Object.entries(cfg.BUILDINGS) as [string, BuildingConfig][]) {
-    result[key] = { food: val.cost.food, material: val.cost.material, exhaustionCost: val.exhaustionCost };
-  }
-  return result;
-}
-
 export function getBuildingPlacementRules(cfg: ICFG): Record<string, string[]> {
-  const result: Record<string, string[]> = {};
-  for (const [key, val] of Object.entries(cfg.BUILDINGS) as [string, BuildingConfig][]) {
-    if (val.placement.length > 0) result[key] = [...val.placement];
-  }
-  return result;
-}
-
-export function getExtractorOutput(cfg: ICFG): Record<string, { resource: ResourceType; amount: number }> {
-  const result: Record<string, { resource: ResourceType; amount: number }> = {};
-  for (const [key, val] of Object.entries(cfg.BUILDINGS) as [string, BuildingConfig][]) {
-    if (val.extractorOutput) {
-      result[key] = { resource: val.extractorOutput.resource, amount: val.extractorOutput.amount };
-    }
-  }
-  return result;
+  return {};
 }
 
 export function getExtractorTypes(cfg: ICFG): string[] {
-  return getUnitBuildableTypes(cfg, 'INFANTRY', 1).filter(
-    (key) => cfg.BUILDINGS[key]?.cost.food === 0 && cfg.BUILDINGS[key]?.cost.material === 0,
-  );
+  return [];
 }
 
 // ─── Resource helpers ────────────────────────
@@ -159,69 +101,6 @@ export function getResourceCategories(cfg: ICFG): Record<string, { label: string
       label: cfg.RESOURCE_CATEGORY_LABELS[cat] ?? cat,
       resources,
     };
-  }
-  return result;
-}
-
-export function getFactoryRecipes(cfg: ICFG): { id: string; name: string; input: { resource: ResourceType; amount: number }[]; output: { resource: ResourceType; amount: number }[]; ticksPerCycle: number; minFactoryTier: number }[] {
-  const result: { id: string; name: string; input: { resource: ResourceType; amount: number }[]; output: { resource: ResourceType; amount: number }[]; ticksPerCycle: number; minFactoryTier: number }[] = [];
-  for (const [key, val] of Object.entries(cfg.RESOURCES) as [string, ResourceConfig][]) {
-    if (val.recipe) {
-      const r = val.recipe;
-      const id = r.id ?? key.toLowerCase();
-      const name = r.name ?? key.charAt(0) + key.slice(1).toLowerCase();
-      result.push({ id, name, input: r.input, output: r.output, ticksPerCycle: r.ticksPerCycle, minFactoryTier: r.minFactoryTier });
-    }
-  }
-  return result;
-}
-
-// ─── Unit helpers ─────────────────────────────
-
-export function getUnitBuildableTypes(cfg: ICFG, unitType: string, unitLevel: number): string[] {
-  const unit = cfg.UNITS[unitType];
-  if (!unit?.buildable) return [];
-  const result: string[] = [];
-  for (const [buildingType, req] of Object.entries(unit.buildable)) {
-    if (req.minLevel <= unitLevel) result.push(buildingType);
-  }
-  return result;
-}
-
-export function getInfantryBuildableTypes(cfg: ICFG): string[] {
-  return getUnitBuildableTypes(cfg, 'INFANTRY', 1);
-}
-
-export function getCitizenBuildableTypes(cfg: ICFG): string[] {
-  return getUnitBuildableTypes(cfg, 'CITIZEN', 1);
-}
-
-export function getEngineerBuildableTypes(cfg: ICFG, engineerLevel: number): string[] {
-  return getUnitBuildableTypes(cfg, 'ENGINEER', engineerLevel);
-}
-
-export function getTraderBuildableTypes(cfg: ICFG): string[] {
-  return getUnitBuildableTypes(cfg, 'TRADER', 1);
-}
-
-export function getUpgradeOptions(cfg: ICFG): { fromType: string; toType: string; cost: Record<string, number>; ticks: number }[] {
-  const result: { fromType: string; toType: string; cost: Record<string, number>; ticks: number }[] = [];
-  for (const [unitType, unitConfig] of Object.entries(cfg.UNITS) as [string, UnitConfig][]) {
-    if (unitConfig.upgradeFrom && unitConfig.upgradeCost && unitConfig.upgradeTicks !== undefined) {
-      result.push({ fromType: unitConfig.upgradeFrom, toType: unitType, cost: { ...unitConfig.upgradeCost }, ticks: unitConfig.upgradeTicks });
-    }
-  }
-  return result;
-}
-
-export function getUpgradeForType(cfg: ICFG, fromType: string): { toType: string; cost: Record<string, number>; ticks: number }[] {
-  return getUpgradeOptions(cfg).filter(o => o.fromType === fromType);
-}
-
-export function getUnitProductionCosts(cfg: ICFG): { type: string; ticksCost: number; resourceCost: Record<string, number>; popCost: number }[] {
-  const result: { type: string; ticksCost: number; resourceCost: Record<string, number>; popCost: number }[] = [];
-  for (const [key, val] of Object.entries(cfg.UNITS) as [string, UnitConfig][]) {
-    result.push({ type: key, ticksCost: val.ticksCost, resourceCost: { ...val.resourceCost }, popCost: val.popCost });
   }
   return result;
 }

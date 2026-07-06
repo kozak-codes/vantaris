@@ -10,33 +10,6 @@ import {
 // This file contains ONLY the CFG object and its
 // interfaces — all gameplay-tunable values in one
 // place.  No derived data, no side effects.
-//
-//   ✅  CFG.UNITS.INFANTRY.buildable
-//   ✅  CFG.RESOURCES.BREAD.recipe
-//   ✅  CFG.CITY.BASE_GRAIN_RATE
-//
-//   ❌  Separate top-level const for gameplay data
-//   ❌  Duplicated data (e.g. FACTORY.RECIPES that
-//       mirrors RESOURCES.*.recipe)
-//   ❌  Derived / computed values (use cfgHelpers.ts)
-//   ❌  Magic numbers scattered in mutations/
-//
-// Recipes are defined on the processed resource
-// (CFG.RESOURCES.BREAD.recipe), not duplicated in
-// FACTORY.RECIPES.  Factory recipes are derived via
-// getFactoryRecipes(cfg) in cfgHelpers.ts.
-//
-// Resource categories are derived from the .category
-// field on each resource.  Use getResourceCategories(cfg)
-// and getResourceCategoryMap(cfg) in cfgHelpers.ts.
-//
-// Unit-specific data (e.g. buildable types) belongs
-// on that unit's config inside CFG.UNITS.  Use the
-// DRY helper getUnitBuildableTypes(cfg, type, level)
-// in cfgHelpers.ts — never duplicate per-unit logic.
-//
-// Matchmaking config lives in matchmaking.ts since
-// it is server-only and not part of the game state.
 // ──────────────────────────────────────────────
 
 export interface TerrainConfig {
@@ -45,47 +18,6 @@ export interface TerrainConfig {
   passable: boolean;
   cost: number;
   capacity: number;
-}
-
-export interface UnitConfig {
-  ticksCost: number;
-  resourceCost: Record<string, number>;
-  popCost: number;
-  visionRange: number;
-  buildExhaustion: number;
-  buildable?: Record<string, { minLevel: number }>;
-  canClaim?: boolean;
-  claimTickMultiplier?: number;
-  upgradeFrom?: string;
-  upgradeCost?: Record<string, number>;
-  upgradeTicks?: number;
-  maxWeight?: number;
-}
-
-export interface CitizenVitalsConfig {
-  MAX_HEALTH: number;
-  MAX_HUNGER: number;
-  MAX_REST: number;
-  HUNGER_DRAIN_PER_TICK: number;
-  REST_DRAIN_PER_TICK: number;
-  HEALTH_LOSS_WHEN_HUNGRY_PER_TICK: number;
-  HUNGER_THRESHOLD: number;
-  REST_THRESHOLD: number;
-  HEALTH_THRESHOLD: number;
-  HUNGER_RECHARGE_PER_TICK: number;
-  REST_RECHARGE_PER_TICK: number;
-  HEALTH_RECHARGE_PER_TICK: number;
-  HUNGER_RECHARGE_FOOD_COST: number;
-}
-
-export interface BuildingConfig {
-  ticks: number;
-  placement: string[];
-  extractorOutput: { resource: ResourceType; amount: number } | null;
-  cost: { food: number; material: number };
-  exhaustionCost: number;
-  wagePer100Ticks: number;
-  target: number;
 }
 
 export interface ResourceConfig {
@@ -110,10 +42,6 @@ export interface ICFG {
   FOG: FogConfig;
   CAMERA: CameraConfig;
   TICK_RATE_MS: number;
-  CLAIM: { TICKS_UNCLAIMED: number; TICKS_ENEMY: number };
-  UNITS: Record<string, UnitConfig>;
-  MAX_PER_HEX: number;
-  BUILDINGS: Record<string, BuildingConfig>;
   RESOURCES: Record<string, ResourceConfig>;
   CITY: {
     INITIAL_STOCKPILE: Record<string, number>;
@@ -132,24 +60,16 @@ export interface ICFG {
     BREAD_EMERGENCY_GRAIN_RATIO: number;
     INFLOW_WINDOW_TICKS: number;
     TIER_XP_THRESHOLDS: number[];
-    GARRISON_CAPACITY: Record<number, number>;
     XP_PER_POP_PER_10: number;
     XP_FOOD_MULTIPLIER: number;
     XP_ENERGY_MULTIPLIER: number;
     VALID_SPAWN_TERRAIN: TerrainType[];
     HOMES_PER_CITY: number;
-    STARTING_CITIZENS: number;
   };
   SUPPLY_CHAIN: {
     MAX_HOPS: number;
     DISTANCE_PENALTY: number;
     ENERGY_PIPELINE_MAX_HOPS: number;
-  };
-  FACTORY: {
-    XP_PER_CYCLE: number;
-    TIER_THRESHOLDS: number[];
-    BASE_XP: number;
-    SPECIALIZATION_BONUS_PER_CYCLE: number;
   };
   RESOURCE_CATEGORY_LABELS: Record<string, string>;
   DAY_NIGHT: {
@@ -160,8 +80,38 @@ export interface ICFG {
     CITY_GLOW_INTENSITY: number;
     CITY_GLOW_COLOR: string;
     NIGHT_COLOR_MIX: number;
+    MOON_INTENSITY: number;
+    MOON_ORBIT_TILT: number;
+    MOON_ORBIT_RADIUS: number;
+    SUN_RENDER_DISTANCE: number;
   };
-  CITIZEN_VITALS: CitizenVitalsConfig;
+  SYSTEM: {
+    // Render scale for the system view: 1 Three.js unit = this many km.
+    VIEW_SCALE_KM: number;
+    // Globe radius in km (used to convert orbital km to globe units in planet view).
+    PLANET_RADIUS_KM: number;
+  };
+  ORBITAL: {
+    STAR_MASS: number;
+    STAR_RADIUS: number;
+    PLANET_MASS: number;
+    PLANET_RADIUS_KM: number;
+    PLANET_SEMI_MAJOR_AXIS_KM: number;
+    PLANET_PERIOD_S: number;
+    PLANET_ECCENTRICITY: number;
+    MOON_MASS: number;
+    MOON_RADIUS_KM: number;
+    MOON_SEMI_MAJOR_AXIS_KM: number;
+    MOON_PERIOD_S: number;
+    MOON_ECCENTRICITY: number;
+    MOON_INCLINATION: number;
+    LANDER_MASS: number;
+    LANDER_RADIUS_KM: number;
+    LANDER_FUEL_CAPACITY: number;
+    LANDER_SEMI_MAJOR_AXIS_KM: number;
+    LANDER_PERIOD_S: number;
+    LANDER_INCLINATION: number;
+  };
   STOCKPILE_RAID_FRACTION: number;
   ENERGY_CREDITS_INITIAL: number;
   PLAYER_COLORS: string[];
@@ -242,7 +192,7 @@ export const CFG: ICFG = {
   },
 
   CAMERA: {
-    minDistance: 7,
+    minDistance: 5.2,
     maxDistance: 25,
     rotationDamping: 0.92,
     zoomSpeed: 1.0,
@@ -251,140 +201,7 @@ export const CFG: ICFG = {
 
   TICK_RATE_MS: 100,
 
-  CLAIM: {
-    TICKS_UNCLAIMED: 50,
-    TICKS_ENEMY: 3000,
-  },
-
-  // ─── Units (dictionary per unit type) ──
-  UNITS: {
-    CITIZEN: {
-      ticksCost: 50,
-      resourceCost: { FOOD: 10 } as Record<string, number>,
-      popCost: 1,
-      visionRange: 1,
-      buildExhaustion: 1,
-      canClaim: true,
-      claimTickMultiplier: 2,
-      maxWeight: 10,
-      buildable: {
-        FARM: { minLevel: 1 },
-        MINE: { minLevel: 1 },
-        LUMBER_CAMP: { minLevel: 1 },
-      },
-    },
-    INFANTRY: {
-      ticksCost: 100,
-      resourceCost: { FOOD: 20 } as Record<string, number>,
-      popCost: 1,
-      visionRange: 1,
-      buildExhaustion: 1,
-      canClaim: true,
-      claimTickMultiplier: 1,
-      upgradeFrom: 'CITIZEN',
-      upgradeCost: { FOOD: 10, ORE: 5 } as Record<string, number>,
-      upgradeTicks: 50,
-      maxWeight: 15,
-      buildable: {
-        FARM: { minLevel: 1 },
-        MINE: { minLevel: 1 },
-        LUMBER_CAMP: { minLevel: 1 },
-      },
-    },
-    ENGINEER: {
-      ticksCost: 300,
-      resourceCost: { FOOD: 30, STEEL: 10 } as Record<string, number>,
-      popCost: 2,
-      visionRange: 1,
-      buildExhaustion: 3,
-      upgradeFrom: 'CITIZEN',
-      upgradeCost: { FOOD: 20, STEEL: 10 } as Record<string, number>,
-      upgradeTicks: 100,
-      maxWeight: 20,
-      buildable: {
-        FARM: { minLevel: 1 },
-        MINE: { minLevel: 1 },
-        OIL_WELL: { minLevel: 1 },
-        LUMBER_CAMP: { minLevel: 1 },
-        FACTORY: { minLevel: 1 },
-        CITY: { minLevel: 1 },
-      },
-    },
-    TRADER: {
-      ticksCost: 200,
-      resourceCost: { FOOD: 15, POWER: 5 } as Record<string, number>,
-      popCost: 1,
-      visionRange: 2,
-      buildExhaustion: 0,
-      upgradeFrom: 'CITIZEN',
-      upgradeCost: { FOOD: 15, POWER: 5 } as Record<string, number>,
-      upgradeTicks: 75,
-      maxWeight: 30,
-    },
-  },
-
-  MAX_PER_HEX: 3,
-
-  // ─── Buildings (dictionary per building type) ──
-  BUILDINGS: {
-    FARM: {
-      ticks: 200,
-      placement: ["PLAINS", "FOREST"],
-      extractorOutput: { resource: ResourceType.GRAIN, amount: 0.5 },
-      cost: { food: 0, material: 0 },
-      exhaustionCost: 1,
-      wagePer100Ticks: 2.5,
-      target: 200,
-    },
-    MINE: {
-      ticks: 300,
-      placement: ["MOUNTAIN", "DESERT"],
-      extractorOutput: { resource: ResourceType.ORE, amount: 0.5 },
-      cost: { food: 0, material: 0 },
-      exhaustionCost: 1,
-      wagePer100Ticks: 2.5,
-      target: 200,
-    },
-    OIL_WELL: {
-      ticks: 350,
-      placement: ["DESERT", "TUNDRA"],
-      extractorOutput: { resource: ResourceType.OIL, amount: 0.3 },
-      cost: { food: 30, material: 20 },
-      exhaustionCost: 1,
-      wagePer100Ticks: 4,
-      target: 150,
-    },
-    LUMBER_CAMP: {
-      ticks: 250,
-      placement: ["FOREST", "TUNDRA"],
-      extractorOutput: { resource: ResourceType.TIMBER, amount: 0.5 },
-      cost: { food: 0, material: 0 },
-      exhaustionCost: 1,
-      wagePer100Ticks: 2.5,
-      target: 200,
-    },
-    FACTORY: {
-      ticks: 400,
-      placement: ["PLAINS", "DESERT", "TUNDRA"],
-      extractorOutput: null,
-      cost: { food: 50, material: 30 },
-      exhaustionCost: 3,
-      wagePer100Ticks: 5,
-      target: 100,
-    },
-    CITY: {
-      ticks: 500,
-      placement: ["PLAINS", "DESERT"],
-      extractorOutput: null,
-      cost: { food: 80, material: 40 },
-      exhaustionCost: 3,
-      wagePer100Ticks: 0,
-      target: 0,
-    },
-  },
-
   // ─── Resources (flat dictionary per resource type) ──
-  // Recipes are defined on the processed resource, not in FACTORY.RECIPES.
   RESOURCES: {
     GRAIN: { tier: "raw", foodValue: 0.67, category: "FOOD" },
     ORE: { tier: "raw", materialValue: 1.0, category: "INDUSTRY" },
@@ -473,16 +290,11 @@ export const CFG: ICFG = {
     BREAD_EMERGENCY_GRAIN_RATIO: 1.5,
     INFLOW_WINDOW_TICKS: 100,
     TIER_XP_THRESHOLDS: [0, 5000, 15000, 40000, 100000, 250000],
-    GARRISON_CAPACITY: { 1: 2, 2: 6, 3: 15, 4: 35, 5: 90, 6: 250 } as Record<
-      number,
-      number
-    >,
     XP_PER_POP_PER_10: 1,
     XP_FOOD_MULTIPLIER: 1.5,
     XP_ENERGY_MULTIPLIER: 1.3,
     VALID_SPAWN_TERRAIN: [TerrainType.PLAINS] as TerrainType[],
     HOMES_PER_CITY: 6,
-    STARTING_CITIZENS: 3,
   },
 
   // ─── Resource Category Labels ──────────────
@@ -499,14 +311,6 @@ export const CFG: ICFG = {
     ENERGY_PIPELINE_MAX_HOPS: 20,
   },
 
-  // ─── Factory ──────────────────────────────
-  FACTORY: {
-    XP_PER_CYCLE: 10,
-    TIER_THRESHOLDS: [0, 100, 500, 2000, 10000],
-    BASE_XP: 0,
-    SPECIALIZATION_BONUS_PER_CYCLE: 0.12,
-  },
-
   // ─── Day / Night ─────────────────────────
   DAY_NIGHT: {
     CYCLE_TICKS: 1800,
@@ -516,22 +320,39 @@ export const CFG: ICFG = {
     CITY_GLOW_INTENSITY: 0.4,
     CITY_GLOW_COLOR: "#ffcc44",
     NIGHT_COLOR_MIX: 0.25,
+    MOON_INTENSITY: 0.3,
+    MOON_ORBIT_TILT: 0.35,
+    MOON_ORBIT_RADIUS: 3.5,
+    SUN_RENDER_DISTANCE: 40,
   },
 
-  CITIZEN_VITALS: {
-    MAX_HEALTH: 100,
-    MAX_HUNGER: 7500,
-    MAX_REST: 7500,
-    HUNGER_DRAIN_PER_TICK: 1.5,
-    REST_DRAIN_PER_TICK: 1.5,
-    HEALTH_LOSS_WHEN_HUNGRY_PER_TICK: 0.1,
-    HUNGER_THRESHOLD: 2250,
-    REST_THRESHOLD: 2250,
-    HEALTH_THRESHOLD: 80,
-    HUNGER_RECHARGE_PER_TICK: 100,
-    REST_RECHARGE_PER_TICK: 10,
-    HEALTH_RECHARGE_PER_TICK: 0.5,
-    HUNGER_RECHARGE_FOOD_COST: 5,
+  // ─── System view rendering ───────────────
+  SYSTEM: {
+    VIEW_SCALE_KM: 1e6,
+    PLANET_RADIUS_KM: 6371,
+  },
+
+  // ─── Orbital body starting parameters ───
+  ORBITAL: {
+    STAR_MASS: 1.989e30,
+    STAR_RADIUS: 696340,
+    PLANET_MASS: 5.972e24,
+    PLANET_RADIUS_KM: 6371,
+    PLANET_SEMI_MAJOR_AXIS_KM: 1.496e8,
+    PLANET_PERIOD_S: 365.25 * 24 * 3600 / 10,
+    PLANET_ECCENTRICITY: 0.017,
+    MOON_MASS: 7.342e22,
+    MOON_RADIUS_KM: 1737,
+    MOON_SEMI_MAJOR_AXIS_KM: 384400,
+    MOON_PERIOD_S: 27.3 * 24 * 3600 / 10,
+    MOON_ECCENTRICITY: 0.0549,
+    MOON_INCLINATION: 0.089,
+    LANDER_MASS: 50000,
+    LANDER_RADIUS_KM: 0.05,
+    LANDER_FUEL_CAPACITY: 1000,
+    LANDER_SEMI_MAJOR_AXIS_KM: 6800,
+    LANDER_PERIOD_S: 5400 / 10,
+    LANDER_INCLINATION: 0.26,
   },
 
   // ─── Misc ─────────────────────────────────

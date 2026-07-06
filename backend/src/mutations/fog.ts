@@ -3,35 +3,23 @@ import {
   RuinType,
   ResourceType,
   CFG,
+  OrbitalBodyType,
   type AdjacencyMap,
   type PlayerStateSlice,
   type VisibleCellData,
   type RevealedCellData,
-  type UnitData,
   type CityData,
   type PlayerSummary,
   type RuinMarkerData,
-  type BuildingData,
   type PlayerResourceData,
   type StockpileEntry,
-  type ProductionItem,
   type ResourceInflowEntry,
-  getFactoryRecipes,
+  type OrbitalBodyData,
 } from '@vantaris/shared';
 import { GameState } from '../state/GameState';
-import { BuildingState } from '../state/BuildingState';
 import { getCityStockpile } from './resources';
-import { getBuildingStockpile, getCellBuildingCapacity, countBuildingsOnCell, getResourcesInvested } from './buildings';
-import { getRepeatQueue, getPriorityQueue, getCurrentProduction } from './cities';
 
-function getRecipeTicksTotal(building: BuildingState): number {
-  if (!building.recipe) return 0;
-  const recipe = getFactoryRecipes(CFG).find(r => r.id === building.recipe);
-  if (!recipe) return 0;
-  const specCycles = building.specializationCycles || 0;
-  const multiplier = 1 + specCycles * CFG.FACTORY.SPECIALIZATION_BONUS_PER_CYCLE;
-  return Math.ceil(recipe.ticksPerCycle / multiplier);
-}
+const VISION_RANGE = 1;
 
 export function revealCellForPlayer(state: GameState, playerId: string, cellId: string): void {
   const player = state.players.get(playerId);
@@ -56,24 +44,27 @@ export function computeVisibilityForPlayer(
   state: GameState,
   playerId: string,
   adjacencyMap: AdjacencyMap,
-  visionRange: number = CFG.UNITS.INFANTRY.visionRange,
+  visionRange: number = VISION_RANGE,
+  cellPositions?: Record<string, [number, number, number]>,
 ): void {
   const player = state.players.get(playerId);
   if (!player) return;
 
   const visibleCellIds = new Set<string>();
 
-  for (const [cellId, cell] of state.cells) {
-    if (cell.ownerId === playerId) {
+  // Reveal tiles under the player's orbiting or landed spacecraft.
+  for (const [, body] of state.orbitalBodies) {
+    if (body.ownerId !== playerId || body.type !== OrbitalBodyType.SPACECRAFT) continue;
+    if (body.landedCellId) {
+      visibleCellIds.add(body.landedCellId);
+      collectNeighborsInRange(body.landedCellId, visionRange, visibleCellIds, adjacencyMap);
+      continue;
+    }
+    // Orbiting: find the cell directly below the spacecraft's sub-point.
+    const cellId = findCellBelowSpacecraft(state, body, cellPositions);
+    if (cellId) {
       visibleCellIds.add(cellId);
       collectNeighborsInRange(cellId, visionRange, visibleCellIds, adjacencyMap);
-    }
-  }
-
-  for (const [, unit] of state.units) {
-    if (unit.ownerId === playerId) {
-      visibleCellIds.add(unit.cellId);
-      collectNeighborsInRange(unit.cellId, visionRange, visibleCellIds, adjacencyMap);
     }
   }
 
@@ -95,6 +86,43 @@ export function computeVisibilityForPlayer(
       player.fog.setVisible(cellId);
     }
   }
+}
+
+function findCellBelowSpacecraft(
+  state: GameState,
+  body: any,
+  cellPositions?: Record<string, [number, number, number]>,
+): string | null {
+  const parent = state.orbitalBodies.get(body.elements.parent);
+  if (!parent) return null;
+  // Direction from planet center to spacecraft (world space).
+  const dx = body.posX - parent.posX;
+  const dy = body.posY - parent.posY;
+  const dz = body.posZ - parent.posZ;
+  const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  if (len === 0) return null;
+  const ux = dx / len, uy = dy / len, uz = dz / len;
+
+  // Find the cell whose center is most aligned with this direction.
+  let bestId: string | null = null;
+  let bestDot = -Infinity;
+  for (const [cellId, cell] of state.cells) {
+    let pos: [number, number, number] | undefined;
+    if (cellPositions) {
+      pos = cellPositions[cellId];
+    }
+    // Fallback: CellState doesn't store center, so we need cellPositions.
+    if (!pos) continue;
+    const cx = pos[0], cy = pos[1], cz = pos[2];
+    const clen = Math.sqrt(cx * cx + cy * cy + cz * cz);
+    if (clen === 0) continue;
+    const dot = (cx * ux + cy * uy + cz * uz) / clen;
+    if (dot > bestDot) {
+      bestDot = dot;
+      bestId = cellId;
+    }
+  }
+  return bestId;
 }
 
 function collectNeighborsInRange(
@@ -144,11 +172,10 @@ export function buildPlayerSlice(
       visibleCells: [],
       revealedCells: [],
       ruinMarkers: [],
-      units: [],
       cities: [],
-      buildings: [],
       players: [],
       resources: { food: 0, energy: 0, foodPerTick: 0, energyPerTick: 0, totalPopulation: 0, factoryCount: 0, energyCredits: 0, claimCompensation: 0, foodCreditRate: 1 },
+      orbitalBodies: [],
     };
   }
 
@@ -162,34 +189,6 @@ export function buildPlayerSlice(
     if (fogValue === FogVisibility.VISIBLE) {
       const cell = state.cells.get(cellId);
       if (cell) {
-        const cellBuildings: BuildingData[] = [];
-        for (const [, building] of state.buildings) {
-          if (building.cellId === cell.cellId) {
-            const bsp = getBuildingStockpile(building);
-            cellBuildings.push({
-              buildingId: building.buildingId,
-              ownerId: building.ownerId,
-              cellId: building.cellId,
-              type: building.type,
-              productionTicksRemaining: building.productionTicksRemaining,
-              recipe: building.recipe,
-              factoryTier: building.factoryTier,
-              factoryXp: building.factoryXp,
-              stockpile: stockpileMapToEntries(bsp),
-              resourcesInvested: getResourcesInvested(building),
-              stockpileTarget: building.stockpileTarget,
-              specializationRecipe: building.specializationRecipe,
-              specializationCycles: building.specializationCycles,
-              recipeTicksRemaining: building.recipeTicksRemaining,
-              recipeTicksTotal: getRecipeTicksTotal(building),
-              wagePer100Ticks: building.wagePer100Ticks,
-            });
-          }
-        }
-
-        const capacity = getCellBuildingCapacity(cell);
-        const currentCount = countBuildingsOnCell(state, cell.cellId);
-
         visibleCells.push({
           cellId: cell.cellId,
           biome: cell.biome,
@@ -200,8 +199,6 @@ export function buildPlayerSlice(
           resourceYield: cell.resourceType !== ResourceType.NONE ? { primary: cell.resourceType as ResourceType, amount: cell.resourceAmount } : null,
           ruin: (cell.ruin as RuinType) || null,
           ruinRevealed: cell.ruinRevealed,
-          buildings: cellBuildings,
-          buildingCapacity: capacity,
         });
         visibleCellIds.add(cellId);
       }
@@ -226,107 +223,41 @@ export function buildPlayerSlice(
     }
   }
 
-  const units: UnitData[] = [];
-  for (const [, unit] of state.units) {
-    if (visibleCellIds.has(unit.cellId)) {
-      let path: string[] = [];
-      try {
-        path = JSON.parse(unit.path);
-      } catch { /* ignore */ }
-
-      units.push({
-        unitId: unit.unitId,
-        ownerId: unit.ownerId,
-        type: unit.type,
-        status: unit.status,
-        cellId: unit.cellId,
-        path,
-        movementTicksRemaining: unit.movementTicksRemaining,
-        movementTicksTotal: unit.movementTicksTotal,
-        claimTicksRemaining: unit.claimTicksRemaining,
-        buildTicksRemaining: unit.buildTicksRemaining,
-        engineerLevel: unit.engineerLevel,
-        buildExhaustion: unit.buildExhaustion,
-        name: unit.name,
-        energyCredits: unit.energyCredits,
-        inventoryWeight: unit.inventoryWeight,
-        health: unit.health,
-        hunger: unit.hunger,
-        rest: unit.rest,
-        homeCityId: unit.homeCityId,
+  const cities: CityData[] = [];
+  for (const [, city] of state.cities) {
+    if (visibleCellIds.has(city.cellId)) {
+      const nextThreshold = city.tier < CFG.CITY.TIER_XP_THRESHOLDS.length
+        ? CFG.CITY.TIER_XP_THRESHOLDS[city.tier]
+        : CFG.CITY.TIER_XP_THRESHOLDS[CFG.CITY.TIER_XP_THRESHOLDS.length - 1];
+      const citySp = getCityStockpile(city);
+      let resourceInflows: ResourceInflowEntry[] = [];
+      try { resourceInflows = JSON.parse(city.resourceInflows); } catch {}
+      cities.push({
+        cityId: city.cityId,
+        ownerId: city.ownerId,
+        cellId: city.cellId,
+        name: city.name,
+        tier: city.tier,
+        xp: city.xp,
+        xpToNext: nextThreshold,
+        population: Math.floor(city.population),
+        repeatQueue: [],
+        priorityQueue: [],
+        currentProduction: null,
+        productionTicksRemaining: 0,
+        productionTicksTotal: 0,
+        productionResourcesInvested: {},
+        foodPerTick: city.foodPerTick,
+        energyPerTick: city.energyPerTick,
+        stockpile: stockpileMapToEntries(citySp),
+        resourceInflows: resourceInflows,
+        homesAvailable: city.homesAvailable,
       });
     }
   }
 
-    const cities: CityData[] = [];
-    for (const [, city] of state.cities) {
-      if (visibleCellIds.has(city.cellId)) {
-        const nextThreshold = city.tier < CFG.CITY.TIER_XP_THRESHOLDS.length
-          ? CFG.CITY.TIER_XP_THRESHOLDS[city.tier]
-          : CFG.CITY.TIER_XP_THRESHOLDS[CFG.CITY.TIER_XP_THRESHOLDS.length - 1];
-        const citySp = getCityStockpile(city);
-        const repeatQ = getRepeatQueue(city);
-        const priorityQ = getPriorityQueue(city);
-        const currentProd = getCurrentProduction(city);
-        let productionResourcesInvested: Record<string, number> = {};
-        try { productionResourcesInvested = JSON.parse(city.productionResourcesInvested); } catch {}
-        let resourceInflows: ResourceInflowEntry[] = [];
-        try { resourceInflows = JSON.parse(city.resourceInflows); } catch {}
-        cities.push({
-          cityId: city.cityId,
-          ownerId: city.ownerId,
-          cellId: city.cellId,
-          name: city.name,
-          tier: city.tier,
-          xp: city.xp,
-          xpToNext: nextThreshold,
-          population: Math.floor(city.population),
-          repeatQueue: repeatQ,
-          priorityQueue: priorityQ,
-          currentProduction: currentProd,
-          productionTicksRemaining: city.productionTicksRemaining,
-          productionTicksTotal: city.productionTicksTotal,
-          productionResourcesInvested: productionResourcesInvested,
-          foodPerTick: city.foodPerTick,
-          energyPerTick: city.energyPerTick,
-          stockpile: stockpileMapToEntries(citySp),
-          resourceInflows: resourceInflows,
-          homesAvailable: city.homesAvailable,
-        });
-      }
-    }
-
-  const buildings: BuildingData[] = [];
-  for (const [, building] of state.buildings) {
-    if (visibleCellIds.has(building.cellId)) {
-      const bsp = getBuildingStockpile(building);
-        buildings.push({
-          buildingId: building.buildingId,
-          ownerId: building.ownerId,
-          cellId: building.cellId,
-          type: building.type,
-          productionTicksRemaining: building.productionTicksRemaining,
-          recipe: building.recipe,
-          factoryTier: building.factoryTier,
-          factoryXp: building.factoryXp,
-          stockpile: stockpileMapToEntries(bsp),
-          resourcesInvested: getResourcesInvested(building),
-          stockpileTarget: building.stockpileTarget,
-          specializationRecipe: building.specializationRecipe,
-           specializationCycles: building.specializationCycles,
-           recipeTicksRemaining: building.recipeTicksRemaining,
-           recipeTicksTotal: getRecipeTicksTotal(building),
-           wagePer100Ticks: building.wagePer100Ticks,
-         });
-     }
-   }
-
   const players: PlayerSummary[] = [];
   for (const [pid, ps] of state.players) {
-    let unitCount = 0;
-    for (const [, unit] of state.units) {
-      if (unit.ownerId === pid) unitCount++;
-    }
     let cityCount = 0;
     let totalPop = 0;
     for (const [, city] of state.cities) {
@@ -335,27 +266,21 @@ export function buildPlayerSlice(
         totalPop += Math.floor(city.population);
       }
     }
-    let factoryCount = 0;
-    for (const [, building] of state.buildings) {
-      if (building.ownerId === pid && building.type === 'FACTORY' && building.productionTicksRemaining <= 0) factoryCount++;
-    }
     players.push({
       playerId: ps.playerId,
       displayName: ps.displayName,
       color: ps.color,
       alive: ps.alive,
       territoryCount: ps.territoryCellCount,
-      unitCount,
       cityCount,
       population: totalPop,
-      factoryCount,
+      factoryCount: 0,
     });
   }
 
   let totalFood = 0;
   let totalEnergy = 0;
   let totalPop = 0;
-  let factCount = 0;
 
   for (const [, city] of state.cities) {
     if (city.ownerId !== playerId) continue;
@@ -365,23 +290,43 @@ export function buildPlayerSlice(
     totalEnergy += sp[ResourceType.POWER] || 0;
   }
 
-  for (const [, building] of state.buildings) {
-    if (building.ownerId === playerId && building.type === 'FACTORY' && building.productionTicksRemaining <= 0) {
-      factCount++;
-    }
-  }
-
   const resources: PlayerResourceData = {
     food: Math.floor(totalFood),
     energy: Math.floor(totalEnergy),
     foodPerTick: 0,
     energyPerTick: 0,
     totalPopulation: totalPop,
-    factoryCount: factCount,
-    energyCredits: player ? player.energyCredits : 0,
-    claimCompensation: player ? player.claimCompensation : 0,
-    foodCreditRate: player ? player.foodCreditRate : 1,
+    factoryCount: 0,
+    energyCredits: player.energyCredits,
+    claimCompensation: player.claimCompensation,
+    foodCreditRate: player.foodCreditRate,
   };
+
+  const orbitalBodies: OrbitalBodyData[] = [];
+  for (const [, b] of state.orbitalBodies) {
+    orbitalBodies.push({
+      bodyId: b.bodyId,
+      name: b.name,
+      type: b.type as OrbitalBodyType,
+      ownerId: b.ownerId,
+      mass: b.mass,
+      radius: b.radius,
+      elements: {
+        parent: b.elements.parent,
+        semiMajorAxis: b.elements.semiMajorAxis,
+        eccentricity: b.elements.eccentricity,
+        inclination: b.elements.inclination,
+        longitudeOfAscendingNode: b.elements.longitudeOfAscendingNode,
+        argumentOfPeriapsis: b.elements.argumentOfPeriapsis,
+        meanAnomalyAtEpoch: b.elements.meanAnomalyAtEpoch,
+        period: b.elements.period,
+      },
+      fuel: b.fuel,
+      fuelCapacity: b.fuelCapacity,
+      position: [b.posX, b.posY, b.posZ],
+      landedCellId: b.landedCellId || null,
+    });
+  }
 
   return {
     myPlayerId: playerId,
@@ -391,10 +336,9 @@ export function buildPlayerSlice(
     visibleCells,
     revealedCells,
     ruinMarkers,
-    units,
     cities,
-    buildings,
     players,
     resources,
+    orbitalBodies,
   };
 }

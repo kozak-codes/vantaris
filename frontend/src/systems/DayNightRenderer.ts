@@ -2,10 +2,13 @@ import * as THREE from 'three';
 import { clientState, onStateUpdate } from '../state/ClientState';
 import { GLOBE_RADIUS } from './IconFactory';
 import { CFG } from '@vantaris/shared';
+import { orbitalBodies } from '../state/signals';
 
-const MOON_INTENSITY = 0.3;
-const MOON_ORBIT_TILT = 0.35;
-const MOON_ORBIT_RADIUS = 3.5;
+const MOON_INTENSITY = CFG.DAY_NIGHT.MOON_INTENSITY;
+const MOON_ORBIT_TILT = CFG.DAY_NIGHT.MOON_ORBIT_TILT;
+const MOON_ORBIT_RADIUS = CFG.DAY_NIGHT.MOON_ORBIT_RADIUS;
+// The sun sits far away in the planet view; the directional light matches this direction.
+const SUN_RENDER_DISTANCE = CFG.DAY_NIGHT.SUN_RENDER_DISTANCE;
 
 export class DayNightRenderer {
   private ambientLight: THREE.AmbientLight;
@@ -18,6 +21,7 @@ export class DayNightRenderer {
   private sunLight: THREE.DirectionalLight;
   private moonLight: THREE.DirectionalLight;
   private moonOrb: THREE.Mesh;
+  private sunOrb: THREE.Mesh;
   private hemisphereLight: THREE.HemisphereLight;
 
   constructor(
@@ -39,6 +43,14 @@ export class DayNightRenderer {
     this.globeGroup.add(this.sunLight.target);
 
     this.sunLight.raycast = () => {};
+
+    // A small emissive sphere placed far from the planet in the sun's direction,
+    // so the player can see where the sun is in the sky from the planet view.
+    const sunGeo = new THREE.SphereGeometry(2.0, 24, 24);
+    const sunMat = new THREE.MeshBasicMaterial({ color: 0xfff0cc });
+    this.sunOrb = new THREE.Mesh(sunGeo, sunMat);
+    this.sunOrb.raycast = () => {};
+    this.globeGroup.add(this.sunOrb);
 
     this.moonLight = new THREE.DirectionalLight(0x8899cc, MOON_INTENSITY);
     this.moonLight.position.set(-GLOBE_RADIUS * 2, MOON_ORBIT_TILT * GLOBE_RADIUS, 0);
@@ -82,32 +94,27 @@ export class DayNightRenderer {
 
   update(): void {
     const sunAngle = clientState.sunAngle;
-    if (sunAngle === this.lastSunAngle) return;
+    if (sunAngle === this.lastSunAngle && !this.hasOrbitalSun()) return;
     this.lastSunAngle = sunAngle;
 
-    const moonAngle = sunAngle + Math.PI;
+    // Direction from the planet to the sun, in globe-local space. Prefer the
+    // real orbital positions; fall back to the day/night cycle angle.
+    const sunDir = this.getSunDirectionFromOrbit(sunAngle);
 
-    this.sunLight.position.set(
-      GLOBE_RADIUS * 2 * Math.cos(sunAngle),
-      0,
-      GLOBE_RADIUS * 2 * Math.sin(sunAngle),
-    );
+    this.sunLight.position.copy(sunDir).multiplyScalar(SUN_RENDER_DISTANCE);
     this.sunLight.target.position.set(0, 0, 0);
+    this.sunOrb.position.copy(sunDir).multiplyScalar(SUN_RENDER_DISTANCE);
 
-    this.moonLight.position.set(
-      GLOBE_RADIUS * 2 * Math.cos(moonAngle),
-      MOON_ORBIT_TILT * GLOBE_RADIUS,
-      GLOBE_RADIUS * 2 * Math.sin(moonAngle),
-    );
+    // Moon position from real orbital data (Selene). Falls back to the legacy
+    // day/night cycle angle if no orbital moon is present.
+    const moonDir = this.getMoonDirectionFromOrbit(sunAngle);
+    this.moonLight.position.copy(moonDir).multiplyScalar(GLOBE_RADIUS * 2);
     this.moonLight.target.position.set(0, 0, 0);
+    this.moonOrb.position.copy(moonDir).multiplyScalar(MOON_ORBIT_RADIUS * GLOBE_RADIUS);
 
-    this.moonOrb.position.set(
-      MOON_ORBIT_RADIUS * GLOBE_RADIUS * Math.cos(moonAngle),
-      MOON_ORBIT_TILT * GLOBE_RADIUS * 0.6,
-      MOON_ORBIT_RADIUS * GLOBE_RADIUS * Math.sin(moonAngle),
-    );
-
-    const dayFactor = this.computeDayFactor(sunAngle);
+    // Day factor follows the real sun direction (dot of sun dir with the globe's
+    // local +x axis, which is where the camera looks by default).
+    const dayFactor = this.computeDayFactor(sunDir);
     this.sunLight.intensity = THREE.MathUtils.lerp(0.3, CFG.DAY_NIGHT.SUN_INTENSITY, dayFactor);
     this.moonLight.intensity = THREE.MathUtils.lerp(MOON_INTENSITY, 0.02, dayFactor);
 
@@ -118,26 +125,76 @@ export class DayNightRenderer {
     );
     this.hemisphereLight.intensity = THREE.MathUtils.lerp(0.15, 0.5, dayFactor);
 
-    this.applyTerminatorGradient(sunAngle);
+    this.applyTerminatorGradient(sunDir);
 
     this.updateCityGlowIntensity(dayFactor);
   }
 
-  private computeDayFactor(sunAngle: number): number {
-    return 0.5 + 0.5 * Math.cos(sunAngle);
+  private hasOrbitalSun(): boolean {
+    const bodies = orbitalBodies.value;
+    if (bodies.size === 0) return false;
+    for (const [, b] of bodies) {
+      if (b.type === 'STAR') return true;
+    }
+    return false;
   }
 
-  private getSunDirection(sunAngle: number): THREE.Vector3 {
-    return new THREE.Vector3(
-      Math.cos(sunAngle),
-      0,
-      Math.sin(sunAngle),
-    ).normalize();
+  // Returns the sun's direction relative to the planet in globe-local space.
+  // The globe group is rotated by the player's camera, so we express the sun
+  // direction in the globe's local frame: the star's world position minus the
+  // planet's world position, normalized, rotated into the globe's local frame.
+  private getSunDirectionFromOrbit(fallbackAngle: number): THREE.Vector3 {
+    const bodies = orbitalBodies.value;
+    let starPos: THREE.Vector3 | null = null;
+    let planetPos: THREE.Vector3 | null = null;
+    for (const [, b] of bodies) {
+      if (b.type === 'STAR') starPos = new THREE.Vector3(b.position[0], b.position[1], b.position[2]);
+      if (b.bodyId === 'vantaris') planetPos = new THREE.Vector3(b.position[0], b.position[1], b.position[2]);
+    }
+    if (!starPos || !planetPos) {
+      // Fall back to the day/night cycle angle.
+      return new THREE.Vector3(Math.cos(fallbackAngle), 0, Math.sin(fallbackAngle)).normalize();
+    }
+    // Direction from planet to star, in world (system) space.
+    const worldDir = starPos.clone().sub(planetPos).normalize();
+    // The orbital plane is the system's xz plane; map system world to globe-local.
+    // The globe group sits at the origin with no rotation by default, so the
+    // system's x/z axes map to the globe's local x/z. The system's y (out of plane)
+    // maps to the globe's local y.
+    return worldDir.normalize();
   }
 
-  private applyTerminatorGradient(sunAngle: number): void {
-    const sunDir = this.getSunDirection(sunAngle);
+  // Returns the moon's direction relative to the planet in globe-local space,
+  // using real orbital data from Selene. Falls back to the legacy day/night
+  // cycle angle if no orbital moon is present.
+  private getMoonDirectionFromOrbit(fallbackAngle: number): THREE.Vector3 {
+    const bodies = orbitalBodies.value;
+    let moonPos: THREE.Vector3 | null = null;
+    let planetPos: THREE.Vector3 | null = null;
+    for (const [, b] of bodies) {
+      if (b.type === 'MOON') moonPos = new THREE.Vector3(b.position[0], b.position[1], b.position[2]);
+      if (b.type === 'PLANET') planetPos = new THREE.Vector3(b.position[0], b.position[1], b.position[2]);
+    }
+    if (!moonPos || !planetPos) {
+      // Fall back to the legacy cycle angle (opposite the sun, with a tilt).
+      const moonAngle = fallbackAngle + Math.PI;
+      return new THREE.Vector3(
+        Math.cos(moonAngle),
+        MOON_ORBIT_TILT,
+        Math.sin(moonAngle),
+      ).normalize();
+    }
+    // Direction from planet to moon, in world (system) space.
+    return moonPos.clone().sub(planetPos).normalize();
+  }
 
+  private computeDayFactor(sunDir: THREE.Vector3): number {
+    // "Day" when the sun is on the camera-facing side of the globe. The globe's
+    // default-facing normal is +z (camera looks down -z), so day = sunDir.z > 0.
+    return 0.5 + 0.5 * sunDir.z;
+  }
+
+  private applyTerminatorGradient(sunDir: THREE.Vector3): void {
     for (const [cellId, mesh] of this.cellMeshes) {
       const mat = mesh.material as THREE.MeshStandardMaterial;
       const pos = mesh.position.clone().normalize();

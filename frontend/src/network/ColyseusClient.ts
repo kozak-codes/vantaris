@@ -1,7 +1,7 @@
 import { Client, Room } from 'colyseus.js';
-import { storeReconnectionToken, getReconnectionToken, getStoredRoomId } from './RoomPersistence';
-import { applyStateSlice, clearClientState, clientState } from '../state/ClientState';
-import { eliminationEvent, gameWonEvent, connected, lastTickTime } from '../state/signals';
+import { storeReconnectionToken, getReconnectionToken } from './RoomPersistence';
+import { applyStateSlice, clearClientState } from '../state/ClientState';
+import { connected, lastTickTime } from '../state/signals';
 import type { ChatMessage } from '@vantaris/shared';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'ws://localhost:2567';
@@ -42,6 +42,23 @@ export async function leaveQueue(): Promise<void> {
   }
 }
 
+function wireRoomMessages(room: Room): void {
+  room.onMessage('stateUpdate', (slice: any) => {
+    applyStateSlice(slice);
+    lastTickTime.value = Date.now();
+  });
+
+  room.onMessage('error', (data: any) => {
+    console.warn('[vantaris] Server error:', data);
+  });
+
+  room.onMessage('chatMessage', (data: ChatMessage) => {
+    for (const handler of chatHandlers) {
+      handler(data);
+    }
+  });
+}
+
 export async function joinGame(roomId: string, displayName?: string): Promise<Room> {
   const c = getClient();
   const room = await c.joinById(roomId, { displayName: displayName || '' });
@@ -51,31 +68,7 @@ export async function joinGame(roomId: string, displayName?: string): Promise<Ro
     storeReconnectionToken(roomId, room.reconnectionToken);
   }
   localStorage.setItem('vantaris_currentRoom', roomId);
-
-  room.onMessage('stateUpdate', (slice: any) => {
-    applyStateSlice(slice);
-  });
-
-  room.onMessage('error', (data: any) => {
-    console.warn('[vantaris] Server error:', data);
-  });
-
-  room.onMessage('playerEliminated', (data: { playerId: string; displayName: string; color: string; eliminatedTick: number }) => {
-    clientState.eliminationEvent = data;
-    eliminationEvent.value = data;
-  });
-
-  room.onMessage('gameWon', (data: { playerId: string; displayName: string; color: string }) => {
-    clientState.gameWonEvent = data;
-    gameWonEvent.value = data;
-  });
-
-  room.onMessage('chatMessage', (data: ChatMessage) => {
-    for (const handler of chatHandlers) {
-      handler(data);
-    }
-  });
-
+  wireRoomMessages(room);
   return room;
 }
 
@@ -88,80 +81,8 @@ export async function reconnectToGame(roomId: string): Promise<Room> {
   const room = await c.reconnect(token);
   currentRoom = room;
   connected.value = true;
-
-  room.onMessage('stateUpdate', (slice: any) => {
-    applyStateSlice(slice);
-  });
-
-  room.onMessage('error', (data: any) => {
-    console.warn('[vantaris] Server error:', data);
-  });
-
-  room.onMessage('playerEliminated', (data: { playerId: string; displayName: string; color: string; eliminatedTick: number }) => {
-    clientState.eliminationEvent = data;
-    eliminationEvent.value = data;
-  });
-
-  room.onMessage('gameWon', (data: { playerId: string; displayName: string; color: string }) => {
-    clientState.gameWonEvent = data;
-    gameWonEvent.value = data;
-  });
-
-  room.onMessage('chatMessage', (data: ChatMessage) => {
-    for (const handler of chatHandlers) {
-      handler(data);
-    }
-  });
-
+  wireRoomMessages(room);
   return room;
-}
-
-export function sendMoveUnit(unitId: string, targetCellId: string): void {
-  if (currentRoom) {
-    currentRoom.send('moveUnit', { unitId, targetCellId });
-  }
-}
-
-export function sendSetUnitIdle(unitId: string): void {
-  if (currentRoom) {
-    currentRoom.send('setUnitIdle', { unitId });
-  }
-}
-
-export function sendClaimTerritory(unitId: string): void {
-  if (currentRoom) {
-    currentRoom.send('claimTerritory', { unitId });
-  }
-}
-
-export function sendBuildStructure(unitId: string, buildingType: string, cellId: string): void {
-  if (currentRoom) {
-    currentRoom.send('buildStructure', { unitId, buildingType, cellId });
-  }
-}
-
-export function sendUpgradeUnit(unitId: string, targetUnitType: string): void {
-  if (currentRoom) {
-    currentRoom.send('upgradeUnit', { unitId, targetUnitType });
-  }
-}
-
-export function sendSetFactoryRecipe(buildingId: string, recipeId: string): void {
-  if (currentRoom) {
-    currentRoom.send('setFactoryRecipe', { buildingId, recipeId });
-  }
-}
-
-export function sendSetStockpileTarget(buildingId: string, target: number): void {
-  if (currentRoom) {
-    currentRoom.send('setStockpileTarget', { buildingId, target });
-  }
-}
-
-export function sendSetBuildingWage(buildingId: string, wage: number): void {
-  if (currentRoom) {
-    currentRoom.send('setBuildingWage', { buildingId, wage });
-  }
 }
 
 export function sendRenameCity(cityId: string, name: string): void {
@@ -170,51 +91,9 @@ export function sendRenameCity(cityId: string, name: string): void {
   }
 }
 
-export function sendCityQueueAddPriority(cityId: string, unitType: string): void {
-  if (currentRoom) {
-    currentRoom.send('cityQueueAddPriority', { cityId, unitType });
-  }
-}
-
-export function sendCityQueueAddRepeat(cityId: string, unitType: string): void {
-  if (currentRoom) {
-    currentRoom.send('cityQueueAddRepeat', { cityId, unitType });
-  }
-}
-
-export function sendCityQueueRemoveRepeat(cityId: string, index: number): void {
-  if (currentRoom) {
-    currentRoom.send('cityQueueRemoveRepeat', { cityId, index });
-  }
-}
-
-export function sendCityQueueClearPriority(cityId: string): void {
-  if (currentRoom) {
-    currentRoom.send('cityQueueClearPriority', { cityId });
-  }
-}
-
-export function sendCityToggleCitizenProduction(cityId: string): void {
-  if (currentRoom) {
-    currentRoom.send('cityToggleCitizenProduction', { cityId });
-  }
-}
-
 export function sendUpdateCamera(qx: number, qy: number, qz: number, qw: number, zoom: number): void {
   if (currentRoom) {
     currentRoom.send('updateCamera', { qx, qy, qz, qw, zoom });
-  }
-}
-
-export function sendSetClaimCompensation(value: number): void {
-  if (currentRoom) {
-    currentRoom.send('setClaimCompensation', { value });
-  }
-}
-
-export function sendSetFoodCreditRate(value: number): void {
-  if (currentRoom) {
-    currentRoom.send('setFoodCreditRate', { value });
   }
 }
 

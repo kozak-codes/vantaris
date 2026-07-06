@@ -3,23 +3,17 @@ import { clientState, onStateUpdate } from '../state/ClientState';
 import { GLOBE_RADIUS } from './IconFactory';
 
 const SELECTION_OFFSET = 0.015;
-const PATH_LINE_OFFSET = 1.02;
 const HOVER_OFFSET = 0.012;
 
 const COLOR_HOVER = 0xffffff;
-const COLOR_CLAIM_TARGET = 0xffcc00;
 
 export class SelectionRenderer {
   private globe: THREE.Group;
   private grid: any;
   private hexRing: THREE.LineSegments | null = null;
   private hoverRing: THREE.LineSegments | null = null;
-  private pathLines: THREE.Line | null = null;
   private currentTileId: string | null = null;
-  private currentUnitId: string | null = null;
-  private currentCityId: string | null = null;
   private currentHoveredCellId: string | null = null;
-  private currentPendingCommand: string | null = null;
 
   constructor(globe: THREE.Group, grid: any) {
     this.globe = globe;
@@ -34,55 +28,32 @@ export class SelectionRenderer {
     return this.grid.cells[numericId].center;
   }
 
-  private cellCenterToWorld(cellId: string, offset: number = 1.01): THREE.Vector3 | null {
-    const center = this.getCellCenter(cellId);
-    if (!center) return null;
-    return new THREE.Vector3(center[0], center[1], center[2]).normalize().multiplyScalar(GLOBE_RADIUS * offset);
-  }
-
   private onStateChange(): void {
     const tileId = clientState.selectedTileId;
-    const unitId = clientState.selectedUnitId;
-    const cityId = clientState.selectedCityId;
     const hoveredId = clientState.hoveredCellId;
-    const pendingCommand = clientState.pendingCommand;
 
     const tileChanged = tileId !== this.currentTileId;
-    const unitChanged = unitId !== this.currentUnitId;
-    const cityChanged = cityId !== this.currentCityId;
     const hoverChanged = hoveredId !== this.currentHoveredCellId;
-    const commandChanged = pendingCommand !== this.currentPendingCommand;
 
     this.currentTileId = tileId;
-    this.currentUnitId = unitId;
-    this.currentCityId = cityId;
     this.currentHoveredCellId = hoveredId;
-    this.currentPendingCommand = pendingCommand;
 
-    if (tileChanged || unitChanged || cityChanged) {
-      this.rebuild();
-    } else {
-      this.updatePathLines();
+    if (tileChanged) {
+      this.rebuildSelection();
     }
 
-    if (hoverChanged || commandChanged) {
+    if (hoverChanged) {
       this.rebuildHover();
     }
   }
 
-  private rebuild(): void {
+  private rebuildSelection(): void {
     this.removeHexRing();
-    this.removePathLines();
 
     if (!this.currentTileId) return;
 
-    this.buildHexRing(this.currentTileId);
-    this.buildPathLines();
-  }
-
-  private getHoverColor(): number {
-    if (clientState.pendingCommand === 'claim') return COLOR_CLAIM_TARGET;
-    return COLOR_HOVER;
+    const ring = this.buildCellRing(this.currentTileId, 0xffff44, SELECTION_OFFSET);
+    if (ring) this.hexRing = ring;
   }
 
   private rebuildHover(): void {
@@ -95,17 +66,7 @@ export class SelectionRenderer {
     const revealed = clientState.revealedCells.has(this.currentHoveredCellId);
     if (!visible && !revealed) return;
 
-    if (visible && clientState.pendingCommand === 'claim') {
-      this.hoverRing = this.buildCellRing(this.currentHoveredCellId, this.getHoverColor(), HOVER_OFFSET);
-      return;
-    }
-
-    this.hoverRing = this.buildCellRing(this.currentHoveredCellId, this.getHoverColor(), HOVER_OFFSET);
-  }
-
-  private buildHexRing(cellId: string): void {
-    const ring = this.buildCellRing(cellId, 0xffff44, SELECTION_OFFSET);
-    if (ring) this.hexRing = ring;
+    this.hoverRing = this.buildCellRing(this.currentHoveredCellId, COLOR_HOVER, HOVER_OFFSET);
   }
 
   private buildCellRing(cellId: string, color: number, offset: number): THREE.LineSegments | null {
@@ -134,42 +95,6 @@ export class SelectionRenderer {
     return lineSegments;
   }
 
-  private buildPathLines(): void {
-    this.removePathLines();
-
-    if (!this.currentUnitId) return;
-
-    const unit = clientState.units.get(this.currentUnitId);
-    if (!unit || (unit.status !== 'MOVING' && unit.status !== 'RETURNING') || !unit.path || unit.path.length === 0) return;
-
-    const points: THREE.Vector3[] = [];
-
-    const startWorld = this.cellCenterToWorld(unit.cellId, PATH_LINE_OFFSET);
-    if (startWorld) points.push(startWorld);
-
-    for (const cid of unit.path) {
-      const pos = this.cellCenterToWorld(cid, PATH_LINE_OFFSET);
-      if (pos) points.push(pos);
-    }
-
-    if (points.length < 2) return;
-
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const material = new THREE.LineBasicMaterial({
-      color: 0x44ddff,
-      transparent: true,
-      opacity: 0.7,
-      linewidth: 2,
-    });
-    this.pathLines = new THREE.Line(geometry, material);
-    this.pathLines.raycast = () => {};
-    this.globe.add(this.pathLines);
-  }
-
-  private updatePathLines(): void {
-    this.buildPathLines();
-  }
-
   private removeHexRing(): void {
     if (this.hexRing) {
       this.globe.remove(this.hexRing);
@@ -185,15 +110,6 @@ export class SelectionRenderer {
       this.hoverRing.geometry.dispose();
       (this.hoverRing.material as THREE.Material).dispose();
       this.hoverRing = null;
-    }
-  }
-
-  private removePathLines(): void {
-    if (this.pathLines) {
-      this.globe.remove(this.pathLines);
-      this.pathLines.geometry.dispose();
-      (this.pathLines.material as THREE.Material).dispose();
-      this.pathLines = null;
     }
   }
 

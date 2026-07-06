@@ -11,35 +11,44 @@ export enum GamePhase {
   FINISHED = 'FINISHED',
 }
 
+export enum OrbitalBodyType {
+  STAR = 'STAR',
+  PLANET = 'PLANET',
+  MOON = 'MOON',
+  SPACECRAFT = 'SPACECRAFT',
+  STATION = 'STATION',
+}
+
+export interface OrbitalElements {
+  parent: string;          // id of the body this orbits ('' for the star)
+  semiMajorAxis: number;   // km from parent body center
+  eccentricity: number;
+  inclination: number;     // radians
+  longitudeOfAscendingNode: number; // radians (Ω)
+  argumentOfPeriapsis: number;      // radians (ω)
+  meanAnomalyAtEpoch: number;       // radians (M0)
+  period: number;          // seconds for one full orbit
+}
+
+export interface OrbitalBodyData {
+  bodyId: string;
+  name: string;
+  type: OrbitalBodyType;
+  ownerId: string;          // for spacecraft/stations; '' for natural bodies
+  mass: number;             // kg
+  radius: number;          // km (physical body radius)
+  elements: OrbitalElements;
+  fuel: number;             // for spacecraft; 0 otherwise
+  fuelCapacity: number;    // for spacecraft; 0 otherwise
+  // Current world-space position relative to the star, in km. Server-authoritative,
+  // recomputed each tick from the orbital elements. Clients render from this.
+  position: [number, number, number];
+  // For spacecraft that have landed on a planet, the cellId they occupy.
+  landedCellId: string | null;
+}
+
 export enum QueueType {
   QUICK = 'QUICK',
-}
-
-export enum UnitType {
-  CITIZEN = 'CITIZEN',
-  INFANTRY = 'INFANTRY',
-  ENGINEER = 'ENGINEER',
-  TRADER = 'TRADER',
-}
-
-export enum UnitStatus {
-  IDLE = 'IDLE',
-  MOVING = 'MOVING',
-  CLAIMING = 'CLAIMING',
-  BUILDING = 'BUILDING',
-  RETURNING = 'RETURNING',
-  WORKING = 'WORKING',
-  EATING = 'EATING',
-  RESTING = 'RESTING',
-}
-
-export enum BuildingType {
-  CITY = 'CITY',
-  FARM = 'FARM',
-  MINE = 'MINE',
-  OIL_WELL = 'OIL_WELL',
-  LUMBER_CAMP = 'LUMBER_CAMP',
-  FACTORY = 'FACTORY',
 }
 
 export enum CityTier {
@@ -105,25 +114,6 @@ export interface ResourceInflowEntry {
   source: string;
 }
 
-export interface BuildingData {
-  buildingId: string;
-  ownerId: string;
-  cellId: string;
-  type: string;
-  productionTicksRemaining: number;
-  recipe: string;
-  factoryTier: number;
-  factoryXp: number;
-  stockpile: StockpileEntry[];
-  resourcesInvested: { food: number; material: number };
-  stockpileTarget: number;
-  specializationRecipe: string;
-  specializationCycles: number;
-  recipeTicksRemaining: number;
-  recipeTicksTotal: number;
-  wagePer100Ticks: number;
-}
-
 export interface CityStockpileData {
   resources: StockpileEntry[];
 }
@@ -138,15 +128,6 @@ export interface PlayerResourceData {
   energyCredits: number;
   claimCompensation: number;
   foodCreditRate: number;
-}
-
-export interface FactoryRecipe {
-  id: string;
-  name: string;
-  input: { resource: ResourceType; amount: number }[];
-  output: { resource: ResourceType; amount: number }[];
-  ticksPerCycle: number;
-  minFactoryTier: number;
 }
 
 export interface PlateData {
@@ -231,11 +212,10 @@ export interface PlayerStateSlice {
   visibleCells: VisibleCellData[];
   revealedCells: RevealedCellData[];
   ruinMarkers: RuinMarkerData[];
-  units: UnitData[];
   cities: CityData[];
-  buildings: BuildingData[];
   players: PlayerSummary[];
   resources: PlayerResourceData;
+  orbitalBodies: OrbitalBodyData[];
 }
 
 export interface VisibleCellData {
@@ -248,8 +228,6 @@ export interface VisibleCellData {
   resourceYield: ResourceYield | null;
   ruin: RuinType | null;
   ruinRevealed: boolean;
-  buildings: BuildingData[];
-  buildingCapacity: number;
 }
 
 export interface RevealedCellData {
@@ -262,28 +240,6 @@ export interface RevealedCellData {
 export interface RuinMarkerData {
   cellId: string;
   ruin: RuinType;
-}
-
-export interface UnitData {
-  unitId: string;
-  ownerId: string;
-  type: string;
-  status: string;
-  cellId: string;
-  path: string[];
-  movementTicksRemaining: number;
-  movementTicksTotal: number;
-  claimTicksRemaining: number;
-  buildTicksRemaining: number;
-  engineerLevel: number;
-  buildExhaustion: number;
-  name: string;
-  energyCredits: number;
-  inventoryWeight: number;
-  health: number;
-  hunger: number;
-  rest: number;
-  homeCityId: string;
 }
 
 export interface ProductionItem {
@@ -321,7 +277,6 @@ export interface PlayerSummary {
   color: string;
   alive: boolean;
   territoryCount: number;
-  unitCount: number;
   cityCount: number;
   population: number;
   factoryCount: number;
@@ -335,11 +290,6 @@ export interface ChatMessage {
   text: string;
   timestamp: number;
   targetId: string | null;
-}
-
-export interface MoveOrder {
-  unitId: string;
-  targetCellId: string;
 }
 
 export interface AdjacencyMap {

@@ -1,31 +1,15 @@
 import {
-  CFG,
-  getBuildingPlacementRules,
-  getEngineerBuildableTypes,
-  getInfantryBuildableTypes,
   type PlayerStateSlice,
   type VisibleCellData,
   type RevealedCellData,
-  type UnitData,
   type CityData,
   type PlayerSummary,
   type RuinMarkerData,
   type ChatMessage,
-  type BuildingData,
   type PlayerResourceData,
+  type OrbitalBodyData,
 } from '@vantaris/shared';
 import { syncFromClientState, addChatMessageToSignals } from './signals';
-
-const BUILDING_PLACEMENT_RULES = getBuildingPlacementRules(CFG);
-
-export type CommandAction = 'move' | 'claim' | 'build';
-
-export interface CommandableAction {
-  id: CommandAction;
-  label: string;
-  key: string;
-  targetRequired: boolean;
-}
 
 export interface ClientState {
   myPlayerId: string;
@@ -35,20 +19,16 @@ export interface ClientState {
   visibleCells: Map<string, VisibleCellData>;
   revealedCells: Map<string, RevealedCellData>;
   ruinMarkers: Map<string, RuinMarkerData>;
-  units: Map<string, UnitData>;
   cities: Map<string, CityData>;
-  buildings: Map<string, BuildingData>;
   players: Map<string, PlayerSummary>;
   resources: PlayerResourceData;
+  orbitalBodies: Map<string, OrbitalBodyData>;
   selectedTileId: string | null;
-  selectedUnitId: string | null;
   selectedCityId: string | null;
-  pendingCommand: CommandAction | null;
   hoveredCellId: string | null;
   mouseClientX: number;
   mouseClientY: number;
-  eliminationEvent: { playerId: string; displayName: string; color: string; eliminatedTick: number } | null;
-  gameWonEvent: { playerId: string; displayName: string; color: string } | null;
+  viewMode: 'system' | 'planet' | 'tile' | 'world';
   chatMessages: ChatMessage[];
   chatTab: 'global' | string;
   chatUnreadGlobal: number;
@@ -63,20 +43,16 @@ export const clientState: ClientState = {
   visibleCells: new Map(),
   revealedCells: new Map(),
   ruinMarkers: new Map(),
-  units: new Map(),
   cities: new Map(),
-  buildings: new Map(),
   players: new Map(),
   resources: { food: 0, energy: 0, foodPerTick: 0, energyPerTick: 0, totalPopulation: 0, factoryCount: 0, energyCredits: 0, claimCompensation: 0, foodCreditRate: 1 },
+  orbitalBodies: new Map(),
   selectedTileId: null,
-  selectedUnitId: null,
   selectedCityId: null,
-  pendingCommand: null,
   hoveredCellId: null,
   mouseClientX: 0,
   mouseClientY: 0,
-  eliminationEvent: null,
-  gameWonEvent: null,
+  viewMode: 'planet',
   chatMessages: [],
   chatTab: 'global' as string,
   chatUnreadGlobal: 0,
@@ -85,14 +61,7 @@ export const clientState: ClientState = {
 
 type RenderCallback = () => void;
 const renderCallbacks: RenderCallback[] = [];
-
-type FirstSpawnCallback = (playerId: string, cityCellId: string) => void;
-const firstSpawnCallbacks: FirstSpawnCallback[] = [];
 let hasReceivedFirstState = false;
-
-export function onFirstSpawn(cb: FirstSpawnCallback): void {
-  firstSpawnCallbacks.push(cb);
-}
 
 export function onStateUpdate(cb: RenderCallback): void {
   renderCallbacks.push(cb);
@@ -133,54 +102,6 @@ export function notifySelectionChanged(): void {
   notifyRenderers();
 }
 
-export function getUnitActions(unitId: string): CommandableAction[] {
-  const unit = clientState.units.get(unitId);
-  if (!unit) return [];
-  if (unit.ownerId !== clientState.myPlayerId) return [];
-
-  const actions: CommandableAction[] = [];
-
-  if (unit.status === 'IDLE') {
-    actions.push({ id: 'move', label: 'Move To', key: '1', targetRequired: true });
-
-    if (unit.type === 'INFANTRY') {
-      actions.push({ id: 'claim', label: 'Claim', key: '2', targetRequired: false });
-    }
-
-    const cellData = clientState.visibleCells.get(unit.cellId);
-    if (cellData && cellData.ownerId === clientState.myPlayerId) {
-      const canBuildTypes = unit.type === 'ENGINEER'
-        ? getEngineerBuildableTypes(CFG, unit.engineerLevel)
-        : getInfantryBuildableTypes(CFG);
-      const canBuildSomething = canBuildTypes.some((bt: string) => {
-        const allowedBiomes = BUILDING_PLACEMENT_RULES[bt];
-        if (allowedBiomes && !allowedBiomes.includes(cellData.biome)) return false;
-        if (bt === 'CITY') {
-          let cellHasCity = false;
-          for (const [, c] of clientState.cities) { if (c.cellId === unit.cellId) { cellHasCity = true; break; } }
-          return !cellHasCity;
-        }
-        return cellData.buildings.length < cellData.buildingCapacity;
-      });
-      if (canBuildSomething) {
-        actions.push({ id: 'build', label: 'Build', key: '3', targetRequired: false });
-      }
-    }
-  }
-
-  return actions;
-}
-
-export function getCityActions(cityId: string): CommandableAction[] {
-  const city = clientState.cities.get(cityId);
-  if (!city) return [];
-  if (city.ownerId !== clientState.myPlayerId) return [];
-
-  const actions: CommandableAction[] = [];
-  actions.push({ id: 'move', label: 'Queue Infantry', key: '1', targetRequired: false });
-  return actions;
-}
-
 export function applyStateSlice(slice: PlayerStateSlice): void {
   clientState.myPlayerId = slice.myPlayerId;
   clientState.currentTick = slice.currentTick;
@@ -204,26 +125,21 @@ export function applyStateSlice(slice: PlayerStateSlice): void {
     }
   }
 
-  clientState.units.clear();
-  for (const unit of slice.units) {
-    clientState.units.set(unit.unitId, unit);
-  }
-
   clientState.cities.clear();
   for (const city of slice.cities) {
     clientState.cities.set(city.cityId, city);
   }
 
-  clientState.buildings.clear();
-  if (slice.buildings) {
-    for (const building of slice.buildings) {
-      clientState.buildings.set(building.buildingId, building);
-    }
-  }
-
   clientState.players.clear();
   for (const player of slice.players) {
     clientState.players.set(player.playerId, player);
+  }
+
+  clientState.orbitalBodies.clear();
+  if (slice.orbitalBodies) {
+    for (const body of slice.orbitalBodies) {
+      clientState.orbitalBodies.set(body.bodyId, body);
+    }
   }
 
   if (slice.resources) {
@@ -233,15 +149,25 @@ export function applyStateSlice(slice: PlayerStateSlice): void {
   validateSelections();
   notifyRenderers();
 
-  if (!hasReceivedFirstState && clientState.cities.size > 0) {
+  if (!hasReceivedFirstState && clientState.orbitalBodies.size > 0) {
     hasReceivedFirstState = true;
-    for (const [, city] of clientState.cities) {
-      if (city.ownerId === clientState.myPlayerId) {
-        for (const cb of firstSpawnCallbacks) {
-          cb(clientState.myPlayerId, city.cellId);
-        }
+    // Find the player's spacecraft and focus on it in planet view.
+    let mySpacecraftId: string | null = null;
+    let mySpacecraftParent: string | null = null;
+    for (const [, body] of clientState.orbitalBodies) {
+      if (body.type === 'SPACECRAFT' && body.ownerId === clientState.myPlayerId) {
+        mySpacecraftId = body.bodyId;
+        mySpacecraftParent = body.elements.parent;
         break;
       }
+    }
+    if (mySpacecraftId) {
+      // Lazy import to avoid circular dependency.
+      import('./signals').then(({ focusedBodyId, viewedBodyId }) => {
+        focusedBodyId.value = mySpacecraftId;
+        viewedBodyId.value = mySpacecraftParent;
+      });
+      clientState.viewMode = 'planet';
     }
   }
 
@@ -254,19 +180,7 @@ function validateSelections(): void {
     const tileRevealed = clientState.revealedCells.has(clientState.selectedTileId);
     if (!tileVisible && !tileRevealed) {
       clientState.selectedTileId = null;
-      clientState.selectedUnitId = null;
       clientState.selectedCityId = null;
-      clientState.pendingCommand = null;
-    }
-  }
-
-  if (clientState.selectedUnitId) {
-    const unit = clientState.units.get(clientState.selectedUnitId);
-    if (!unit) {
-      clientState.selectedUnitId = null;
-      clientState.pendingCommand = null;
-    } else if (unit.cellId !== clientState.selectedTileId) {
-      clientState.selectedTileId = unit.cellId;
     }
   }
 
@@ -276,14 +190,6 @@ function validateSelections(): void {
       clientState.selectedCityId = null;
     } else if (city.cellId !== clientState.selectedTileId) {
       clientState.selectedTileId = city.cellId;
-    }
-  }
-
-  if (clientState.pendingCommand) {
-    if (clientState.pendingCommand === 'claim') {
-      if (!clientState.selectedUnitId) {
-        clientState.pendingCommand = null;
-      }
     }
   }
 }
@@ -296,20 +202,16 @@ export function clearClientState(): void {
   clientState.visibleCells.clear();
   clientState.revealedCells.clear();
   clientState.ruinMarkers.clear();
-  clientState.units.clear();
   clientState.cities.clear();
-  clientState.buildings.clear();
   clientState.players.clear();
+  clientState.orbitalBodies.clear();
   clientState.resources = { food: 0, energy: 0, foodPerTick: 0, energyPerTick: 0, totalPopulation: 0, factoryCount: 0, energyCredits: 0, claimCompensation: 0, foodCreditRate: 1 };
   clientState.selectedTileId = null;
-  clientState.selectedUnitId = null;
   clientState.selectedCityId = null;
-  clientState.pendingCommand = null;
   clientState.hoveredCellId = null;
   clientState.mouseClientX = 0;
   clientState.mouseClientY = 0;
-  clientState.eliminationEvent = null;
-  clientState.gameWonEvent = null;
+  clientState.viewMode = 'system';
   clientState.chatMessages = [];
   clientState.chatTab = 'global';
   clientState.chatUnreadGlobal = 0;

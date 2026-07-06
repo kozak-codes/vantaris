@@ -4,22 +4,12 @@ import {
   getPassableTerrain,
   getMovementCost,
   getCellBuildingCapacity,
-  getBuildingTicks,
-  getBuildingCosts,
-  getBuildingPlacementRules,
-  getExtractorOutput,
-  getExtractorTypes,
   getFoodValue,
   getMaterialValue,
   getRawResources,
   getProcessedResources,
   getResourceCategoryMap,
   getResourceCategories,
-  getFactoryRecipes,
-  getUnitBuildableTypes,
-  getInfantryBuildableTypes,
-  getEngineerBuildableTypes,
-  getUnitProductionCosts,
 } from '../cfgHelpers';
 import { ResourceType } from '../types';
 
@@ -54,51 +44,6 @@ describe('getCellBuildingCapacity', () => {
     expect(cap.PLAINS).toBe(6);
     expect(cap.OCEAN).toBe(0);
     expect(cap.MOUNTAIN).toBe(3);
-  });
-});
-
-describe('getBuildingTicks', () => {
-  it('returns ticks for each building', () => {
-    const ticks = getBuildingTicks(CFG);
-    expect(ticks.FARM).toBe(200);
-    expect(ticks.CITY).toBe(500);
-    expect(ticks.FACTORY).toBe(400);
-  });
-});
-
-describe('getBuildingCosts', () => {
-  it('returns costs for each building', () => {
-    const costs = getBuildingCosts(CFG);
-    expect(costs.FARM).toEqual({ food: 0, material: 0, exhaustionCost: 1 });
-    expect(costs.CITY).toEqual({ food: 80, material: 40, exhaustionCost: 3 });
-    expect(costs.FACTORY.exhaustionCost).toBe(3);
-  });
-});
-
-describe('getBuildingPlacementRules', () => {
-  it('returns placement rules for buildings with placement', () => {
-    const rules = getBuildingPlacementRules(CFG);
-    expect(rules.FARM).toEqual(['PLAINS', 'FOREST']);
-    expect(rules.OIL_WELL).toEqual(['DESERT', 'TUNDRA']);
-  });
-});
-
-describe('getExtractorOutput', () => {
-  it('returns output only for extractor buildings', () => {
-    const output = getExtractorOutput(CFG);
-    expect(output.FARM).toEqual({ resource: ResourceType.GRAIN, amount: 3 });
-    expect(output.FACTORY).toBeUndefined();
-  });
-});
-
-describe('getExtractorTypes', () => {
-  it('returns infantry-buildable buildings with zero cost', () => {
-    const types = getExtractorTypes(CFG);
-    expect(types).toContain('FARM');
-    expect(types).toContain('MINE');
-    expect(types).toContain('LUMBER_CAMP');
-    expect(types).not.toContain('OIL_WELL');
-    expect(types).not.toContain('FACTORY');
   });
 });
 
@@ -150,61 +95,5 @@ describe('getResourceCategories', () => {
     expect(cats.FOOD.resources).toEqual(expect.arrayContaining([ResourceType.BREAD, ResourceType.GRAIN]));
     expect(cats.INDUSTRY.resources).toEqual(expect.arrayContaining([ResourceType.ORE, ResourceType.STEEL, ResourceType.TIMBER, ResourceType.LUMBER]));
     expect(cats.ENERGY.resources).toEqual(expect.arrayContaining([ResourceType.POWER]));
-  });
-});
-
-describe('getFactoryRecipes', () => {
-  it('derives recipes from RESOURCES.*.recipe', () => {
-    const recipes = getFactoryRecipes(CFG);
-    expect(recipes.length).toBe(4);
-    const bake = recipes.find(r => r.id === 'bake');
-    expect(bake).toBeDefined();
-    expect(bake!.input[0].resource).toBe(ResourceType.GRAIN);
-    expect(bake!.output[0].resource).toBe(ResourceType.BREAD);
-    expect(bake!.ticksPerCycle).toBe(120);
-  });
-
-  it('includes smelt, refine, and mill recipes', () => {
-    const recipes = getFactoryRecipes(CFG);
-    const ids = recipes.map(r => r.id);
-    expect(ids).toEqual(expect.arrayContaining(['bake', 'smelt', 'refine', 'mill']));
-  });
-});
-
-describe('getUnitBuildableTypes', () => {
-  it('returns all buildable types for infantry at level 1', () => {
-    const types = getUnitBuildableTypes(CFG, 'INFANTRY', 1);
-    expect(types).toEqual(expect.arrayContaining(['FARM', 'MINE', 'LUMBER_CAMP']));
-    expect(types).not.toContain('FACTORY');
-    expect(types).not.toContain('CITY');
-  });
-
-  it('returns level-gated types for engineers', () => {
-    const eng1 = getUnitBuildableTypes(CFG, 'ENGINEER', 1);
-    const eng2 = getUnitBuildableTypes(CFG, 'ENGINEER', 2);
-    expect(eng1).toEqual(expect.arrayContaining(['FACTORY', 'CITY']));
-    expect(eng2).toEqual(expect.arrayContaining(['FACTORY', 'CITY']));
-  });
-
-  it('returns empty for unknown unit type', () => {
-    expect(getUnitBuildableTypes(CFG, 'TRADER', 1)).toEqual([]);
-  });
-});
-
-describe('getInfantryBuildableTypes / getEngineerBuildableTypes', () => {
-  it('delegates to getUnitBuildableTypes', () => {
-    expect(getInfantryBuildableTypes(CFG)).toEqual(getUnitBuildableTypes(CFG, 'INFANTRY', 1));
-    expect(getEngineerBuildableTypes(CFG, 2)).toEqual(getUnitBuildableTypes(CFG, 'ENGINEER', 2));
-  });
-});
-
-describe('getUnitProductionCosts', () => {
-  it('returns costs for all unit types', () => {
-    const costs = getUnitProductionCosts(CFG);
-    expect(costs.length).toBeGreaterThanOrEqual(2);
-    const inf = costs.find(c => c.type === 'INFANTRY');
-    expect(inf).toBeDefined();
-    expect(inf!.ticksCost).toBe(100);
-    expect(inf!.popCost).toBe(1);
   });
 });

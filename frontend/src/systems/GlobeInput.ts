@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { clientState, notifySelectionChanged } from '../state/ClientState';
-import { selectedBuildingId } from '../state/signals';
+import { enterTileView, exitTileView, exitPlanetView } from '../state/signals';
 import type { CameraControls } from './CameraControls';
 
 const CLICK_THRESHOLD_PX = 8;
@@ -13,6 +13,8 @@ export class GlobeInput {
   private pointerDownTime = 0;
   private globe: THREE.Group;
   private cameraControls: CameraControls | null = null;
+  private onEnterTile: ((cellId: string) => void) | null = null;
+  private onExitTile: (() => void) | null = null;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -34,6 +36,11 @@ export class GlobeInput {
 
   setCameraControls(cc: CameraControls): void {
     this.cameraControls = cc;
+  }
+
+  setTileViewHandlers(onEnter: (cellId: string) => void, onExit: () => void): void {
+    this.onEnterTile = onEnter;
+    this.onExitTile = onExit;
   }
 
   private onPointerDown(e: PointerEvent): void {
@@ -162,70 +169,28 @@ export class GlobeInput {
       return;
     }
 
-    const prevUnitId = clientState.selectedUnitId;
     const prevCityId = clientState.selectedCityId;
 
-    if (cellId === clientState.selectedTileId && !prevUnitId && !prevCityId) {
-      this.deselectAll();
+    // In system view the globe is hidden; ignore globe clicks.
+    if (clientState.viewMode === 'system') return;
+
+    if (clientState.viewMode === 'tile') {
+      // Already in tile view; clicking another hex switches directly to it.
+      if (cellId !== clientState.selectedTileId) {
+        enterTileView(cellId);
+        if (this.onEnterTile) this.onEnterTile(cellId);
+      }
       return;
     }
 
-    if (cellId === clientState.selectedTileId && (prevUnitId || prevCityId)) {
-      clientState.selectedUnitId = null;
-      clientState.selectedCityId = null;
-      clientState.pendingCommand = null;
-      selectedBuildingId.value = null;
-      notifySelectionChanged();
-      return;
-    }
-
-    if (prevUnitId) {
-      const unit = clientState.units.get(prevUnitId);
-      if (unit && unit.cellId === cellId) {
-        clientState.selectedTileId = cellId;
-        notifySelectionChanged();
-        return;
-      }
-    }
-    if (prevCityId) {
-      const city = clientState.cities.get(prevCityId);
-      if (city && city.cellId === cellId) {
-        clientState.selectedTileId = cellId;
-        notifySelectionChanged();
-        return;
-      }
-    }
-
-    clientState.selectedTileId = cellId;
-    clientState.selectedUnitId = null;
-    clientState.selectedCityId = null;
-    clientState.pendingCommand = null;
-    selectedBuildingId.value = null;
-
-    const unitsOnTile: string[] = [];
-    for (const [unitId, unit] of clientState.units) {
-      if (unit.cellId === cellId) unitsOnTile.push(unitId);
-    }
-    const citiesOnTile: string[] = [];
-    for (const [cityId, city] of clientState.cities) {
-      if (city.cellId === cellId) citiesOnTile.push(cityId);
-    }
-
-    if (unitsOnTile.length === 1 && citiesOnTile.length === 0) {
-      clientState.selectedUnitId = unitsOnTile[0];
-    } else if (citiesOnTile.length === 1 && unitsOnTile.length === 0) {
-      clientState.selectedCityId = citiesOnTile[0];
-    }
-
-    notifySelectionChanged();
+    // In planet/world view, single click on a hex enters tile view.
+    enterTileView(cellId);
+    if (this.onEnterTile) this.onEnterTile(cellId);
   }
 
   private deselectAll(): void {
     clientState.selectedTileId = null;
-    clientState.selectedUnitId = null;
     clientState.selectedCityId = null;
-    selectedBuildingId.value = null;
-    clientState.pendingCommand = null;
     notifySelectionChanged();
   }
 
@@ -237,14 +202,21 @@ export class GlobeInput {
 
   private onKeyDown(e: KeyboardEvent): void {
     if (e.key === 'Escape') {
-      if (clientState.selectedUnitId) {
-        clientState.selectedUnitId = null;
-      } else if (clientState.selectedCityId) {
+      if (clientState.viewMode === 'tile') {
+        exitTileView();
+        if (this.onExitTile) this.onExitTile();
+        return;
+      }
+      if (clientState.viewMode === 'planet' || clientState.viewMode === 'world') {
+        exitPlanetView();
+        if (this.onExitTile) this.onExitTile();
+        return;
+      }
+      if (clientState.selectedCityId) {
         clientState.selectedCityId = null;
       } else {
         clientState.selectedTileId = null;
       }
-      clientState.pendingCommand = null;
       notifySelectionChanged();
       return;
     }

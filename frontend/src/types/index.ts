@@ -3,9 +3,6 @@ export {
   FogVisibility,
   GamePhase,
   QueueType,
-  UnitType,
-  UnitStatus,
-  BuildingType,
   CityTier,
 } from '@vantaris/shared';
 
@@ -21,10 +18,8 @@ export type {
   PlayerStateSlice,
   VisibleCellData,
   RevealedCellData,
-  UnitData,
   CityData,
   PlayerSummary,
-  MoveOrder,
   AdjacencyMap,
 } from '@vantaris/shared';
 
