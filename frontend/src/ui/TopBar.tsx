@@ -275,6 +275,28 @@ function buildFavoritesChildren(): MenuItem[] {
   return children;
 }
 
+function buildPlanetChildren(): MenuItem[] {
+  const children: MenuItem[] = [];
+  for (const [, body] of orbitalBodies.value) {
+    if (body.type === 'SPACECRAFT') {
+      const scChildren = buildBodyChildren(body.bodyId);
+      children.push({
+        label: body.name,
+        action: () => openBodyWindow(body),
+        children: scChildren.length > 0 ? scChildren : undefined,
+      });
+    } else if (body.type === 'MOON') {
+      const moonChildren = buildBodyChildren(body.bodyId);
+      children.push({
+        label: body.name,
+        action: () => openBodyWindow(body),
+        children: moonChildren.length > 0 ? moonChildren : undefined,
+      });
+    }
+  }
+  return children;
+}
+
 export const TopBar: FunctionalComponent = () => {
   const hasSelectedTile = !!selectedTileId.value;
   const { date, time, isNight } = formatGameDateTime(currentTick.value, dayNightCycleTicks.value);
@@ -295,14 +317,18 @@ export const TopBar: FunctionalComponent = () => {
   }
 
   const systemChildren = useComputed(() => buildSystemChildren());
+  const planetChildren = useComputed(() => buildPlanetChildren());
   const favoritesChildren = useComputed(() => buildFavoritesChildren());
 
-  // Order: Favorites (far left), System, Tile, Construct.
+  // Order: Favorites (far left), System, Planet, Tile, Construct.
   const leftMenus: { id: string; item: MenuItem }[] = [];
   if (favoritesChildren.value.length > 0) {
     leftMenus.push({ id: 'favorites', item: { label: '★', children: favoritesChildren.value } });
   }
   leftMenus.push({ id: 'system', item: { label: 'System', children: systemChildren.value } });
+  if (viewMode.value !== 'system') {
+    leftMenus.push({ id: 'planet', item: { label: 'Planet', children: planetChildren.value } });
+  }
   if (hasSelectedTile) {
     leftMenus.push({ id: 'tile', item: { label: 'Tile', children: TILE_CHILDREN } });
     leftMenus.push({ id: 'construct', item: { label: 'Construct', children: CONSTRUCT_CHILDREN } });
