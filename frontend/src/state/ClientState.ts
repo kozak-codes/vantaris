@@ -8,6 +8,7 @@ import {
   type ChatMessage,
   type PlayerResourceData,
   type OrbitalBodyData,
+  type ConstructionData,
 } from '@vantaris/shared';
 import { syncFromClientState, addChatMessageToSignals } from './signals';
 
@@ -23,12 +24,14 @@ export interface ClientState {
   players: Map<string, PlayerSummary>;
   resources: PlayerResourceData;
   orbitalBodies: Map<string, OrbitalBodyData>;
+  constructions: Map<string, ConstructionData>;
+  worldSeed: number;
   selectedTileId: string | null;
   selectedCityId: string | null;
   hoveredCellId: string | null;
   mouseClientX: number;
   mouseClientY: number;
-  viewMode: 'system' | 'planet' | 'tile' | 'world';
+  viewMode: 'system' | 'planet';
   chatMessages: ChatMessage[];
   chatTab: 'global' | string;
   chatUnreadGlobal: number;
@@ -47,6 +50,8 @@ export const clientState: ClientState = {
   players: new Map(),
   resources: { food: 0, energy: 0, foodPerTick: 0, energyPerTick: 0, totalPopulation: 0, factoryCount: 0, energyCredits: 0, claimCompensation: 0, foodCreditRate: 1 },
   orbitalBodies: new Map(),
+  constructions: new Map(),
+  worldSeed: 0,
   selectedTileId: null,
   selectedCityId: null,
   hoveredCellId: null,
@@ -142,6 +147,17 @@ export function applyStateSlice(slice: PlayerStateSlice): void {
     }
   }
 
+  clientState.constructions.clear();
+  if (slice.constructions) {
+    for (const c of slice.constructions) {
+      clientState.constructions.set(c.id, c);
+    }
+  }
+
+  if (slice.worldSeed !== undefined) {
+    clientState.worldSeed = slice.worldSeed;
+  }
+
   if (slice.resources) {
     clientState.resources = { ...slice.resources };
   }
@@ -162,10 +178,19 @@ export function applyStateSlice(slice: PlayerStateSlice): void {
       }
     }
     if (mySpacecraftId) {
-      // Lazy import to avoid circular dependency.
-      import('./signals').then(({ focusedBodyId, viewedBodyId }) => {
-        focusedBodyId.value = mySpacecraftId;
+      // Enter planet view looking at the spacecraft's parent body, but do NOT
+      // lock focus on the spacecraft — the player should be able to rotate
+      // and zoom freely. Just open the spacecraft window.
+      import('./signals').then(({ viewedBodyId }) => {
         viewedBodyId.value = mySpacecraftParent;
+      });
+      import('./windows').then(({ openWindow }) => {
+        const scBody = clientState.orbitalBodies.get(mySpacecraftId!);
+        if (scBody) {
+          import('../ui/WindowContent').then(({ bodyWindowContent }) => {
+            openWindow(mySpacecraftId!, scBody.name, bodyWindowContent(scBody));
+          });
+        }
       });
       clientState.viewMode = 'planet';
     }
@@ -205,6 +230,8 @@ export function clearClientState(): void {
   clientState.cities.clear();
   clientState.players.clear();
   clientState.orbitalBodies.clear();
+  clientState.constructions.clear();
+  clientState.worldSeed = 0;
   clientState.resources = { food: 0, energy: 0, foodPerTick: 0, energyPerTick: 0, totalPopulation: 0, factoryCount: 0, energyCredits: 0, claimCompensation: 0, foodCreditRate: 1 };
   clientState.selectedTileId = null;
   clientState.selectedCityId = null;

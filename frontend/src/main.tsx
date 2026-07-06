@@ -8,15 +8,16 @@ import { SelectionRenderer } from './systems/SelectionRenderer';
 import { RuinRenderer } from './systems/RuinRenderer';
 import { DayNightRenderer } from './systems/DayNightRenderer';
 import { SpacecraftRenderer } from './systems/SpacecraftRenderer';
+import { SubHexWorldRenderer } from './systems/SubHexWorldRenderer';
 import { CameraControls } from './systems/CameraControls';
 import { LobbyUI } from './ui/LobbyUI';
 import { GlobeInput } from './systems/GlobeInput';
 import { createDebugAPI } from './systems/DebugAPI';
 import { getRoomIdFromURL, setRoomIdInURL, clearRoomFromURL, getStoredRoomId, getDisplayName } from './network/RoomPersistence';
-import { joinGame, reconnectToGame, sendUpdateCamera } from './network/ColyseusClient';
-import { CFG } from '@vantaris/shared';
-import { clientState, clearClientState, onStateUpdate } from './state/ClientState';
-import { setTileViewExitHandler, orbitalBodies, enterPlanetView, focusedBodyId, viewedBodyId } from './state/signals';
+import { joinGame, reconnectToGame, sendUpdateCamera, sendBuild, sendScrap } from './network/ColyseusClient';
+import { CFG, ConstructionType, type ConstructionData } from '@vantaris/shared';
+import { clientState, clearClientState, onStateUpdate, notifySelectionChanged } from './state/ClientState';
+import { orbitalBodies, enterPlanetView, viewedBodyId, selectedTileId, viewMode, constructions, players, worldSeed } from './state/signals';
 import { SystemView } from './systems/SystemView';
 import { App } from './ui/App';
 
@@ -54,34 +55,67 @@ const selectionRenderer = new SelectionRenderer(globeRenderer.getGlobeGroup(), g
 const ruinRenderer = new RuinRenderer(globeRenderer.getGlobeGroup(), grid);
 const dayNightRenderer = new DayNightRenderer(ambientLight, globeRenderer.getGlobeGroup(), fogRenderer.getCellMeshMap());
 const spacecraftRenderer = new SpacecraftRenderer(globeRenderer.getGlobeGroup());
+const subHexRenderer = new SubHexWorldRenderer(globeRenderer.getGlobeGroup(), globeRenderer.getCellMeshes());
+
+// Build a map of cellId → geometry data (center + boundary vertex positions)
+// for the SubHexWorldRenderer to use when building sub-hex terrain.
+const cellGeometryMap = new Map<string, { center: [number, number, number]; vertexPositions: [number, number, number][] }>();
+for (const cell of grid.cells) {
+  const vertexPositions: [number, number, number][] = cell.vertexIds.map((fi: number) => {
+    const dv = grid.vertices[fi];
+    return [dv[0], dv[1], dv[2]] as [number, number, number];
+  });
+  cellGeometryMap.set(`cell_${cell.id}`, {
+    center: cell.center,
+    vertexPositions,
+    vertexIds: cell.vertexIds,
+  });
+}
 
 render(<App />, document.getElementById('hud-root')!);
 const cameraControls = new CameraControls(camera, canvas, pivot);
 const globeInput = new GlobeInput(canvas, camera, globeRenderer.getGlobeGroup());
 globeInput.setCameraControls(cameraControls);
 
-// Tile-view camera controller: tween into the selected hex on enter, back out on exit.
-// Globe radius is 5 (CFG.GLOBE.radius); a camera distance of ~6.5 puts the cell
-// surface ~1.5 units from the camera so the hex fills the viewport.
-const TILE_VIEW_ZOOM = 6.5;
+// Zoom thresholds for auto-selecting tiles.
+const TILE_VIEW_ZOOM = CFG.CAMERA.tileViewZoom;
+const TILE_VIEW_MAX_ZOOM = CFG.CAMERA.tileViewMaxZoom;
+
+// Click a tile to zoom into it.
 globeInput.setTileViewHandlers(
   (cellId: string) => {
     const numericId = parseInt(cellId.replace('cell_', ''));
     if (isNaN(numericId) || numericId < 0 || numericId >= grid.cells.length) return;
     const center = grid.cells[numericId].center;
-    console.log('[tile-view] entering tile', cellId, 'center=', center);
-    cameraControls.setEnabled(false);
     cameraControls.focusCellZoomed(center, TILE_VIEW_ZOOM);
   },
-  () => {
-    cameraControls.setEnabled(true);
-    cameraControls.returnToWorldView();
-  },
+  () => {},
 );
-setTileViewExitHandler(() => {
-  cameraControls.setEnabled(true);
-  cameraControls.returnToWorldView();
+
+// Click to place a building on the clicked sub-hex (build mode).
+let buildType: ConstructionType = 'HAB';
+let buildMode = false;
+canvas.addEventListener('click', (e) => {
+  if (!buildMode) return;
+  const rect = canvas.getBoundingClientRect();
+  const pointer = new THREE.Vector2(
+    ((e.clientX - rect.left) / rect.width) * 2 - 1,
+    -((e.clientY - rect.top) / rect.height) * 2 + 1,
+  );
+  const pick = subHexRenderer.pickSubHex(camera, pointer);
+  if (!pick) return;
+  const sub = subHexRenderer.getSubHex(pick.cellId, pick.subHexIndex);
+  if (!sub || !sub.buildable) return;
+  sendBuild(pick.cellId, pick.subHexIndex, buildType);
+  buildMode = false;
 });
+
+// Expose build mode toggle via debug API for now.
+(window as any).vantarisBuild = (type: ConstructionType) => {
+  buildType = type;
+  buildMode = true;
+  console.log(`[tile] Build mode: ${type}. Click a sub-hex to place.`);
+};
 
 // System view lifecycle: show/hide the globe canvas and manage the SystemView
 // renderer instance as the player navigates between system and planet views.
@@ -121,7 +155,9 @@ function applyViewMode(mode: string): void {
   } else {
     hideSystemView();
     cameraControls.setEnabled(true);
-    cameraControls.returnToWorldView();
+    if (prevViewMode === 'system') {
+      cameraControls.returnToWorldView();
+    }
   }
 }
 
@@ -133,6 +169,14 @@ onStateUpdate(() => {
   }
   prevViewMode = mode;
   applyViewMode(mode);
+});
+
+// Rebuild sub-hex terrain when visible/revealed cells or world seed change.
+onStateUpdate(() => {
+  subHexRenderer.setWorldSeed(clientState.worldSeed);
+  const allCellIds = new Set(grid.cells.map((c: { id: number }) => `cell_${c.id}`));
+  subHexRenderer.updateVisibility(clientState.visibleCells, cellGeometryMap, clientState.revealedCells, grid.adjacency, allCellIds);
+  subHexRenderer.updateConstructions(clientState.constructions);
 });
 
 // Force the initial view mode to be applied (the watcher only fires on changes).
@@ -205,53 +249,58 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-let focusBodyId: string | null = null;
-onStateUpdate(() => {
-  focusBodyId = focusedBodyId.value;
-});
+// Auto-select tile under the screen center.
+const autoSelectRaycaster = new THREE.Raycaster();
+const screenCenter = new THREE.Vector2(0, 0);
 
-// Focus the camera on a spacecraft in planet view. Sets the camera's look
-// target to the spacecraft's world position so the camera tracks it as it
-// orbits. Does NOT override the player's pivot rotation or zoom — the player
-// can still rotate and zoom freely while the camera follows the spacecraft.
-function updateSpacecraftFocus(): void {
-  if (!focusBodyId || clientState.viewMode === 'system') {
-    cameraControls.setLookTarget(null);
-    return;
-  }
-  const body = orbitalBodies.value.get(focusBodyId);
-  if (!body || body.type !== 'SPACECRAFT') {
-    cameraControls.setLookTarget(null);
-    return;
-  }
-  const parent = orbitalBodies.value.get(body.elements.parent);
-  if (!parent) {
-    cameraControls.setLookTarget(null);
-    return;
-  }
-
-  const kmPerUnit = CFG.SYSTEM.PLANET_RADIUS_KM / 5;
-  const relX = (body.position[0] - parent.position[0]) / kmPerUnit;
-  const relY = (body.position[1] - parent.position[1]) / kmPerUnit;
-  const relZ = (body.position[2] - parent.position[2]) / kmPerUnit;
-  const localPos = new THREE.Vector3(relX, relY, relZ);
-
-  // The spacecraft's world position is its local position transformed by the pivot.
-  pivot.updateMatrixWorld();
-  const worldPos = localPos.clone().applyMatrix4(pivot.matrixWorld);
-  cameraControls.setLookTarget(worldPos);
+function getCellAtScreenCenter(): string | null {
+  autoSelectRaycaster.setFromCamera(screenCenter, camera);
+  const hexMeshes: THREE.Object3D[] = [];
+  globeRenderer.getGlobeGroup().traverse((child) => {
+    if (child instanceof THREE.Mesh && child.userData.cellId !== undefined) {
+      hexMeshes.push(child);
+    }
+  });
+  const hits = autoSelectRaycaster.intersectObjects(hexMeshes, false);
+  if (hits.length === 0) return null;
+  const cellId = typeof hits[0].object.userData.cellId === 'number'
+    ? `cell_${hits[0].object.userData.cellId}`
+    : hits[0].object.userData.cellId as string;
+  if (!cellId) return null;
+  if (!clientState.visibleCells.has(cellId) && !clientState.revealedCells.has(cellId)) return null;
+  return cellId;
 }
 
 function animate(): void {
   requestAnimationFrame(animate);
 
   cameraControls.update();
-  updateSpacecraftFocus();
-    fogRenderer.updateFogColors();
-    selectionRenderer.update();
-    ruinRenderer.update();
-    dayNightRenderer.update();
-    spacecraftRenderer.update(camera);
+
+  const zoom = cameraControls.getZoom();
+
+  if (clientState.viewMode !== 'system') {
+    // Auto-select the tile under the screen center when zoomed in.
+    if (zoom <= TILE_VIEW_ZOOM) {
+      const cellId = getCellAtScreenCenter();
+      if (cellId && cellId !== clientState.selectedTileId) {
+        clientState.selectedTileId = cellId;
+        notifySelectionChanged();
+      }
+    } else if (zoom > TILE_VIEW_MAX_ZOOM && clientState.selectedTileId) {
+      clientState.selectedTileId = null;
+      notifySelectionChanged();
+    }
+  }
+
+  fogRenderer.updateFogColors();
+  selectionRenderer.update();
+  ruinRenderer.update();
+  dayNightRenderer.update();
+  spacecraftRenderer.update(camera);
+  subHexRenderer.update();
+  subHexRenderer.updateConstructions(clientState.constructions);
+
+  subHexRenderer.setVisible(clientState.viewMode !== 'system');
 
   globeRenderer.updateGlow(camera);
 

@@ -3,6 +3,7 @@ import {
   ResourceType,
   type FogConfig,
   type GlobeConfig,
+  type SubHexConfig,
   type CameraConfig,
 } from "./types";
 
@@ -39,6 +40,7 @@ export interface ResourceConfig {
 export interface ICFG {
   TERRAIN: Record<string, TerrainConfig>;
   GLOBE: GlobeConfig;
+  SUBHEX: SubHexConfig;
   FOG: FogConfig;
   CAMERA: CameraConfig;
   TICK_RATE_MS: number;
@@ -182,6 +184,22 @@ export const CFG: ICFG = {
     borderWidth: 0.3,
   },
 
+  // ─── Sub-hex (micro tiles within a macro hex) ──
+  SUBHEX: {
+    // Hex-of-hexes layout radius. R=8 → 1+3*R*(R+1) = 217 sub-hexes per macro hex.
+    radius: 8,
+    // Height displacement range (units along macro-hex normal direction).
+    heightMin: -0.08,
+    heightMax: 0.8,
+    // Slope (height delta between adjacent sub-hexes) above which building is disallowed.
+    maxBuildSlope: 0.04,
+    // Noise frequencies for terrain detail.
+    heightNoiseScale: 1.8,
+    subBiomeNoiseScale: 1.2,
+    // Mesh subdivision per triangle.
+    planetSubdiv: 32,
+  },
+
   FOG: {
     unexploredColor: "#0a0a0a",
     unexploredOpacity: 0.95,
@@ -192,11 +210,15 @@ export const CFG: ICFG = {
   },
 
   CAMERA: {
-    minDistance: 5.2,
+    minDistance: 6.1,
     maxDistance: 25,
     rotationDamping: 0.92,
     zoomSpeed: 1.0,
+    zoomSpeedMin: 0.15,
+    zoomSlowDistance: 7.0,
     keyboardRotateSpeed: 2.5,
+    tileViewZoom: 7.5,
+    tileViewMaxZoom: 10.0,
   },
 
   TICK_RATE_MS: 100,
@@ -350,7 +372,7 @@ export const CFG: ICFG = {
     LANDER_MASS: 50000,
     LANDER_RADIUS_KM: 0.05,
     LANDER_FUEL_CAPACITY: 1000,
-    LANDER_SEMI_MAJOR_AXIS_KM: 6800,
+    LANDER_SEMI_MAJOR_AXIS_KM: 7800,
     LANDER_PERIOD_S: 5400 / 10,
     LANDER_INCLINATION: 0.26,
   },

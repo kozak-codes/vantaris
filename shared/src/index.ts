@@ -1,16 +1,3 @@
-export {
-  TerrainType,
-  FogVisibility,
-  GamePhase,
-  QueueType,
-  CityTier,
-  RuinType,
-  ResourceType,
-  ResourceTier,
-  BoundaryType,
-  OrbitalBodyType,
-} from './types';
-
 export type {
   RawResourceType,
   ProcessedResourceType,
@@ -21,6 +8,7 @@ export type {
   CellRenderData,
   FogConfig,
   GlobeConfig,
+  SubHexConfig,
   CameraConfig,
   PlayerStateSlice,
   VisibleCellData,
@@ -39,9 +27,45 @@ export type {
   PlayerSummary,
   OrbitalBodyData,
   OrbitalElements,
+  SubHexData,
+  ConstructionData,
 } from './types';
 
+export {
+  TerrainType,
+  FogVisibility,
+  GamePhase,
+  QueueType,
+  CityTier,
+  RuinType,
+  ResourceType,
+  ResourceTier,
+  BoundaryType,
+  OrbitalBodyType,
+  SubBiomeType,
+} from './types';
+
+export type { ConstructionType } from './types';
+
 export { buildAdjacencyMap } from './hexAdjacency';
+
+export {
+  type AxialCoord,
+  hexDistance,
+  axialToPixel,
+  HEX_DIRECTIONS,
+  generateSubHexCoords,
+  subHexCount,
+  subHexIndexFromAxial,
+  axialFromSubHexIndex,
+  subHexNeighbors,
+  constructionId,
+  parseConstructionId,
+  subHexSize,
+  generateSubHexesWorld,
+  sampleWorldTerrain,
+  type MacroHexContext,
+} from './subhex';
 
 export { CFG, type ICFG, type TerrainConfig, type ResourceConfig } from './CFG';
 

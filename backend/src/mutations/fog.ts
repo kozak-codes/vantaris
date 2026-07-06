@@ -15,6 +15,8 @@ import {
   type StockpileEntry,
   type ResourceInflowEntry,
   type OrbitalBodyData,
+  type ConstructionData,
+  type ConstructionType,
 } from '@vantaris/shared';
 import { GameState } from '../state/GameState';
 import { getCityStockpile } from './resources';
@@ -36,6 +38,9 @@ export function snapshotAndHideCell(state: GameState, playerId: string, cellId: 
     ownerId: cell.ownerId || null,
     biome: cell.biome,
     ruin: cell.ruin || null,
+    elevation: cell.elevation,
+    moisture: cell.moisture,
+    temperature: cell.temperature,
   });
   player.fog.setRevealed(cellId, snapshot);
 }
@@ -87,7 +92,6 @@ export function computeVisibilityForPlayer(
     }
   }
 }
-
 function findCellBelowSpacecraft(
   state: GameState,
   body: any,
@@ -95,7 +99,6 @@ function findCellBelowSpacecraft(
 ): string | null {
   const parent = state.orbitalBodies.get(body.elements.parent);
   if (!parent) return null;
-  // Direction from planet center to spacecraft (world space).
   const dx = body.posX - parent.posX;
   const dy = body.posY - parent.posY;
   const dz = body.posZ - parent.posZ;
@@ -103,7 +106,6 @@ function findCellBelowSpacecraft(
   if (len === 0) return null;
   const ux = dx / len, uy = dy / len, uz = dz / len;
 
-  // Find the cell whose center is most aligned with this direction.
   let bestId: string | null = null;
   let bestDot = -Infinity;
   for (const [cellId, cell] of state.cells) {
@@ -111,7 +113,6 @@ function findCellBelowSpacecraft(
     if (cellPositions) {
       pos = cellPositions[cellId];
     }
-    // Fallback: CellState doesn't store center, so we need cellPositions.
     if (!pos) continue;
     const cx = pos[0], cy = pos[1], cz = pos[2];
     const clen = Math.sqrt(cx * cx + cy * cy + cz * cz);
@@ -122,6 +123,7 @@ function findCellBelowSpacecraft(
       bestId = cellId;
     }
   }
+
   return bestId;
 }
 
@@ -176,6 +178,8 @@ export function buildPlayerSlice(
       players: [],
       resources: { food: 0, energy: 0, foodPerTick: 0, energyPerTick: 0, totalPopulation: 0, factoryCount: 0, energyCredits: 0, claimCompensation: 0, foodCreditRate: 1 },
       orbitalBodies: [],
+      constructions: [],
+      worldSeed: 0,
     };
   }
 
@@ -211,6 +215,9 @@ export function buildPlayerSlice(
           lastKnownBiome: data.biome || '',
           lastKnownOwnerId: data.ownerId || '',
           lastKnownRuin: data.ruin || null,
+          elevation: data.elevation ?? 0,
+          moisture: data.moisture ?? 0,
+          temperature: data.temperature ?? 0,
         });
         revealedCellIds.add(cellId);
       }
@@ -328,6 +335,20 @@ export function buildPlayerSlice(
     });
   }
 
+  // Constructions: only send those on visible macro hexes.
+  const constructions: ConstructionData[] = [];
+  for (const [, c] of state.constructions) {
+    if (visibleCellIds.has(c.macroCellId)) {
+      constructions.push({
+        id: c.id,
+        macroCellId: c.macroCellId,
+        subHexIndex: c.subHexIndex,
+        type: c.type as ConstructionType,
+        ownerId: c.ownerId,
+      });
+    }
+  }
+
   return {
     myPlayerId: playerId,
     currentTick: state.tick,
@@ -340,5 +361,7 @@ export function buildPlayerSlice(
     players,
     resources,
     orbitalBodies,
+    constructions,
+    worldSeed: state.worldSeed,
   };
 }

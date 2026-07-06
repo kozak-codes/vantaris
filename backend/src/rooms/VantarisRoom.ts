@@ -1,14 +1,24 @@
 import { Room, Client } from '@colyseus/core';
-import { GameState } from '../state/GameState';
-import { GamePhase, CFG, MATCHMAKING_CFG, AdjacencyMap, buildAdjacencyMap, OrbitalBodyType, TerrainType } from '@vantaris/shared';
+import {
+  GameState,
+} from '../state/GameState';
+import {
+  GamePhase, CFG, MATCHMAKING_CFG, AdjacencyMap, buildAdjacencyMap,
+  OrbitalBodyType, TerrainType,
+  type ConstructionType,
+  constructionId,
+} from '@vantaris/shared';
 import { generateGlobe } from '../globe';
 import { computeVisibilityForPlayer, buildPlayerSlice } from '../mutations/fog';
 import { CellState } from '../state/CellState';
 import { PlayerState } from '../state/PlayerState';
+import { ConstructionState } from '../state/ConstructionState';
 import { TickSystem } from '../systems/TickSystem';
 import { tickCityResourceDrain, tickCityXP, tickInflowResets } from '../mutations/resources';
 import { generateStartingSystem, spawnPlayerSpacecraft } from '../worldgen/system';
 import { updateOrbitalPositions, advanceOrbitalAnomalies } from '../systems/OrbitalMechanics';
+import { generateMacroHexSubHexes } from '../mutations/subhexTerrain';
+import { recalcMacroOwnership } from '../mutations/ownership';
 
 interface CreateOptions {
   spawnPoints: { cellId: string }[];
@@ -31,17 +41,20 @@ export class VantarisRoom extends Room<GameState> {
   private adjacencyMap: AdjacencyMap = {};
   private cellPositions: Record<string, [number, number, number]> = {};
   private tickSystem = new TickSystem();
+  private worldSeed: number = 42;
 
   async onCreate(options: CreateOptions): Promise<void> {
     const playerCount = options.spawnPoints?.length || 1;
     const subdivideLevel = playerCount > 4 ? 4 : 3;
     this.maxClients = MATCHMAKING_CFG.MAX_PLAYERS;
     const worldSeed = options.worldSeed ?? hashStringToSeed(this.roomId);
+    this.worldSeed = worldSeed;
     const globe = generateGlobe(subdivideLevel, worldSeed);
 
     this.setState(new GameState());
 
     this.state.dayNightCycleTicks = options.dayNightCycleTicks || CFG.DAY_NIGHT.CYCLE_TICKS;
+    this.state.worldSeed = worldSeed;
 
     const cellIds: string[] = [];
     for (const cell of globe.cells) {
@@ -83,6 +96,7 @@ export class VantarisRoom extends Room<GameState> {
     this.state.phase = GamePhase.ACTIVE;
 
     generateStartingSystem(this.state);
+    updateOrbitalPositions(this.state);
 
     this.tickSystem.start((tick) => this.onTick(tick));
 
@@ -127,6 +141,14 @@ export class VantarisRoom extends Room<GameState> {
     this.onMessage('land', (client, data: { bodyId: string; cellId: string }) => {
       this.handleLand(client, data);
     });
+
+    this.onMessage('build', (client, data: { macroCellId: string; subHexIndex: number; type: ConstructionType }) => {
+      this.handleBuild(client, data);
+    });
+
+    this.onMessage('scrap', (client, data: { constructionId: string }) => {
+      this.handleScrap(client, data);
+    });
   }
 
   onJoin(client: Client, options: { spawnPoint?: string; displayName?: string }): void {
@@ -141,6 +163,7 @@ export class VantarisRoom extends Room<GameState> {
     this.state.players.set(playerId, player);
 
     spawnPlayerSpacecraft(this.state, playerId, player.displayName);
+    updateOrbitalPositions(this.state);
 
     computeVisibilityForPlayer(this.state, playerId, this.adjacencyMap, undefined, this.cellPositions);
 
@@ -222,6 +245,61 @@ export class VantarisRoom extends Room<GameState> {
     if (!cell || cell.biome === TerrainType.OCEAN) return;
 
     body.landedCellId = data.cellId;
+  }
+
+  private handleBuild(
+    client: Client,
+    data: { macroCellId: string; subHexIndex: number; type: ConstructionType },
+  ): void {
+    const playerId = client.sessionId;
+    const cell = this.state.cells.get(data.macroCellId);
+    if (!cell) return;
+
+    // Must be visible to the player (revealed by spacecraft).
+    const player = this.state.players.get(playerId);
+    if (!player) return;
+    if (player.fog.visibility.get(data.macroCellId) !== 'VISIBLE') return;
+
+    // Must not already have a construction at this sub-hex.
+    const id = constructionId(data.macroCellId, data.subHexIndex);
+    if (this.state.constructions.get(id)) return;
+
+    // Validate terrain buildability.
+    const subHexes = generateMacroHexSubHexes(cell, this.cellPositions, this.worldSeed);
+    if (!subHexes) return;
+    if (data.subHexIndex < 0 || data.subHexIndex >= subHexes.length) return;
+    if (!subHexes[data.subHexIndex].buildable) return;
+
+    // Must have a landed spacecraft on this macro hex (or adjacent? for now, same hex).
+    let hasLander = false;
+    for (const [, body] of this.state.orbitalBodies) {
+      if (body.ownerId === playerId && body.type === OrbitalBodyType.SPACECRAFT && body.landedCellId === data.macroCellId) {
+        hasLander = true;
+        break;
+      }
+    }
+    if (!hasLander) return;
+
+    const construction = new ConstructionState();
+    construction.id = id;
+    construction.macroCellId = data.macroCellId;
+    construction.subHexIndex = data.subHexIndex;
+    construction.type = data.type;
+    construction.ownerId = playerId;
+    this.state.constructions.set(id, construction);
+
+    recalcMacroOwnership(this.state, data.macroCellId);
+  }
+
+  private handleScrap(client: Client, data: { constructionId: string }): void {
+    const playerId = client.sessionId;
+    const construction = this.state.constructions.get(data.constructionId);
+    if (!construction) return;
+    if (construction.ownerId !== playerId) return;
+
+    const macroCellId = construction.macroCellId;
+    this.state.constructions.delete(data.constructionId);
+    recalcMacroOwnership(this.state, macroCellId);
   }
 
   private handleChatMessage(client: Client, text: string): void {

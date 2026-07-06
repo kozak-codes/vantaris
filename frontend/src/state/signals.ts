@@ -1,5 +1,5 @@
 import { signal, computed } from '@preact/signals';
-import type { VisibleCellData, RevealedCellData, CityData, PlayerSummary, PlayerResourceData, ChatMessage, OrbitalBodyData } from '@vantaris/shared';
+import type { VisibleCellData, RevealedCellData, CityData, PlayerSummary, PlayerResourceData, ChatMessage, OrbitalBodyData, ConstructionData } from '@vantaris/shared';
 import { clientState, notifySelectionChanged } from './ClientState';
 
 export const myPlayerId = signal<string>('');
@@ -15,7 +15,7 @@ export const hoveredCellId = signal<string | null>(null);
 export const mouseClientX = signal<number>(0);
 export const mouseClientY = signal<number>(0);
 
-export type ViewMode = 'system' | 'planet' | 'tile' | 'world';
+export type ViewMode = 'system' | 'planet';
 export const viewMode = signal<ViewMode>('system');
 
 export const visibleCells = signal<Map<string, VisibleCellData>>(new Map());
@@ -24,6 +24,8 @@ export const ruinMarkers = signal<Set<string>>(new Set());
 export const cities = signal<Map<string, CityData>>(new Map());
 export const players = signal<Map<string, PlayerSummary>>(new Map());
 export const orbitalBodies = signal<Map<string, OrbitalBodyData>>(new Map());
+export const constructions = signal<Map<string, ConstructionData>>(new Map());
+export const worldSeed = signal<number>(0);
 export const resources = signal<PlayerResourceData>({ food: 0, energy: 0, foodPerTick: 0, energyPerTick: 0, totalPopulation: 0, factoryCount: 0, energyCredits: 0, claimCompensation: 0, foodCreditRate: 1 });
 
 export const chatMessages = signal<ChatMessage[]>([]);
@@ -33,7 +35,6 @@ export const chatUnreadDirect = signal<Map<string, number>>(new Map());
 
 export const connected = signal<boolean>(false);
 export const lastTickTime = signal<number>(0);
-export const focusedBodyId = signal<string | null>(null);
 // The planet/moon we're currently viewing in planet view. Set when entering
 // planet view; used by the PlanetView bar to show the body name.
 export const viewedBodyId = signal<string | null>(null);
@@ -74,43 +75,21 @@ export function selectTile(tileId: string | null) {
   notifySelectionChanged();
 }
 
-export function enterTileView(tileId: string) {
-  clientState.selectedTileId = tileId;
-  clientState.selectedCityId = null;
-  clientState.viewMode = 'tile';
-  notifySelectionChanged();
-}
-
-export function exitTileView() {
-  clientState.viewMode = 'planet';
-  clientState.selectedCityId = null;
-  notifySelectionChanged();
-  if (tileViewExitHandler) tileViewExitHandler();
-}
-
 export function enterPlanetView(bodyId?: string) {
   clientState.viewMode = 'planet';
   clientState.selectedCityId = null;
   viewedBodyId.value = bodyId ?? null;
   notifySelectionChanged();
-  if (tileViewExitHandler) tileViewExitHandler();
 }
 
 export function exitPlanetView() {
   clientState.viewMode = 'system';
   notifySelectionChanged();
-  if (tileViewExitHandler) tileViewExitHandler();
 }
 
 export function enterSystemView() {
   clientState.viewMode = 'system';
   notifySelectionChanged();
-  if (tileViewExitHandler) tileViewExitHandler();
-}
-
-let tileViewExitHandler: (() => void) | null = null;
-export function setTileViewExitHandler(fn: (() => void) | null): void {
-  tileViewExitHandler = fn;
 }
 
 export function selectCity(cityId: string | null) {
@@ -150,12 +129,14 @@ export function syncFromClientState(cs: {
   players: Map<string, PlayerSummary>;
   resources: PlayerResourceData;
   orbitalBodies: Map<string, OrbitalBodyData>;
+  constructions: Map<string, ConstructionData>;
+  worldSeed: number;
   hoveredCellId: string | null;
   mouseClientX: number;
   mouseClientY: number;
   selectedTileId: string | null;
   selectedCityId: string | null;
-  viewMode: 'system' | 'planet' | 'tile' | 'world';
+  viewMode: 'system' | 'planet';
   chatMessages: ChatMessage[];
   chatTab: string;
   chatUnreadGlobal: number;
@@ -171,6 +152,8 @@ export function syncFromClientState(cs: {
   cities.value = new Map(cs.cities);
   players.value = new Map(cs.players);
   orbitalBodies.value = new Map(cs.orbitalBodies);
+  constructions.value = new Map(cs.constructions);
+  worldSeed.value = cs.worldSeed;
   resources.value = { ...cs.resources };
   hoveredCellId.value = cs.hoveredCellId;
   mouseClientX.value = cs.mouseClientX;

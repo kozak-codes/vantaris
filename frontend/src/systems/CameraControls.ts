@@ -149,12 +149,27 @@ export class CameraControls {
   private onWheel(e: WheelEvent): void {
     if (!this._enabled) return;
     e.preventDefault();
-    this.targetZoom += e.deltaY * 0.01 * CAMERA_CONFIG.zoomSpeed;
+    const speed = this.dynamicZoomSpeed();
+    this.targetZoom += e.deltaY * 0.01 * speed;
     this.targetZoom = THREE.MathUtils.clamp(
       this.targetZoom,
       CAMERA_CONFIG.minDistance,
       CAMERA_CONFIG.maxDistance,
     );
+  }
+
+  /**
+   * Compute zoom speed scaled by current distance. Near the terrain surface
+   * (below zoomSlowDistance), speed ramps down to zoomSpeedMin so the player
+   * can fine-tune their view without clipping through terrain.
+   */
+  private dynamicZoomSpeed(): number {
+    const dist = this.currentDistance;
+    const slow = CAMERA_CONFIG.zoomSlowDistance;
+    if (dist >= slow) return CAMERA_CONFIG.zoomSpeed;
+    const t = (dist - CAMERA_CONFIG.minDistance) / (slow - CAMERA_CONFIG.minDistance);
+    const clamped = THREE.MathUtils.clamp(t, 0, 1);
+    return CAMERA_CONFIG.zoomSpeedMin + (CAMERA_CONFIG.zoomSpeed - CAMERA_CONFIG.zoomSpeedMin) * clamped;
   }
 
   private onTouchStart(e: TouchEvent): void {
@@ -188,7 +203,7 @@ export class CameraControls {
       this.isRotating = true;
       const newDist = this.getTouchDistance(e.touches);
       const delta = this.pinchStartDistance - newDist;
-      this.targetZoom += delta * 0.02 * CAMERA_CONFIG.zoomSpeed;
+      this.targetZoom += delta * 0.02 * this.dynamicZoomSpeed();
       this.targetZoom = THREE.MathUtils.clamp(
         this.targetZoom,
         CAMERA_CONFIG.minDistance,

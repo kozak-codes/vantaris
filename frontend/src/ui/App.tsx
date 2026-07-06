@@ -1,9 +1,9 @@
 import { FunctionalComponent } from 'preact';
-import { viewMode, orbitalBodies, viewedBodyId } from '../state/signals';
+import { viewMode, orbitalBodies, viewedBodyId, exitPlanetView } from '../state/signals';
 import { ChatPanel } from './ChatPanel';
 import { TileView } from './TileView';
 import { TopBar } from './TopBar';
-import { exitPlanetView } from '../state/signals';
+import { WindowManager } from './WindowManager';
 
 const PlanetView: FunctionalComponent = () => {
   const bodyId = viewedBodyId.value;
@@ -24,8 +24,9 @@ export const App: FunctionalComponent = () => {
   return (
     <>
       <TopBar />
-      {mode === 'tile' && <TileView />}
-      {(mode === 'planet' || mode === 'world') && <PlanetView />}
+      {mode === 'planet' && <PlanetView />}
+      <TileView />
+      <WindowManager />
       <ChatPanel />
     </>
   );

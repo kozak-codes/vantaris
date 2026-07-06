@@ -196,12 +196,26 @@ export interface GlobeConfig {
   borderWidth: number;
 }
 
+export interface SubHexConfig {
+  radius: number;
+  heightMin: number;
+  heightMax: number;
+  maxBuildSlope: number;
+  heightNoiseScale: number;
+  subBiomeNoiseScale: number;
+  planetSubdiv: number;
+}
+
 export interface CameraConfig {
   minDistance: number;
   maxDistance: number;
   rotationDamping: number;
   zoomSpeed: number;
+  zoomSpeedMin: number;
+  zoomSlowDistance: number;
   keyboardRotateSpeed: number;
+  tileViewZoom: number;
+  tileViewMaxZoom: number;
 }
 
 export interface PlayerStateSlice {
@@ -216,6 +230,8 @@ export interface PlayerStateSlice {
   players: PlayerSummary[];
   resources: PlayerResourceData;
   orbitalBodies: OrbitalBodyData[];
+  constructions: ConstructionData[];
+  worldSeed: number;
 }
 
 export interface VisibleCellData {
@@ -235,6 +251,9 @@ export interface RevealedCellData {
   lastKnownBiome: string;
   lastKnownOwnerId: string;
   lastKnownRuin: RuinType | null;
+  elevation: number;
+  moisture: number;
+  temperature: number;
 }
 
 export interface RuinMarkerData {
@@ -294,4 +313,51 @@ export interface ChatMessage {
 
 export interface AdjacencyMap {
   [cellId: string]: string[];
+}
+
+// ─── Sub-hex (micro tiles within a macro hex) ──
+
+/**
+ * A micro hex within a macro hex. Position is in axial coordinates relative
+ * to the macro hex center. The macro hex is treated as a hex-of-hexes with
+ * the given radius (CFG.SUBHEX.radius).
+ */
+export interface SubHexData {
+  /** Index into the sub-hex array (0 .. count-1). */
+  index: number;
+  /** Axial q coordinate within the macro hex. */
+  q: number;
+  /** Axial r coordinate within the macro hex. */
+  r: number;
+  /** Height displacement along the macro-hex normal (units). */
+  height: number;
+  /** Sub-biome, derived from world-space noise + macro biome. */
+  subBiome: SubBiomeType;
+  /** True if this sub-hex is buildable (not water, slope within limits). */
+  buildable: boolean;
+}
+
+export enum SubBiomeType {
+  WATER = 'WATER',
+  BEACH = 'BEACH',
+  FLAT = 'FLAT',
+  ROLLING = 'ROLLING',
+  HILLY = 'HILLY',
+  ROCKY = 'ROCKY',
+  FOREST_DENSE = 'FOREST_DENSE',
+  FOREST_LIGHT = 'FOREST_LIGHT',
+  DUNES = 'DUNES',
+  CRAGS = 'CRAGS',
+  ICE = 'ICE',
+  SNOW = 'SNOW',
+}
+
+export type ConstructionType = 'HAB' | 'MINE' | 'FARM' | 'FACTORY' | 'ROAD' | 'PORT' | 'SPACEPORT';
+
+export interface ConstructionData {
+  id: string;            // `${macroCellId}:${subHexIndex}`
+  macroCellId: string;
+  subHexIndex: number;
+  type: ConstructionType;
+  ownerId: string;
 }

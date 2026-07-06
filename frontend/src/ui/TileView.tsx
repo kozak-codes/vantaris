@@ -4,7 +4,6 @@ import {
   selectedCellData,
   selectedRevealedData,
   players,
-  exitTileView,
 } from '../state/signals';
 import { BIOME_TRAVEL_NAMES } from './hud-shared';
 
@@ -25,9 +24,6 @@ export const TileView: FunctionalComponent = () => {
   return (
     <div id="tile-view-overlay">
       <div class="tile-view-topbar">
-        <button class="tile-view-back" onClick={() => exitTileView()} title="Back to world (Esc)">
-          ← World
-        </button>
         <div class="tile-view-title">
           <span class="tile-view-biome">{BIOME_TRAVEL_NAMES[biome] || biome}</span>
           <span class="tile-view-owner" style={ownerColor !== '#888' ? { color: ownerColor } : {}}>

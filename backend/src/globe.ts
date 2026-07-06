@@ -1,7 +1,5 @@
 import { TerrainType, CFG } from '@vantaris/shared';
 import { generateWorld } from './worldgen/pipeline';
-import { placeRuins } from './worldgen/ruins';
-import { SeededRandom } from './worldgen/rng';
 
 interface Vec3 {
   x: number;
@@ -151,13 +149,6 @@ export function generateGlobe(subdivideLevel: number, worldSeed?: number): {
   }
 
   const world = generateWorld(rawCells, adjacency, seed);
-
-  const rng = new SeededRandom(seed + 999);
-  let landCount = 0;
-  for (const wc of world.cells) {
-    if (wc.elevation >= 0) landCount++;
-  }
-  placeRuins(world.cells, rng, landCount);
 
   const cells: ServerHexCell[] = world.cells.map(wc => ({
     id: wc.cellId,

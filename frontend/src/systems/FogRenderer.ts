@@ -3,6 +3,7 @@ import { clientState } from '../state/ClientState';
 import { onStateUpdate } from '../state/ClientState';
 import { TerrainType } from '../types/index';
 import { TERRAIN_CONFIGS } from '../constants';
+import { sampleWorldTerrain } from '@vantaris/shared';
 
 const biomeColorMap = new Map<string, THREE.Color>(
   (Object.entries(TERRAIN_CONFIGS) as [string, { color: string }][]).map(([key, val]) => [key, new THREE.Color(val.color)]),
@@ -20,7 +21,6 @@ const BORDER_PULSE_MAX = 1.0;
 export class FogRenderer {
   private cellMeshes: Map<string, THREE.Mesh>;
   private targetColors: Map<string, THREE.Color> = new Map();
-  private borderLines: THREE.LineSegments | null = null;
   private ownerLines: THREE.LineSegments | null = null;
   private globe: THREE.Group;
   private grid: any;
@@ -37,13 +37,11 @@ export class FogRenderer {
     }
 
     onStateUpdate(() => this.onStateChange());
-
-    this.rebuildBorders();
   }
 
   private onStateChange(): void {
     this.updateTargetColors();
-    this.rebuildBorders();
+    // Border lines are now drawn by SubHexWorldRenderer on the terrain surface.
     this.rebuildOwnerBorders();
   }
 
@@ -115,57 +113,6 @@ export class FogRenderer {
     }
   }
 
-  private rebuildBorders(): void {
-    if (this.borderLines) {
-      this.globe.remove(this.borderLines);
-      this.borderLines.geometry.dispose();
-      (this.borderLines.material as THREE.Material).dispose();
-      this.borderLines = null;
-    }
-
-    const positions: number[] = [];
-    const offset = 0.005;
-    const radius = 5;
-    const visibleSet = new Set<string>();
-    const revealedSet = new Set<string>();
-    for (const [cellId] of clientState.visibleCells) visibleSet.add(cellId);
-    for (const [cellId] of clientState.revealedCells) revealedSet.add(cellId);
-
-    for (const cell of this.grid.cells) {
-      const key = `cell_${cell.id}`;
-      if (!visibleSet.has(key) && !revealedSet.has(key)) continue;
-
-      const center = new THREE.Vector3(cell.center[0], cell.center[1], cell.center[2]);
-      const cn = center.clone().normalize();
-
-      const dualVerts = cell.vertexIds.map((fi: number) => {
-        const dv = this.grid.vertices[fi];
-        return new THREE.Vector3(dv[0], dv[1], dv[2]);
-      });
-
-      for (let i = 0; i < dualVerts.length; i++) {
-        const a = dualVerts[i];
-        const b = dualVerts[(i + 1) % dualVerts.length];
-        const an = a.clone().normalize().multiplyScalar(radius + offset);
-        const bn = b.clone().normalize().multiplyScalar(radius + offset);
-        positions.push(an.x, an.y, an.z, bn.x, bn.y, bn.z);
-      }
-    }
-
-    if (positions.length > 0) {
-      const geom = new THREE.BufferGeometry();
-      geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-      const mat = new THREE.LineBasicMaterial({
-        color: 0x222222,
-        transparent: true,
-        opacity: 0.4,
-      });
-      this.borderLines = new THREE.LineSegments(geom, mat);
-      this.borderLines.raycast = () => {};
-      this.globe.add(this.borderLines);
-    }
-  }
-
   forceColorUpdate(): void {
     this.updateTargetColors();
     for (const cell of this.grid.cells) {
@@ -189,8 +136,17 @@ export class FogRenderer {
 
     const positions: number[] = [];
     const colors: number[] = [];
-    const offset = 0.016;
     const radius = 5;
+    const seed = clientState.worldSeed;
+
+    const sampleOnSurface = (v: [number, number, number]): THREE.Vector3 => {
+      const len = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]) || 1;
+      const sx = (v[0] / len) * radius;
+      const sy = (v[1] / len) * radius;
+      const sz = (v[2] / len) * radius;
+      const { height } = sampleWorldTerrain([sx, sy, sz], seed);
+      return new THREE.Vector3(sx, sy, sz).normalize().multiplyScalar(radius + height + 0.05);
+    };
 
     const visibleSet = new Set<string>();
     for (const [cellId] of clientState.visibleCells) visibleSet.add(cellId);
@@ -214,16 +170,23 @@ export class FogRenderer {
 
       if (!hasDifferentNeighbor) continue;
 
-      const dualVerts = cell.vertexIds.map((fi: number) => {
-        const dv = this.grid.vertices[fi];
-        return new THREE.Vector3(dv[0], dv[1], dv[2]);
-      });
+      const rawVerts = cell.vertexIds.map((fi: number) => this.grid.vertices[fi] as [number, number, number]);
 
-      for (let i = 0; i < dualVerts.length; i++) {
-        const a = dualVerts[i].clone().normalize().multiplyScalar(radius + offset);
-        const b = dualVerts[(i + 1) % dualVerts.length].clone().normalize().multiplyScalar(radius + offset);
-        positions.push(a.x, a.y, a.z, b.x, b.y, b.z);
-        colors.push(color.r, color.g, color.b, color.r, color.g, color.b);
+      for (let i = 0; i < rawVerts.length; i++) {
+        const a = rawVerts[i];
+        const b = rawVerts[(i + 1) % rawVerts.length];
+        const STEPS = 8;
+        let prev = sampleOnSurface(a);
+        for (let s = 1; s <= STEPS; s++) {
+          const t = s / STEPS;
+          const mx = a[0] * (1 - t) + b[0] * t;
+          const my = a[1] * (1 - t) + b[1] * t;
+          const mz = a[2] * (1 - t) + b[2] * t;
+          const next = sampleOnSurface([mx, my, mz]);
+          positions.push(prev.x, prev.y, prev.z, next.x, next.y, next.z);
+          colors.push(color.r, color.g, color.b, color.r, color.g, color.b);
+          prev = next;
+        }
       }
     }
 
@@ -236,6 +199,7 @@ export class FogRenderer {
         transparent: true,
         opacity: 0.9,
         linewidth: 2,
+        depthTest: true,
       });
       this.ownerLines = new THREE.LineSegments(geom, mat);
       this.ownerLines.raycast = () => {};

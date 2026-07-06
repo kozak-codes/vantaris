@@ -2,7 +2,7 @@ import { Client, Room } from 'colyseus.js';
 import { storeReconnectionToken, getReconnectionToken } from './RoomPersistence';
 import { applyStateSlice, clearClientState } from '../state/ClientState';
 import { connected, lastTickTime } from '../state/signals';
-import type { ChatMessage } from '@vantaris/shared';
+import type { ChatMessage, ConstructionType } from '@vantaris/shared';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'ws://localhost:2567';
 
@@ -126,4 +126,16 @@ export function leaveGame(): void {
   }
   connected.value = false;
   clearClientState();
+}
+
+export function sendBuild(macroCellId: string, subHexIndex: number, type: ConstructionType): void {
+  if (currentRoom) {
+    currentRoom.send('build', { macroCellId, subHexIndex, type });
+  }
+}
+
+export function sendScrap(constructionId: string): void {
+  if (currentRoom) {
+    currentRoom.send('scrap', { constructionId });
+  }
 }

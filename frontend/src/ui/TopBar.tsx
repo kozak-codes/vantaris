@@ -14,12 +14,13 @@ import {
   orbitalBodies,
   enterSystemView,
   enterPlanetView,
-  focusedBodyId,
   viewedBodyId,
 } from '../state/signals';
 import { leaveGame } from '../network/ColyseusClient';
 import { clearRoomFromURL } from '../network/RoomPersistence';
 import type { OrbitalBodyData } from '@vantaris/shared';
+import { openWindow, favorites } from '../state/windows';
+import { bodyWindowContent } from './WindowContent';
 
 interface MenuItem {
   label: string;
@@ -213,8 +214,17 @@ const EconomyMenu: FunctionalComponent = () => {
 };
 
 function focusSpacecraft(bodyId: string): void {
-  focusedBodyId.value = bodyId;
-  enterPlanetView();
+  // Enter free planet view (view the parent body) without locking focus.
+  const body = orbitalBodies.value.get(bodyId);
+  if (body) {
+    enterPlanetView(body.elements.parent);
+  } else {
+    enterPlanetView();
+  }
+}
+
+function openBodyWindow(body: OrbitalBodyData): void {
+  openWindow(body.bodyId, body.name, bodyWindowContent(body));
 }
 
 // Build a submenu for an orbital body by listing all its direct children
@@ -227,13 +237,7 @@ function buildBodyChildren(parentId: string): MenuItem[] {
     const grandChildren = buildBodyChildren(body.bodyId);
     children.push({
       label: body.name,
-      action: () => {
-        if (body.type === 'SPACECRAFT') {
-          focusSpacecraft(body.bodyId);
-        } else if (body.type === 'PLANET' || body.type === 'MOON') {
-          enterPlanetView(body.bodyId);
-        }
-      },
+      action: () => openBodyWindow(body),
       children: grandChildren.length > 0 ? grandChildren : undefined,
     });
   }
@@ -249,7 +253,7 @@ function buildSystemChildren(): MenuItem[] {
       const subChildren = buildBodyChildren(body.bodyId);
       children.push({
         label: body.name,
-        action: () => enterSystemView(),
+        action: () => openBodyWindow(body),
         children: subChildren.length > 0 ? subChildren : undefined,
       });
     }
@@ -257,23 +261,36 @@ function buildSystemChildren(): MenuItem[] {
   return children;
 }
 
+// Build the Favorites menu from the favorites signal.
+function buildFavoritesChildren(): MenuItem[] {
+  const children: MenuItem[] = [];
+  for (const favId of favorites.value) {
+    const body = orbitalBodies.value.get(favId);
+    if (!body) continue;
+    children.push({
+      label: body.name,
+      action: () => openBodyWindow(body),
+    });
+  }
+  return children;
+}
+
 function buildPlanetChildren(): MenuItem[] {
   // Show all bodies orbiting whatever planet/moon we're currently viewing.
-  // For now, list all spacecraft and moons in the system.
   const children: MenuItem[] = [];
   for (const [, body] of orbitalBodies.value) {
     if (body.type === 'SPACECRAFT') {
       const scChildren = buildBodyChildren(body.bodyId);
       children.push({
         label: body.name,
-        action: () => focusSpacecraft(body.bodyId),
+        action: () => openBodyWindow(body),
         children: scChildren.length > 0 ? scChildren : undefined,
       });
     } else if (body.type === 'MOON') {
       const moonChildren = buildBodyChildren(body.bodyId);
       children.push({
         label: body.name,
-        action: () => enterPlanetView(body.bodyId),
+        action: () => openBodyWindow(body),
         children: moonChildren.length > 0 ? moonChildren : undefined,
       });
     }
@@ -282,7 +299,7 @@ function buildPlanetChildren(): MenuItem[] {
 }
 
 export const TopBar: FunctionalComponent = () => {
-  const inTileView = viewMode.value === 'tile';
+  const hasSelectedTile = !!selectedTileId.value;
   const { date, time, isNight } = formatGameDateTime(currentTick.value, dayNightCycleTicks.value);
   const icon = isNight ? '☽' : '☀';
   const hasPlayer = !!myPlayerId.value;
@@ -302,21 +319,24 @@ export const TopBar: FunctionalComponent = () => {
 
   const systemChildren = useComputed(() => buildSystemChildren());
   const planetChildren = useComputed(() => buildPlanetChildren());
+  const favoritesChildren = useComputed(() => buildFavoritesChildren());
 
-  // Order: System, Planet, Tile, Construct. System is always visible.
-  // Planet appears in system/planet/tile. Tile and Construct appear in tile view.
+  // Order: Favorites (far left), System, Planet, Tile, Construct.
   const leftMenus: { id: string; item: MenuItem }[] = [];
+  if (favoritesChildren.value.length > 0) {
+    leftMenus.push({ id: 'favorites', item: { label: '★', children: favoritesChildren.value } });
+  }
   leftMenus.push({ id: 'system', item: { label: 'System', children: systemChildren.value } });
   if (viewMode.value !== 'system') {
     leftMenus.push({ id: 'planet', item: { label: 'Planet', children: planetChildren.value } });
   }
-  if (inTileView) {
+  if (hasSelectedTile) {
     leftMenus.push({ id: 'tile', item: { label: 'Tile', children: TILE_CHILDREN } });
     leftMenus.push({ id: 'construct', item: { label: 'Construct', children: CONSTRUCT_CHILDREN } });
   }
 
   const cellData = selectedCellData.value;
-  const tileLabel = inTileView && cellData ? cellData.biome : null;
+  const tileLabel = hasSelectedTile && cellData ? cellData.biome : null;
 
   return (
     <div id="topbar" onClick={(e) => e.stopPropagation()}>

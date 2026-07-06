@@ -213,10 +213,13 @@ export class SpacecraftRenderer {
           const cell = cellMesh;
           if (cell) {
             const normal = (cell as THREE.Mesh).position.clone().normalize();
-            sc.mesh.position.copy(normal.clone().multiplyScalar(GLOBE_RADIUS * 1.02));
+            // Place lander well above terrain. Max terrain height is 0.8,
+            // so GLOBE_RADIUS + 1.0 ensures it's always above the surface.
+            const landerHeight = GLOBE_RADIUS + 1.5;
+            sc.mesh.position.copy(normal.clone().multiplyScalar(landerHeight));
             sc.mesh.lookAt(normal.clone().multiplyScalar(GLOBE_RADIUS * 2));
             sc.mesh.rotateX(Math.PI / 2);
-            sc.label.position.copy(normal.clone().multiplyScalar(GLOBE_RADIUS * 1.08));
+            sc.label.position.copy(normal.clone().multiplyScalar(landerHeight + 0.15));
           }
         }
       } else {
@@ -227,11 +230,16 @@ export class SpacecraftRenderer {
         sc.label.position.set(relX, relY + 0.15, relZ);
       }
 
+      // Hide orbit line when landed.
+      if (sc.orbitLine) {
+        sc.orbitLine.visible = !body.landedCellId;
+      }
+
       // Scale label with camera distance so it stays a reasonable on-screen size.
       if (camera) {
         const dist = sc.label.position.distanceTo(camera.position);
-        const s = THREE.MathUtils.clamp(dist * 0.15, 1.5, 8);
-        sc.label.scale.set(s, s * 0.25, 1);
+        const s = THREE.MathUtils.clamp(dist * 0.06, 0.4, 2);
+        sc.label.scale.set(s, s * 0.3, 1);
       }
     }
   }
@@ -240,17 +248,17 @@ export class SpacecraftRenderer {
 function makeSpacecraftLabel(text: string): THREE.Sprite {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d')!;
-  const fontSize = 32;
+  const fontSize = 16;
   ctx.font = `${fontSize}px ui-monospace, monospace`;
   const textWidth = ctx.measureText(text).width;
-  canvas.width = Math.ceil(textWidth) + 16;
-  canvas.height = fontSize + 8;
+  canvas.width = Math.ceil(textWidth) + 8;
+  canvas.height = fontSize + 4;
   ctx.font = `${fontSize}px ui-monospace, monospace`;
   ctx.textBaseline = 'middle';
   ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = '#88cc88';
-  ctx.fillText(text, 8, canvas.height / 2);
+  ctx.fillText(text, 4, canvas.height / 2);
   const texture = new THREE.CanvasTexture(canvas);
   texture.minFilter = THREE.LinearFilter;
   const material = new THREE.SpriteMaterial({ map: texture, depthTest: false });

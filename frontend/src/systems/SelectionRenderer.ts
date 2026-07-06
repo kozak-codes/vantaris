@@ -1,9 +1,7 @@
 import * as THREE from 'three';
 import { clientState, onStateUpdate } from '../state/ClientState';
 import { GLOBE_RADIUS } from './IconFactory';
-
-const SELECTION_OFFSET = 0.015;
-const HOVER_OFFSET = 0.012;
+import { sampleWorldTerrain } from '@vantaris/shared';
 
 const COLOR_HOVER = 0xffffff;
 
@@ -52,7 +50,7 @@ export class SelectionRenderer {
 
     if (!this.currentTileId) return;
 
-    const ring = this.buildCellRing(this.currentTileId, 0xffff44, SELECTION_OFFSET);
+    const ring = this.buildCellRing(this.currentTileId, 0xffff44);
     if (ring) this.hexRing = ring;
   }
 
@@ -66,29 +64,47 @@ export class SelectionRenderer {
     const revealed = clientState.revealedCells.has(this.currentHoveredCellId);
     if (!visible && !revealed) return;
 
-    this.hoverRing = this.buildCellRing(this.currentHoveredCellId, COLOR_HOVER, HOVER_OFFSET);
+    this.hoverRing = this.buildCellRing(this.currentHoveredCellId, COLOR_HOVER);
   }
 
-  private buildCellRing(cellId: string, color: number, offset: number): THREE.LineSegments | null {
+  private buildCellRing(cellId: string, color: number): THREE.LineSegments | null {
     const numericId = parseInt(cellId.replace('cell_', ''));
     if (isNaN(numericId) || numericId < 0 || numericId >= this.grid.cells.length) return null;
 
     const cell = this.grid.cells[numericId];
-    const verts = cell.vertexIds.map((fi: number) => {
-      const dv = this.grid.vertices[fi];
-      return new THREE.Vector3(dv[0], dv[1], dv[2]).normalize().multiplyScalar(GLOBE_RADIUS + offset);
-    });
+    const seed = clientState.worldSeed;
 
+    const sampleOnSurface = (v: [number, number, number]): THREE.Vector3 => {
+      const len = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]) || 1;
+      const sx = (v[0] / len) * GLOBE_RADIUS;
+      const sy = (v[1] / len) * GLOBE_RADIUS;
+      const sz = (v[2] / len) * GLOBE_RADIUS;
+      const { height } = sampleWorldTerrain([sx, sy, sz], seed);
+      return new THREE.Vector3(sx, sy, sz).normalize().multiplyScalar(GLOBE_RADIUS + height + 0.05);
+    };
+
+    const rawVerts = cell.vertexIds.map((fi: number) => this.grid.vertices[fi] as [number, number, number]);
     const positions: number[] = [];
-    for (let i = 0; i < verts.length; i++) {
-      const a = verts[i];
-      const b = verts[(i + 1) % verts.length];
-      positions.push(a.x, a.y, a.z, b.x, b.y, b.z);
+
+    for (let i = 0; i < rawVerts.length; i++) {
+      const a = rawVerts[i];
+      const b = rawVerts[(i + 1) % rawVerts.length];
+      const STEPS = 8;
+      let prev = sampleOnSurface(a);
+      for (let s = 1; s <= STEPS; s++) {
+        const t = s / STEPS;
+        const mx = a[0] * (1 - t) + b[0] * t;
+        const my = a[1] * (1 - t) + b[1] * t;
+        const mz = a[2] * (1 - t) + b[2] * t;
+        const next = sampleOnSurface([mx, my, mz]);
+        positions.push(prev.x, prev.y, prev.z, next.x, next.y, next.z);
+        prev = next;
+      }
     }
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85 });
+    const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85, depthTest: true });
     const lineSegments = new THREE.LineSegments(geometry, material);
     lineSegments.raycast = () => {};
     this.globe.add(lineSegments);

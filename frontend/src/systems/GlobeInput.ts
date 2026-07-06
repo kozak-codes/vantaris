@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { clientState, notifySelectionChanged } from '../state/ClientState';
-import { enterTileView, exitTileView, exitPlanetView } from '../state/signals';
+import { selectTile, exitPlanetView } from '../state/signals';
 import type { CameraControls } from './CameraControls';
 
 const CLICK_THRESHOLD_PX = 8;
@@ -14,7 +14,6 @@ export class GlobeInput {
   private globe: THREE.Group;
   private cameraControls: CameraControls | null = null;
   private onEnterTile: ((cellId: string) => void) | null = null;
-  private onExitTile: (() => void) | null = null;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -38,9 +37,8 @@ export class GlobeInput {
     this.cameraControls = cc;
   }
 
-  setTileViewHandlers(onEnter: (cellId: string) => void, onExit: () => void): void {
+  setTileViewHandlers(onEnter: (cellId: string) => void, _onExit?: () => void): void {
     this.onEnterTile = onEnter;
-    this.onExitTile = onExit;
   }
 
   private onPointerDown(e: PointerEvent): void {
@@ -169,22 +167,11 @@ export class GlobeInput {
       return;
     }
 
-    const prevCityId = clientState.selectedCityId;
-
     // In system view the globe is hidden; ignore globe clicks.
     if (clientState.viewMode === 'system') return;
 
-    if (clientState.viewMode === 'tile') {
-      // Already in tile view; clicking another hex switches directly to it.
-      if (cellId !== clientState.selectedTileId) {
-        enterTileView(cellId);
-        if (this.onEnterTile) this.onEnterTile(cellId);
-      }
-      return;
-    }
-
-    // In planet/world view, single click on a hex enters tile view.
-    enterTileView(cellId);
+    // Select the tile and zoom into it.
+    selectTile(cellId);
     if (this.onEnterTile) this.onEnterTile(cellId);
   }
 
@@ -196,20 +183,15 @@ export class GlobeInput {
 
   private getCellIdFromIntersection(intersection: THREE.Intersection): string | null {
     if (!intersection.object || intersection.object.userData.cellId === undefined) return null;
-    const numericId = intersection.object.userData.cellId as number;
-    return `cell_${numericId}`;
+    const cellId = intersection.object.userData.cellId;
+    if (typeof cellId === 'number') return `cell_${cellId}`;
+    return cellId as string;
   }
 
   private onKeyDown(e: KeyboardEvent): void {
     if (e.key === 'Escape') {
-      if (clientState.viewMode === 'tile') {
-        exitTileView();
-        if (this.onExitTile) this.onExitTile();
-        return;
-      }
-      if (clientState.viewMode === 'planet' || clientState.viewMode === 'world') {
+      if (clientState.viewMode === 'planet') {
         exitPlanetView();
-        if (this.onExitTile) this.onExitTile();
         return;
       }
       if (clientState.selectedCityId) {
