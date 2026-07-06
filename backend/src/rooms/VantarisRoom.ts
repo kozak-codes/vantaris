@@ -94,13 +94,6 @@ export class VantarisRoom extends Room<GameState> {
       this.handleRenameCity(client, data);
     });
 
-    this.onMessage('revealRuin', (client, data: { cellId: string }) => {
-      const cell = this.state.cells.get(data.cellId);
-      if (cell && cell.ruin && !cell.ruinRevealed) {
-        cell.ruinRevealed = true;
-      }
-    });
-
     this.onMessage('ping', (client) => {
       client.send('pong', { serverTick: this.state.tick });
     });

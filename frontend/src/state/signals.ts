@@ -20,7 +20,6 @@ export const viewMode = signal<ViewMode>('system');
 
 export const visibleCells = signal<Map<string, VisibleCellData>>(new Map());
 export const revealedCells = signal<Map<string, RevealedCellData>>(new Map());
-export const ruinMarkers = signal<Set<string>>(new Set());
 export const cities = signal<Map<string, CityData>>(new Map());
 export const players = signal<Map<string, PlayerSummary>>(new Map());
 export const orbitalBodies = signal<Map<string, OrbitalBodyData>>(new Map());

@@ -60,15 +60,6 @@ export enum CityTier {
   MEGACITY = 6,
 }
 
-export enum RuinType {
-  RUINED_CITY = 'RUINED_CITY',
-  RUINED_FACTORY = 'RUINED_FACTORY',
-  RUINED_PORT = 'RUINED_PORT',
-  RUINED_BARRACKS = 'RUINED_BARRACKS',
-  COLLAPSED_MINE = 'COLLAPSED_MINE',
-  OVERGROWN_FARM = 'OVERGROWN_FARM',
-}
-
 export enum ResourceType {
   GRAIN = 'GRAIN',
   ORE = 'ORE',
@@ -123,7 +114,6 @@ export interface PlayerResourceData {
 
 export interface CellSnapshot {
   ownerId: string | null;
-  ruin: RuinType | null;
 }
 
 export interface SpawnPoint {
@@ -194,7 +184,6 @@ export interface PlayerStateSlice {
   dayNightCycleTicks: number;
   visibleCells: VisibleCellData[];
   revealedCells: RevealedCellData[];
-  ruinMarkers: RuinMarkerData[];
   cities: CityData[];
   players: PlayerSummary[];
   resources: PlayerResourceData;
@@ -207,19 +196,11 @@ export interface VisibleCellData {
   cellId: string;
   ownerId: string;
   resourceYield: ResourceYield | null;
-  ruin: RuinType | null;
-  ruinRevealed: boolean;
 }
 
 export interface RevealedCellData {
   cellId: string;
   lastKnownOwnerId: string;
-  lastKnownRuin: RuinType | null;
-}
-
-export interface RuinMarkerData {
-  cellId: string;
-  ruin: RuinType;
 }
 
 export interface ProductionItem {

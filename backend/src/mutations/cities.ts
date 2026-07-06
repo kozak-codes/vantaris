@@ -24,14 +24,7 @@ export function createCity(
   initCityStockpile(city);
 
   const cell = state.cells.get(cellId);
-  if (cell) {
-    cell.hasCity = true;
-    cell.cityId = city.cityId;
-    if (cell.ruin) {
-      cell.ruin = '';
-      cell.ruinRevealed = false;
-    }
-  }
+  // Cell no longer tracks hasCity/cityId — city ownership is on the CityState.
 
   state.cities.set(city.cityId, city);
   return city;

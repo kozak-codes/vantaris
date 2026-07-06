@@ -1,9 +1,12 @@
 import * as THREE from 'three';
 import { clientState, notifySelectionChanged } from '../state/ClientState';
 import { selectTile, exitPlanetView } from '../state/signals';
+import { openWindow } from '../state/windows';
+import { TileWindowContent } from '../ui/WindowContent';
 import type { CameraControls } from './CameraControls';
 
 const CLICK_THRESHOLD_PX = 8;
+const DOUBLE_CLICK_MS = 350;
 
 export class GlobeInput {
   private canvas: HTMLCanvasElement;
@@ -14,6 +17,8 @@ export class GlobeInput {
   private globe: THREE.Group;
   private cameraControls: CameraControls | null = null;
   private onEnterTile: ((cellId: string) => void) | null = null;
+  private lastClickCellId: string | null = null;
+  private lastClickTime = 0;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -170,9 +175,22 @@ export class GlobeInput {
     // In system view the globe is hidden; ignore globe clicks.
     if (clientState.viewMode === 'system') return;
 
-    // Select the tile and zoom into it.
+    // Detect double-click: focus camera on the tile.
+    const now = Date.now();
+    const isDoubleClick = this.lastClickCellId === cellId && (now - this.lastClickTime) < DOUBLE_CLICK_MS;
+    this.lastClickCellId = cellId;
+    this.lastClickTime = now;
+
+    // Select the tile.
     selectTile(cellId);
-    if (this.onEnterTile) this.onEnterTile(cellId);
+
+    if (isDoubleClick) {
+      // Double-click: focus camera on the tile.
+      if (this.onEnterTile) this.onEnterTile(cellId);
+    } else {
+      // Single click: open the tile window.
+      openWindow(`tile:${cellId}`, `Tile ${cellId}`, { component: TileWindowContent, props: { cellId } });
+    }
   }
 
   private deselectAll(): void {

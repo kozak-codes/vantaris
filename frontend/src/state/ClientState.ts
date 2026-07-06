@@ -4,7 +4,6 @@ import {
   type RevealedCellData,
   type CityData,
   type PlayerSummary,
-  type RuinMarkerData,
   type ChatMessage,
   type PlayerResourceData,
   type OrbitalBodyData,
@@ -19,7 +18,6 @@ export interface ClientState {
   dayNightCycleTicks: number;
   visibleCells: Map<string, VisibleCellData>;
   revealedCells: Map<string, RevealedCellData>;
-  ruinMarkers: Map<string, RuinMarkerData>;
   cities: Map<string, CityData>;
   players: Map<string, PlayerSummary>;
   resources: PlayerResourceData;
@@ -45,7 +43,6 @@ export const clientState: ClientState = {
   dayNightCycleTicks: 600,
   visibleCells: new Map(),
   revealedCells: new Map(),
-  ruinMarkers: new Map(),
   cities: new Map(),
   players: new Map(),
   resources: { food: 0, energy: 0, foodPerTick: 0, energyPerTick: 0, totalPopulation: 0, factoryCount: 0, energyCredits: 0, claimCompensation: 0, foodCreditRate: 1 },
@@ -121,13 +118,6 @@ export function applyStateSlice(slice: PlayerStateSlice): void {
   clientState.revealedCells.clear();
   for (const rc of slice.revealedCells) {
     clientState.revealedCells.set(rc.cellId, rc);
-  }
-
-  clientState.ruinMarkers.clear();
-  if (slice.ruinMarkers) {
-    for (const rm of slice.ruinMarkers) {
-      clientState.ruinMarkers.set(rm.cellId, rm);
-    }
   }
 
   clientState.cities.clear();
@@ -226,7 +216,6 @@ export function clearClientState(): void {
   clientState.dayNightCycleTicks = 600;
   clientState.visibleCells.clear();
   clientState.revealedCells.clear();
-  clientState.ruinMarkers.clear();
   clientState.cities.clear();
   clientState.players.clear();
   clientState.orbitalBodies.clear();

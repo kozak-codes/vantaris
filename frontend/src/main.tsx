@@ -5,7 +5,6 @@ import { GlobeRenderer } from './globe/GlobeRenderer';
 import { FogRenderer } from './systems/FogRenderer';
 import { CityRenderer } from './systems/CityRenderer';
 import { SelectionRenderer } from './systems/SelectionRenderer';
-import { RuinRenderer } from './systems/RuinRenderer';
 import { DayNightRenderer } from './systems/DayNightRenderer';
 import { SpacecraftRenderer } from './systems/SpacecraftRenderer';
 import { SubHexWorldRenderer } from './systems/SubHexWorldRenderer';
@@ -52,7 +51,6 @@ const globeRenderer = new GlobeRenderer(pivot, grid, scene);
 const fogRenderer = new FogRenderer(pivot, grid, globeRenderer.getCellMeshes(), globeRenderer.getGlobeGroup());
 const cityRenderer = new CityRenderer(globeRenderer.getGlobeGroup(), grid);
 const selectionRenderer = new SelectionRenderer(globeRenderer.getGlobeGroup(), grid);
-const ruinRenderer = new RuinRenderer(globeRenderer.getGlobeGroup(), grid);
 const dayNightRenderer = new DayNightRenderer(ambientLight, globeRenderer.getGlobeGroup(), fogRenderer.getCellMeshMap());
 const spacecraftRenderer = new SpacecraftRenderer(globeRenderer.getGlobeGroup());
 const subHexRenderer = new SubHexWorldRenderer(globeRenderer.getGlobeGroup(), globeRenderer.getCellMeshes());
@@ -294,7 +292,6 @@ function animate(): void {
 
   fogRenderer.updateFogColors();
   selectionRenderer.update();
-  ruinRenderer.update();
   dayNightRenderer.update();
   spacecraftRenderer.update(camera);
   subHexRenderer.update();

@@ -275,29 +275,6 @@ function buildFavoritesChildren(): MenuItem[] {
   return children;
 }
 
-function buildPlanetChildren(): MenuItem[] {
-  // Show all bodies orbiting whatever planet/moon we're currently viewing.
-  const children: MenuItem[] = [];
-  for (const [, body] of orbitalBodies.value) {
-    if (body.type === 'SPACECRAFT') {
-      const scChildren = buildBodyChildren(body.bodyId);
-      children.push({
-        label: body.name,
-        action: () => openBodyWindow(body),
-        children: scChildren.length > 0 ? scChildren : undefined,
-      });
-    } else if (body.type === 'MOON') {
-      const moonChildren = buildBodyChildren(body.bodyId);
-      children.push({
-        label: body.name,
-        action: () => openBodyWindow(body),
-        children: moonChildren.length > 0 ? moonChildren : undefined,
-      });
-    }
-  }
-  return children;
-}
-
 export const TopBar: FunctionalComponent = () => {
   const hasSelectedTile = !!selectedTileId.value;
   const { date, time, isNight } = formatGameDateTime(currentTick.value, dayNightCycleTicks.value);
@@ -318,24 +295,18 @@ export const TopBar: FunctionalComponent = () => {
   }
 
   const systemChildren = useComputed(() => buildSystemChildren());
-  const planetChildren = useComputed(() => buildPlanetChildren());
   const favoritesChildren = useComputed(() => buildFavoritesChildren());
 
-  // Order: Favorites (far left), System, Planet, Tile, Construct.
+  // Order: Favorites (far left), System, Tile, Construct.
   const leftMenus: { id: string; item: MenuItem }[] = [];
   if (favoritesChildren.value.length > 0) {
     leftMenus.push({ id: 'favorites', item: { label: '★', children: favoritesChildren.value } });
   }
   leftMenus.push({ id: 'system', item: { label: 'System', children: systemChildren.value } });
-  if (viewMode.value !== 'system') {
-    leftMenus.push({ id: 'planet', item: { label: 'Planet', children: planetChildren.value } });
-  }
   if (hasSelectedTile) {
     leftMenus.push({ id: 'tile', item: { label: 'Tile', children: TILE_CHILDREN } });
     leftMenus.push({ id: 'construct', item: { label: 'Construct', children: CONSTRUCT_CHILDREN } });
   }
-
-  const tileLabel = hasSelectedTile ? selectedTileId.value : null;
 
   return (
     <div id="topbar" onClick={(e) => e.stopPropagation()}>
@@ -349,7 +320,6 @@ export const TopBar: FunctionalComponent = () => {
         <div class="topbar-clock">
           {icon} {date} {time} <span class={statusClass}>{statusDot}</span>
         </div>
-        {tileLabel && <span class="topbar-tile-label">{tileLabel}</span>}
         {hasPlayer && (
           <button class="topbar-leave" onClick={(e) => { e.stopPropagation(); handleLeave(); }} title="Leave game">
             ✕

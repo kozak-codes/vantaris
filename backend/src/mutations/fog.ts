@@ -1,6 +1,5 @@
 import {
   FogVisibility,
-  RuinType,
   ResourceType,
   CFG,
   OrbitalBodyType,
@@ -10,7 +9,6 @@ import {
   type RevealedCellData,
   type CityData,
   type PlayerSummary,
-  type RuinMarkerData,
   type PlayerResourceData,
   type StockpileEntry,
   type ResourceInflowEntry,
@@ -36,7 +34,6 @@ export function snapshotAndHideCell(state: GameState, playerId: string, cellId: 
   if (!cell) return;
   const snapshot = JSON.stringify({
     ownerId: cell.ownerId || null,
-    ruin: cell.ruin || null,
   });
   player.fog.setRevealed(cellId, snapshot);
 }
@@ -169,7 +166,6 @@ export function buildPlayerSlice(
       dayNightCycleTicks: state.dayNightCycleTicks,
       visibleCells: [],
       revealedCells: [],
-      ruinMarkers: [],
       cities: [],
       players: [],
       resources: { food: 0, energy: 0, foodPerTick: 0, energyPerTick: 0, totalPopulation: 0, factoryCount: 0, energyCredits: 0, claimCompensation: 0, foodCreditRate: 1 },
@@ -183,7 +179,6 @@ export function buildPlayerSlice(
   const revealedCells: RevealedCellData[] = [];
   const visibleCellIds = new Set<string>();
   const revealedCellIds = new Set<string>();
-  const ruinMarkers: RuinMarkerData[] = [];
 
   for (const [cellId, fogValue] of player.fog.visibility) {
     if (fogValue === FogVisibility.VISIBLE) {
@@ -193,8 +188,6 @@ export function buildPlayerSlice(
           cellId: cell.cellId,
           ownerId: cell.ownerId,
           resourceYield: null,
-          ruin: (cell.ruin as RuinType) || null,
-          ruinRevealed: cell.ruinRevealed,
         });
         visibleCellIds.add(cellId);
       }
@@ -205,16 +198,9 @@ export function buildPlayerSlice(
         revealedCells.push({
           cellId,
           lastKnownOwnerId: data.ownerId || '',
-          lastKnownRuin: data.ruin || null,
         });
         revealedCellIds.add(cellId);
       }
-    }
-  }
-
-  for (const [, cell] of state.cells) {
-    if (cell.ruin && revealedCellIds.has(cell.cellId) && !visibleCellIds.has(cell.cellId)) {
-      ruinMarkers.push({ cellId: cell.cellId, ruin: cell.ruin as RuinType });
     }
   }
 
@@ -344,7 +330,6 @@ export function buildPlayerSlice(
     dayNightCycleTicks: state.dayNightCycleTicks,
     visibleCells,
     revealedCells,
-    ruinMarkers,
     cities,
     players,
     resources,

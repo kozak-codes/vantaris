@@ -1,7 +1,6 @@
 import { FunctionalComponent } from 'preact';
 import { viewMode, orbitalBodies, viewedBodyId, exitPlanetView } from '../state/signals';
 import { ChatPanel } from './ChatPanel';
-import { TileView } from './TileView';
 import { TopBar } from './TopBar';
 import { WindowManager } from './WindowManager';
 
@@ -25,7 +24,6 @@ export const App: FunctionalComponent = () => {
     <>
       <TopBar />
       {mode === 'planet' && <PlanetView />}
-      <TileView />
       <WindowManager />
       <ChatPanel />
     </>

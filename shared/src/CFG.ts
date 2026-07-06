@@ -106,7 +106,6 @@ export interface ICFG {
   STOCKPILE_RAID_FRACTION: number;
   ENERGY_CREDITS_INITIAL: number;
   PLAYER_COLORS: string[];
-  RUIN_TYPE_TO_BUILDING: Record<string, string>;
 }
 
 // ──────────────────────────────────────────────
@@ -325,12 +324,4 @@ export const CFG: ICFG = {
     "#ff8844",
     "#8844ff",
   ],
-  RUIN_TYPE_TO_BUILDING: {
-    RUINED_FACTORY: "FACTORY",
-    COLLAPSED_MINE: "MINE",
-    OVERGROWN_FARM: "FARM",
-    RUINED_BARRACKS: "FARM",
-    RUINED_PORT: "FACTORY",
-    RUINED_CITY: "CITY",
-  },
 };
