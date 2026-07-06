@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { generateGlobe } from '../globe';
+import { CFG } from '@vantaris/shared';
 
 describe('generateGlobe', () => {
   it('should produce correct number of cells for level 3', () => {
@@ -87,7 +88,7 @@ describe('generateGlobe', () => {
 
   it('should produce cells on the globe surface (distance from origin ≈ radius)', () => {
     const { cells } = generateGlobe(3);
-    const R = 5;
+    const R = CFG.GLOBE.radius;
     for (const cell of cells) {
       const [x, y, z] = cell.center;
       const dist = Math.sqrt(x * x + y * y + z * z);

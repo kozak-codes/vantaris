@@ -335,8 +335,7 @@ export const TopBar: FunctionalComponent = () => {
     leftMenus.push({ id: 'construct', item: { label: 'Construct', children: CONSTRUCT_CHILDREN } });
   }
 
-  const cellData = selectedCellData.value;
-  const tileLabel = hasSelectedTile && cellData ? cellData.biome : null;
+  const tileLabel = hasSelectedTile ? selectedTileId.value : null;
 
   return (
     <div id="topbar" onClick={(e) => e.stopPropagation()}>

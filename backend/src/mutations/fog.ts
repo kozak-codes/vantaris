@@ -36,11 +36,7 @@ export function snapshotAndHideCell(state: GameState, playerId: string, cellId: 
   if (!cell) return;
   const snapshot = JSON.stringify({
     ownerId: cell.ownerId || null,
-    biome: cell.biome,
     ruin: cell.ruin || null,
-    elevation: cell.elevation,
-    moisture: cell.moisture,
-    temperature: cell.temperature,
   });
   player.fog.setRevealed(cellId, snapshot);
 }
@@ -195,12 +191,8 @@ export function buildPlayerSlice(
       if (cell) {
         visibleCells.push({
           cellId: cell.cellId,
-          biome: cell.biome,
           ownerId: cell.ownerId,
-          elevation: cell.elevation,
-          moisture: cell.moisture,
-          temperature: cell.temperature,
-          resourceYield: cell.resourceType !== ResourceType.NONE ? { primary: cell.resourceType as ResourceType, amount: cell.resourceAmount } : null,
+          resourceYield: null,
           ruin: (cell.ruin as RuinType) || null,
           ruinRevealed: cell.ruinRevealed,
         });
@@ -212,12 +204,8 @@ export function buildPlayerSlice(
         const data = JSON.parse(snapshot);
         revealedCells.push({
           cellId,
-          lastKnownBiome: data.biome || '',
           lastKnownOwnerId: data.ownerId || '',
           lastKnownRuin: data.ruin || null,
-          elevation: data.elevation ?? 0,
-          moisture: data.moisture ?? 0,
-          temperature: data.temperature ?? 0,
         });
         revealedCellIds.add(cellId);
       }

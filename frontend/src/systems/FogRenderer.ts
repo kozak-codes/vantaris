@@ -1,16 +1,8 @@
 import * as THREE from 'three';
 import { clientState } from '../state/ClientState';
 import { onStateUpdate } from '../state/ClientState';
-import { TerrainType } from '../types/index';
-import { TERRAIN_CONFIGS } from '../constants';
-import { sampleWorldTerrain } from '@vantaris/shared';
+import { CFG, sampleWorldTerrain } from '@vantaris/shared';
 
-const biomeColorMap = new Map<string, THREE.Color>(
-  (Object.entries(TERRAIN_CONFIGS) as [string, { color: string }][]).map(([key, val]) => [key, new THREE.Color(val.color)]),
-);
-
-const VISIBLE_COLOR_FACTOR = 1.0;
-const REVEALED_COLOR_FACTOR = 0.25;
 const UNREVEALED_COLOR = new THREE.Color('#111111');
 
 const TERRITORY_TINT_STRENGTH = 0.10;
@@ -63,8 +55,7 @@ export class FogRenderer {
       if (visibleSet.has(key)) {
         const data = clientState.visibleCells.get(key);
         if (data) {
-          const biomeColor = biomeColorMap.get(data.biome);
-          targetColor = biomeColor ? biomeColor.clone() : new THREE.Color('#333333');
+          targetColor = new THREE.Color('#333333');
           if (data.ownerId && data.ownerId !== '') {
             const ownerPlayer = clientState.players.get(data.ownerId);
             if (ownerPlayer) {
@@ -73,17 +64,10 @@ export class FogRenderer {
             }
           }
         } else {
-          targetColor = biomeColorMap.get(cell.biome)!.clone();
+          targetColor = new THREE.Color('#333333');
         }
       } else if (revealedSet.has(key)) {
-        const data = clientState.revealedCells.get(key);
-        const biome = data?.lastKnownBiome || cell.biome;
-        const biomeColor = biomeColorMap.get(biome);
-        if (biomeColor) {
-          targetColor = biomeColor.clone().lerp(UNREVEALED_COLOR, 0.7);
-        } else {
-          targetColor = new THREE.Color('#1a1a2e');
-        }
+        targetColor = new THREE.Color('#1a1a2e');
       } else {
         targetColor = UNREVEALED_COLOR.clone();
       }
@@ -136,7 +120,7 @@ export class FogRenderer {
 
     const positions: number[] = [];
     const colors: number[] = [];
-    const radius = 5;
+    const radius = CFG.GLOBE.radius;
     const seed = clientState.worldSeed;
 
     const sampleOnSurface = (v: [number, number, number]): THREE.Vector3 => {

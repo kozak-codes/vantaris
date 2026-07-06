@@ -1,9 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CFG } from '../CFG';
 import {
-  getPassableTerrain,
-  getMovementCost,
-  getCellBuildingCapacity,
   getFoodValue,
   getMaterialValue,
   getRawResources,
@@ -12,40 +9,6 @@ import {
   getResourceCategories,
 } from '../cfgHelpers';
 import { ResourceType } from '../types';
-
-describe('getPassableTerrain', () => {
-  it('includes PLAINS, FOREST, MOUNTAIN, DESERT, TUNDRA, PENTAGON', () => {
-    const result = getPassableTerrain(CFG);
-    expect(result).toContain('PLAINS');
-    expect(result).toContain('FOREST');
-    expect(result).toContain('MOUNTAIN');
-    expect(result).toContain('DESERT');
-    expect(result).toContain('TUNDRA');
-    expect(result).toContain('PENTAGON');
-  });
-
-  it('excludes OCEAN', () => {
-    const result = getPassableTerrain(CFG);
-    expect(result).not.toContain('OCEAN');
-  });
-});
-
-describe('getMovementCost', () => {
-  it('returns cost for each terrain', () => {
-    const costs = getMovementCost(CFG);
-    expect(costs.PLAINS).toBe(30);
-    expect(costs.OCEAN).toBe(Infinity);
-  });
-});
-
-describe('getCellBuildingCapacity', () => {
-  it('returns capacity for each terrain', () => {
-    const cap = getCellBuildingCapacity(CFG);
-    expect(cap.PLAINS).toBe(6);
-    expect(cap.OCEAN).toBe(0);
-    expect(cap.MOUNTAIN).toBe(3);
-  });
-});
 
 describe('getFoodValue / getMaterialValue', () => {
   it('returns food values for resources with foodValue > 0', () => {

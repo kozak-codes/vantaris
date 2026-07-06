@@ -97,7 +97,6 @@ export function createDebugAPI(
             : 'UNREVEALED';
         return {
           id: cell.id,
-          biome: cell.biome,
           visibility,
           isPentagon: cell.isPentagon,
           center: Array.from(cell.center),

@@ -14,16 +14,17 @@ const SQRT3 = Math.sqrt(3);
 const SUB_BIOME_COLORS: Record<SubBiomeType, number> = {
   [SubBiomeType.WATER]: 0x1a3a5a,
   [SubBiomeType.BEACH]: 0xc2b280,
-  [SubBiomeType.FLAT]: 0x88aa55,
-  [SubBiomeType.ROLLING]: 0x779944,
-  [SubBiomeType.HILLY]: 0x668833,
+  [SubBiomeType.FLAT]: 0x6a9a44,
+  [SubBiomeType.ROLLING]: 0x5a8a3a,
+  [SubBiomeType.HILLY]: 0x4a7a2a,
   [SubBiomeType.ROCKY]: 0x887755,
   [SubBiomeType.FOREST_DENSE]: 0x1a441a,
-  [SubBiomeType.FOREST_LIGHT]: 0x447744,
+  [SubBiomeType.FOREST_LIGHT]: 0x3a6633,
   [SubBiomeType.DUNES]: 0xddcc88,
   [SubBiomeType.CRAGS]: 0xaa8855,
   [SubBiomeType.ICE]: 0xaaccdd,
   [SubBiomeType.SNOW]: 0xeeeeff,
+  [SubBiomeType.TUNDRA]: 0x8a9a7a,
 };
 
 const SUBDIV = CFG.SUBHEX.planetSubdiv;

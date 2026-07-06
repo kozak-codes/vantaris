@@ -17,7 +17,6 @@ export type {
   CityData,
   PlayerResourceData,
   CityStockpileData,
-  PlateData,
   ChatMessage,
   AdjacencyMap,
   ResourceYield,
@@ -32,7 +31,6 @@ export type {
 } from './types';
 
 export {
-  TerrainType,
   FogVisibility,
   GamePhase,
   QueueType,
@@ -40,7 +38,6 @@ export {
   RuinType,
   ResourceType,
   ResourceTier,
-  BoundaryType,
   OrbitalBodyType,
   SubBiomeType,
 } from './types';
@@ -67,14 +64,9 @@ export {
   type MacroHexContext,
 } from './subhex';
 
-export { CFG, type ICFG, type TerrainConfig, type ResourceConfig } from './CFG';
+export { CFG, type ICFG, type ResourceConfig } from './CFG';
 
 export {
-  getPassableTerrain,
-  getMovementCost,
-  getCellBuildingCapacity,
-  getBuildingPlacementRules,
-  getExtractorTypes,
   getFoodValue,
   getMaterialValue,
   getRawResources,

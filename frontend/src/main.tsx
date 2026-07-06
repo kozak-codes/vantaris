@@ -59,7 +59,7 @@ const subHexRenderer = new SubHexWorldRenderer(globeRenderer.getGlobeGroup(), gl
 
 // Build a map of cellId → geometry data (center + boundary vertex positions)
 // for the SubHexWorldRenderer to use when building sub-hex terrain.
-const cellGeometryMap = new Map<string, { center: [number, number, number]; vertexPositions: [number, number, number][] }>();
+const cellGeometryMap = new Map<string, { center: [number, number, number]; vertexPositions: [number, number, number][]; vertexIds?: number[] }>();
 for (const cell of grid.cells) {
   const vertexPositions: [number, number, number][] = cell.vertexIds.map((fi: number) => {
     const dv = grid.vertices[fi];

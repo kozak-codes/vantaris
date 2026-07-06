@@ -68,6 +68,7 @@ export class SubHexWorldRenderer {
   private terrainDirty = false;
   private worker: Worker | null = null;
   private pendingCells = new Set<string>();
+  private inFlightCells = new Set<string>();
 
   constructor(parent: THREE.Object3D, macroMeshes?: Map<number, THREE.Mesh> | Map<string, THREE.Mesh>) {
     this.parent = parent;
@@ -93,6 +94,7 @@ export class SubHexWorldRenderer {
     this.worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
       const res = e.data;
       this.pendingCells.delete(res.cellId);
+      this.inFlightCells.delete(res.cellId);
 
       // Convert flat sphere positions back to Vector3 array.
       const spherePositions: THREE.Vector3[] = [];
@@ -124,14 +126,15 @@ export class SubHexWorldRenderer {
       this.worldSeed = seed;
       this.cellCache.clear();
       this.pendingCells.clear();
+      this.inFlightCells.clear();
       this.terrainDirty = true;
     }
   }
 
   updateVisibility(
-    visibleCells: Map<string, { biome: string; elevation: number; moisture: number; temperature: number }>,
+    visibleCells: Map<string, { ownerId: string }>,
     cellGeometry: Map<string, CellGeo>,
-    revealedCells?: Map<string, { lastKnownBiome: string; elevation: number; moisture: number; temperature: number }>,
+    revealedCells?: Map<string, { lastKnownOwnerId: string }>,
     adjacency?: Map<number, number[]>,
     allCellIds?: Set<string>,
   ): void {
@@ -188,12 +191,15 @@ export class SubHexWorldRenderer {
     }
 
     // Always check if any cell's visibility state changed (e.g. unexplored → visible).
-    // This must run even when the cell set changed, to evict stale cache entries.
+    // Request re-sampling but DON'T evict the old cache — it serves as a placeholder
+    // (old terrain/fog appearance) until the new sample arrives.
     for (const [cellId, newInfo] of newInfos) {
       const oldInfo = this.cellInfos.get(cellId);
-      if (!oldInfo) continue; // New cell — no cache to evict.
+      if (!oldInfo) { changed = true; continue; } // New cell — no placeholder needed.
       if (oldInfo.fogged !== newInfo.fogged || (oldInfo.unexplored ?? false) !== (newInfo.unexplored ?? false)) {
-        this.cellCache.delete(cellId);
+        // Force re-sampling by marking the cell as needing a new sample.
+        // We keep the old cache so the cell still renders until the new one arrives.
+        this.pendingCells.add(cellId);
         changed = true;
       }
     }
@@ -225,12 +231,21 @@ export class SubHexWorldRenderer {
    * Requests worker sampling for uncached cells, assembles cached data.
    */
   update(): void {
-    // Request sampling for uncached cells.
-    for (const [cellId, info] of this.cellInfos) {
-      if (this.cellCache.has(cellId)) continue;
+    // Mark uncached cells as pending (don't send yet — unified below).
+    for (const [cellId] of this.cellInfos) {
       if (this.pendingCells.has(cellId)) continue;
+      if (this.inFlightCells.has(cellId)) continue;
+      if (this.cellCache.has(cellId)) continue;
       this.pendingCells.add(cellId);
-      const req: WorkerRequest = {
+    }
+
+    // Send worker requests for pending cells (new + re-sampling).
+    for (const cellId of this.pendingCells) {
+      const info = this.cellInfos.get(cellId);
+      if (!info) { this.pendingCells.delete(cellId); continue; }
+      this.pendingCells.delete(cellId);
+      this.inFlightCells.add(cellId);
+      this.worker?.postMessage({
         cellId,
         center: info.geo.center,
         vertexPositions: info.geo.vertexPositions,
@@ -238,8 +253,7 @@ export class SubHexWorldRenderer {
         fogged: info.fogged,
         unexplored: info.unexplored ?? false,
         heightBlend: 1.0,
-      };
-      this.worker?.postMessage(req);
+      } as WorkerRequest);
     }
 
     if (!this.terrainDirty) return;
@@ -313,11 +327,18 @@ export class SubHexWorldRenderer {
       this.root.add(this.terrainMesh);
     }
 
-    // Build opaque fog mesh from all unexplored cells using simple macro hex
-    // geometry extruded to heightMax. Includes walls down to globe radius
-    // so the player can never see through or under it.
-    if (this.unexploredIds.size > 0) {
-      this.fogMesh = this.buildFogMesh();
+    // Build opaque fog mesh from all unexplored cells + any visible/revealed
+    // cells that don't have terrain data yet (still sampling in worker).
+    // These show fog as a placeholder until the terrain mesh arrives.
+    const fogPlaceholderIds = new Set<string>(this.unexploredIds);
+    for (const [cellId, info] of this.cellInfos) {
+      if (info.unexplored) continue;
+      if (!this.cellCache.has(cellId)) {
+        fogPlaceholderIds.add(cellId); // newly visible, no terrain yet
+      }
+    }
+    if (fogPlaceholderIds.size > 0) {
+      this.fogMesh = this.buildFogMesh(fogPlaceholderIds);
       this.root.add(this.fogMesh);
     }
 
@@ -325,17 +346,22 @@ export class SubHexWorldRenderer {
     this.buildBorderLines();
   }
 
-  private buildFogMesh(): THREE.Mesh {
+  private buildFogMesh(fogCellIds: Set<string>): THREE.Mesh {
     const globeRadius = CFG.GLOBE.radius;
     const wallHeight = CFG.SUBHEX.heightMax;
     const fogColor = new THREE.Color(0x0a0a14);
 
     const positions: number[] = [];
 
-    // Build a set of explored cell IDs for quick lookup.
-    const exploredIds = new Set(this.cellInfos.keys());
+    // Build a set of explored cell IDs (with terrain data) for wall edge detection.
+    const exploredIds = new Set<string>();
+    for (const [cellId, info] of this.cellInfos) {
+      if (!info.unexplored && this.cellCache.has(cellId)) {
+        exploredIds.add(cellId);
+      }
+    }
 
-    for (const cellId of this.unexploredIds) {
+    for (const cellId of fogCellIds) {
       const geo = this.cellGeometry.get(cellId);
       if (!geo) continue;
 
@@ -566,6 +592,7 @@ export class SubHexWorldRenderer {
     this.unexploredIds.clear();
     this.cellCache.clear();
     this.pendingCells.clear();
+    this.inFlightCells.clear();
     this.subHexDataMap.clear();
     for (const [, mesh] of this.constructionMeshes) {
       this.root.remove(mesh);

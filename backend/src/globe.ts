@@ -1,5 +1,4 @@
-import { TerrainType, CFG } from '@vantaris/shared';
-import { generateWorld } from './worldgen/pipeline';
+import { CFG } from '@vantaris/shared';
 
 interface Vec3 {
   x: number;
@@ -24,16 +23,7 @@ export interface ServerHexCell {
   id: string;
   center: [number, number, number];
   neighborIds: string[];
-  biome: TerrainType;
   isPentagon: boolean;
-  elevation: number;
-  moisture: number;
-  temperature: number;
-  plateId: string;
-  resourceType: string;
-  resourceAmount: number;
-  ruin: string;
-  ruinRevealed: boolean;
 }
 
 function createIcosahedron(radius: number): { vertices: Vec3[]; faces: [number, number, number][] } {
@@ -106,8 +96,6 @@ export function generateGlobe(subdivideLevel: number, worldSeed?: number): {
     }
   }
 
-  const seed = worldSeed ?? 42;
-
   const rawCells: { cellId: string; x: number; y: number; z: number; neighborIds: string[]; isPentagon: boolean }[] = [];
   const vertexToCellId = new Map<number, string>();
   const vertexIndices = Array.from(cellFaceMap.keys());
@@ -148,22 +136,11 @@ export function generateGlobe(subdivideLevel: number, worldSeed?: number): {
     adjacency.set(c.cellId, c.neighborIds);
   }
 
-  const world = generateWorld(rawCells, adjacency, seed);
-
-  const cells: ServerHexCell[] = world.cells.map(wc => ({
-    id: wc.cellId,
-    center: [wc.center.x, wc.center.y, wc.center.z],
-    neighborIds: wc.neighborIds,
-    biome: wc.biome,
-    isPentagon: wc.isPentagon,
-    elevation: wc.elevation,
-    moisture: wc.moisture,
-    temperature: wc.temperature,
-    plateId: wc.plateId,
-    resourceType: wc.resourceType,
-    resourceAmount: wc.resourceAmount,
-    ruin: wc.ruin,
-    ruinRevealed: wc.ruinRevealed,
+  const cells: ServerHexCell[] = rawCells.map(c => ({
+    id: c.cellId,
+    center: [c.x, c.y, c.z],
+    neighborIds: c.neighborIds,
+    isPentagon: c.isPentagon,
   }));
 
   return { cells, adjacency };

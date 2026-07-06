@@ -4,9 +4,10 @@ import {
 } from '../state/GameState';
 import {
   GamePhase, CFG, MATCHMAKING_CFG, AdjacencyMap, buildAdjacencyMap,
-  OrbitalBodyType, TerrainType,
+  OrbitalBodyType,
   type ConstructionType,
   constructionId,
+  sampleWorldTerrain,
 } from '@vantaris/shared';
 import { generateGlobe } from '../globe';
 import { computeVisibilityForPlayer, buildPlayerSlice } from '../mutations/fog';
@@ -60,18 +61,7 @@ export class VantarisRoom extends Room<GameState> {
     for (const cell of globe.cells) {
       const cellState = new CellState();
       cellState.cellId = cell.id;
-      cellState.biome = cell.biome;
       cellState.ownerId = '';
-      cellState.hasCity = false;
-      cellState.cityId = '';
-      cellState.elevation = cell.elevation;
-      cellState.moisture = cell.moisture;
-      cellState.temperature = cell.temperature;
-      cellState.plateId = cell.plateId;
-      cellState.resourceType = cell.resourceType as any;
-      cellState.resourceAmount = cell.resourceAmount;
-      cellState.ruin = cell.ruin;
-      cellState.ruinRevealed = cell.ruinRevealed;
       cellState.isPentagon = cell.isPentagon;
       this.state.cells.set(cell.id, cellState);
       cellIds.push(cell.id);
@@ -242,7 +232,14 @@ export class VantarisRoom extends Room<GameState> {
     if (body.landedCellId) return;
 
     const cell = this.state.cells.get(data.cellId);
-    if (!cell || cell.biome === TerrainType.OCEAN) return;
+    if (!cell) return;
+
+    // Check that the cell center isn't ocean by sampling the world terrain.
+    const center = this.cellPositions[data.cellId];
+    if (center) {
+      const { subBiome } = sampleWorldTerrain(center, this.state.worldSeed);
+      if (subBiome === 'WATER' || subBiome === 'ICE') return;
+    }
 
     body.landedCellId = data.cellId;
   }

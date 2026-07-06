@@ -82,11 +82,10 @@ export class FogOfWar {
     return newlyVisible;
   }
 
-  getCellInfo(cellId: number): { biome: string; fog: string; isPentagon: boolean } | null {
+  getCellInfo(cellId: number): { fog: string; isPentagon: boolean } | null {
     const cell = this.grid.cells[cellId];
     if (!cell) return null;
     return {
-      biome: cell.biome,
       fog: cell.fog,
       isPentagon: cell.isPentagon,
     };

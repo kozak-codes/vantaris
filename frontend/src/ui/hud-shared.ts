@@ -5,11 +5,6 @@ export const TIER_NAMES: Record<number, string> = {
   4: 'City', 5: 'Metropolis', 6: 'Megacity',
 };
 
-export const BIOME_TRAVEL_NAMES: Record<string, string> = {
-  PLAINS: 'Plains', FOREST: 'Forest', MOUNTAIN: 'Mountain',
-  DESERT: 'Desert', TUNDRA: 'Tundra', OCEAN: 'Ocean', PENTAGON: 'Pentagon',
-};
-
 export const RESOURCE_LABELS: Record<string, string> = Object.fromEntries(
   Object.keys(CFG.RESOURCES).map(k => [k, k.charAt(0) + k.slice(1).toLowerCase()])
 );

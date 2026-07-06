@@ -100,11 +100,7 @@ export const TileWindowContent: FunctionalComponent<{ cellId?: string }> = () =>
   return (
     <div class="win-content">
       <WinRow label="Cell" value={selectedTileId.value ?? ''} />
-      <WinRow label="Biome" value={cellData.biome} />
       <WinRow label="Owner" value={cellData.ownerId || 'Unclaimed'} />
-      <WinRow label="Elevation" value={cellData.elevation.toFixed(2)} />
-      <WinRow label="Moisture" value={cellData.moisture.toFixed(2)} />
-      <WinRow label="Temp" value={`${cellData.temperature.toFixed(1)}°C`} />
     </div>
   );
 };

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
+import { CFG } from '@vantaris/shared';
 
-const GLOBE_RADIUS = 5;
+const GLOBE_RADIUS = CFG.GLOBE.radius;
 const textureCache = new Map<string, THREE.Texture>();
 
 function createTextureFromSVG(svgString: string, size: number = 128): THREE.Texture {

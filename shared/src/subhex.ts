@@ -236,14 +236,6 @@ export interface MacroHexContext {
   macroCellId: string;
   /** Center of the macro hex in 3D world space (globe surface). */
   center: [number, number, number];
-  /** Biome of the macro hex. */
-  biome: string;
-  /** Elevation [0, 1] of the macro hex from worldgen. */
-  elevation: number;
-  /** Moisture [0, 1] of the macro hex from worldgen. */
-  moisture: number;
-  /** Temperature [0, 1] of the macro hex from worldgen. */
-  temperature: number;
 }
 
 /** Sea level — heights below this are ocean (flat, no displacement). */
@@ -266,10 +258,13 @@ export function sampleWorldTerrain(
 
   // Height: multi-octave fBm noise in world space.
   const n = fbm3D(px * heightNoiseScale, py * heightNoiseScale, pz * heightNoiseScale, worldSeed + 7919, 5);
-  // Add a second lower-frequency layer for larger landmass variation.
-  const n2 = fbm3D(px * 0.5, py * 0.5, pz * 0.5, worldSeed + 113, 3);
-  const combined = n * 0.7 + n2 * 0.3;
-  // Map [-1, 1] → [heightMin, heightMax].
+  // Lower-frequency continent shaping — determines where land vs ocean goes.
+  const continent = fbm3D(px * 0.35, py * 0.35, pz * 0.35, worldSeed + 113, 3);
+  // Bias the combined noise downward so ~40% of the surface is ocean.
+  // continent ∈ [-1,1], n ∈ [-1,1]. Blend and shift.
+  const combined = (continent * 0.6 + n * 0.4) - 0.3; // shift down → more ocean
+
+  // Map [-1, 1] → [heightMin, heightMax]. Below sea level = ocean.
   let height = (combined * 0.5 + 0.5) * (heightMax - heightMin) + heightMin;
 
   // Ocean: clamp to sea level (flat water surface, no height displacement).
@@ -279,9 +274,10 @@ export function sampleWorldTerrain(
   }
 
   // Latitude-based temperature: equator (y ≈ ±R) is hot, poles (y ≈ 0) are cold.
+  // Gentle curve so only the very poles are cold — no harsh arctic circle.
   const globeRadius = CFG.GLOBE.radius;
   const latitude = py / globeRadius; // [-1, 1]
-  const temperature = 1.0 - Math.abs(latitude) * 0.9; // equator=1, poles=0.1
+  const temperature = 1.0 - Math.abs(latitude) * 0.5; // equator=1, poles=0.5
 
   // Moisture: world-space noise.
   const moistureNoise = fbm3D(
@@ -347,7 +343,7 @@ function computeBuildable(
   subBiomes: SubBiomeType[],
   radius: number,
 ): boolean {
-  if (subBiomes[index] === SubBiomeType.WATER || subBiomes[index] === SubBiomeType.ICE) {
+  if (subBiomes[index] === SubBiomeType.WATER || subBiomes[index] === SubBiomeType.ICE || subBiomes[index] === SubBiomeType.ROCKY) {
     return false;
   }
   const neighbors = subHexNeighbors(index, radius);
@@ -376,37 +372,30 @@ function classifySubBiome(
     return SubBiomeType.BEACH;
   }
 
-  // Polar: ice and snow.
-  if (temperature < 0.25) {
-    return height > 0.25 ? SubBiomeType.SNOW : SubBiomeType.ICE;
+  // Only the very poles get snow — gentle temperature curve.
+  if (temperature < 0.55) {
+    return height > 0.25 ? SubBiomeType.SNOW : SubBiomeType.TUNDRA;
   }
 
   // Hot + dry: desert.
-  if (temperature > 0.75 && moisture < 0.35) {
+  if (temperature > 0.85 && moisture < 0.3) {
     return noiseVal > 0.3 ? SubBiomeType.CRAGS : SubBiomeType.DUNES;
   }
 
-  // Cold: tundra.
-  if (temperature < 0.35) {
-    return noiseVal > 0.2 ? SubBiomeType.ROCKY : SubBiomeType.SNOW;
-  }
-
-  // High elevation: mountains.
-  if (height > 0.25) {
+  // High elevation: mountains — only at significant height.
+  if (height > 0.35) {
     return SubBiomeType.ROCKY;
   }
 
-  // Forest based on moisture.
-  if (moisture > 0.6) {
-    return noiseVal > 0 ? SubBiomeType.FOREST_DENSE : SubBiomeType.FOREST_LIGHT;
+  // Forest based on moisture — most temperate land is green.
+  if (moisture > 0.55) {
+    return noiseVal > 0.2 ? SubBiomeType.FOREST_DENSE : SubBiomeType.FOREST_LIGHT;
   }
-  if (moisture > 0.4) {
-    return noiseVal > 0 ? SubBiomeType.FOREST_LIGHT : SubBiomeType.ROLLING;
+  if (moisture > 0.35) {
+    return noiseVal > 0.2 ? SubBiomeType.FOREST_LIGHT : SubBiomeType.FLAT;
   }
 
-  // Rolling hills vs flat.
-  if (height > 0.15) return SubBiomeType.HILLY;
-  if (height > 0.08) return SubBiomeType.ROLLING;
-  if (noiseVal > 0.4) return SubBiomeType.ROCKY;
+  // Gentle hills only at moderate elevation.
+  if (height > 0.15) return SubBiomeType.ROLLING;
   return SubBiomeType.FLAT;
 }

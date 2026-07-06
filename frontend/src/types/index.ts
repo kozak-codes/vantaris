@@ -1,5 +1,4 @@
 export {
-  TerrainType,
   FogVisibility,
   GamePhase,
   QueueType,

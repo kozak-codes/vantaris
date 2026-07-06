@@ -23,10 +23,11 @@ import { SubBiomeType } from '../types';
 const R = CFG.SUBHEX.radius;
 
 function makePositions(center: [number, number, number] = [3, 0, 4]): [number, number, number][] {
+  const scale = 8 / R; // keep sub-hex spacing proportional
   return generateSubHexCoords(R).map((c) => [
-    center[0] + c.q * 0.05,
-    center[1] + c.r * 0.04,
-    center[2] + c.q * 0.03,
+    center[0] + c.q * 0.05 * scale,
+    center[1] + c.r * 0.04 * scale,
+    center[2] + c.q * 0.03 * scale,
   ]);
 }
 
@@ -515,10 +516,10 @@ describe('generateSubHexesWorld', () => {
     }
   });
 
-  it('water sub-biomes are never buildable', () => {
-    const cells = generateSubHexesWorld(makePositions([0, -5, 0]), 42);
+  it('water and rocky sub-biomes are never buildable', () => {
+    const cells = generateSubHexesWorld(makePositions([0, -CFG.GLOBE.radius, 0]), 42);
     for (const c of cells) {
-      if (c.subBiome === SubBiomeType.WATER || c.subBiome === SubBiomeType.ICE) {
+      if (c.subBiome === SubBiomeType.WATER || c.subBiome === SubBiomeType.ICE || c.subBiome === SubBiomeType.ROCKY) {
         expect(c.buildable).toBe(false);
       }
     }
@@ -536,10 +537,10 @@ describe('generateSubHexesWorld', () => {
     }
   });
 
-  it('polar positions produce ice/snow sub-biomes', () => {
+  it('polar positions produce cold sub-biomes', () => {
     // Position near the pole (high |y| relative to globe radius)
-    const cells = generateSubHexesWorld(makePositions([0, 5, 0]), 42);
-    const coldTypes = new Set([SubBiomeType.ICE, SubBiomeType.SNOW]);
+    const cells = generateSubHexesWorld(makePositions([0, CFG.GLOBE.radius, 0]), 42);
+    const coldTypes = new Set([SubBiomeType.ICE, SubBiomeType.SNOW, SubBiomeType.TUNDRA]);
     const hasCold = cells.some((c) => coldTypes.has(c.subBiome));
     expect(hasCold).toBe(true);
   });
@@ -626,8 +627,8 @@ describe('sampleWorldTerrain', () => {
   });
 
   it('polar positions have cold sub-biomes', () => {
-    const { subBiome } = sampleWorldTerrain([0, 5, 0], 42);
-    expect([SubBiomeType.ICE, SubBiomeType.SNOW]).toContain(subBiome);
+    const { subBiome } = sampleWorldTerrain([0, CFG.GLOBE.radius, 0], 42);
+    expect([SubBiomeType.ICE, SubBiomeType.SNOW, SubBiomeType.TUNDRA]).toContain(subBiome);
   });
 
   it('returns valid SubBiomeType', () => {

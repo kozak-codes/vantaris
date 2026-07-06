@@ -1,5 +1,4 @@
 import {
-  TerrainType,
   ResourceType,
   type FogConfig,
   type GlobeConfig,
@@ -12,14 +11,6 @@ import {
 // interfaces — all gameplay-tunable values in one
 // place.  No derived data, no side effects.
 // ──────────────────────────────────────────────
-
-export interface TerrainConfig {
-  color: string;
-  weight: number;
-  passable: boolean;
-  cost: number;
-  capacity: number;
-}
 
 export interface ResourceConfig {
   tier: "raw" | "processed";
@@ -38,7 +29,6 @@ export interface ResourceConfig {
 }
 
 export interface ICFG {
-  TERRAIN: Record<string, TerrainConfig>;
   GLOBE: GlobeConfig;
   SUBHEX: SubHexConfig;
   FOG: FogConfig;
@@ -65,7 +55,6 @@ export interface ICFG {
     XP_PER_POP_PER_10: number;
     XP_FOOD_MULTIPLIER: number;
     XP_ENERGY_MULTIPLIER: number;
-    VALID_SPAWN_TERRAIN: TerrainType[];
     HOMES_PER_CITY: number;
   };
   SUPPLY_CHAIN: {
@@ -125,71 +114,18 @@ export interface ICFG {
 // ──────────────────────────────────────────────
 
 export const CFG: ICFG = {
-  // ─── Terrain (merged biome + terrain config) ──
-  TERRAIN: {
-    OCEAN: {
-      color: "#2299cc",
-      weight: 0.35,
-      passable: false,
-      cost: Infinity,
-      capacity: 0,
-    },
-    PLAINS: {
-      color: "#6aad4f",
-      weight: 0.25,
-      passable: true,
-      cost: 30,
-      capacity: 6,
-    },
-    FOREST: {
-      color: "#3d7a2a",
-      weight: 0.18,
-      passable: true,
-      cost: 60,
-      capacity: 5,
-    },
-    MOUNTAIN: {
-      color: "#998877",
-      weight: 0.1,
-      passable: true,
-      cost: 90,
-      capacity: 3,
-    },
-    DESERT: {
-      color: "#ddbb6a",
-      weight: 0.07,
-      passable: true,
-      cost: 30,
-      capacity: 4,
-    },
-    TUNDRA: {
-      color: "#bbdde6",
-      weight: 0.05,
-      passable: true,
-      cost: 60,
-      capacity: 4,
-    },
-    PENTAGON: {
-      color: "#557788",
-      weight: 0,
-      passable: true,
-      cost: 30,
-      capacity: 5,
-    },
-  } as Record<string, TerrainConfig>,
-
   GLOBE: {
-    radius: 5,
+    radius: 10,
     subdivideLevel: 3,
     borderWidth: 0.3,
   },
 
   // ─── Sub-hex (micro tiles within a macro hex) ──
   SUBHEX: {
-    // Hex-of-hexes layout radius. R=8 → 1+3*R*(R+1) = 217 sub-hexes per macro hex.
-    radius: 8,
+    // Hex-of-hexes layout radius. R=16 → 1+3*R*(R+1) = 817 sub-hexes per macro hex.
+    radius: 16,
     // Height displacement range (units along macro-hex normal direction).
-    heightMin: -0.08,
+    heightMin: -0.3,
     heightMax: 0.8,
     // Slope (height delta between adjacent sub-hexes) above which building is disallowed.
     maxBuildSlope: 0.04,
@@ -210,15 +146,15 @@ export const CFG: ICFG = {
   },
 
   CAMERA: {
-    minDistance: 6.1,
-    maxDistance: 25,
+    minDistance: 11.2,
+    maxDistance: 50,
     rotationDamping: 0.92,
     zoomSpeed: 1.0,
     zoomSpeedMin: 0.15,
-    zoomSlowDistance: 7.0,
+    zoomSlowDistance: 14.0,
     keyboardRotateSpeed: 2.5,
-    tileViewZoom: 7.5,
-    tileViewMaxZoom: 10.0,
+    tileViewZoom: 15.0,
+    tileViewMaxZoom: 20.0,
   },
 
   TICK_RATE_MS: 100,
@@ -315,7 +251,6 @@ export const CFG: ICFG = {
     XP_PER_POP_PER_10: 1,
     XP_FOOD_MULTIPLIER: 1.5,
     XP_ENERGY_MULTIPLIER: 1.3,
-    VALID_SPAWN_TERRAIN: [TerrainType.PLAINS] as TerrainType[],
     HOMES_PER_CITY: 6,
   },
 

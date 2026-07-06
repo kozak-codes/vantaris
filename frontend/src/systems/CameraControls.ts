@@ -85,8 +85,20 @@ export class CameraControls {
   }
 
   private rotateGlobe(dx: number, dy: number): void {
-    const zoomScale = this.currentDistance / CAMERA_CONFIG.minDistance;
-    const sensitivity = 0.005 * zoomScale;
+    // Rotation speed scales with distance — slower when zoomed in for fine control.
+    // Below zoomSlowDistance, ramps down to a fraction of full speed.
+    const dist = this.currentDistance;
+    const slow = CAMERA_CONFIG.zoomSlowDistance;
+    let speedScale: number;
+    if (dist >= slow) {
+      speedScale = dist / CAMERA_CONFIG.minDistance;
+    } else {
+      const t = (dist - CAMERA_CONFIG.minDistance) / (slow - CAMERA_CONFIG.minDistance);
+      const clamped = THREE.MathUtils.clamp(t, 0, 1);
+      // Ramp from 0.2 (at min) to full speed at zoomSlowDistance.
+      speedScale = 0.2 + 0.8 * clamped * (slow / CAMERA_CONFIG.minDistance);
+    }
+    const sensitivity = 0.005 * speedScale;
 
     const yawQuat = new THREE.Quaternion().setFromAxisAngle(
       new THREE.Vector3(0, 1, 0),

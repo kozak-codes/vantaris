@@ -2,7 +2,6 @@ import { Vector3 } from 'three';
 import type { HexCell, HexGrid as HexGridData } from '../types/index';
 import { FogVisibility } from '../types/index';
 import { GLOBE_CONFIG } from '../constants';
-import { assignBiomes } from './terrain';
 
 function midpoint(a: Vector3, b: Vector3): Vector3 {
   return new Vector3(
@@ -145,7 +144,6 @@ function buildDualGrid(
       id: cellId,
       center,
       vertexIds: orderedFaces,
-      biome: assignBiomes(cells.length),
       fog: FogVisibility.UNREVEALED,
       isPentagon,
     });

@@ -5,7 +5,7 @@
 // side effects.
 // ──────────────────────────────────────────────
 
-import type { ICFG, TerrainConfig, ResourceConfig } from './CFG';
+import type { ICFG, ResourceConfig } from './CFG';
 import { type ResourceType as RT } from './types';
 
 // ─── Internal shared helpers (DRY) ───────────
@@ -27,38 +27,6 @@ function getResourceFieldMap(cfg: ICFG, field: 'foodValue' | 'materialValue'): R
     if (v !== undefined && v > 0) result[key] = v;
   }
   return result;
-}
-
-// ─── Terrain helpers ─────────────────────────
-
-export function getPassableTerrain(cfg: ICFG): string[] {
-  return (Object.entries(cfg.TERRAIN) as [string, TerrainConfig][])
-    .filter(([, t]) => t.passable)
-    .map(([k]) => k);
-}
-
-export function getMovementCost(cfg: ICFG): Record<string, number> {
-  const result: Record<string, number> = {};
-  for (const [key, t] of Object.entries(cfg.TERRAIN) as [string, TerrainConfig][]) {
-    result[key] = t.cost;
-  }
-  return result;
-}
-
-export function getCellBuildingCapacity(cfg: ICFG): Record<string, number> {
-  const result: Record<string, number> = {};
-  for (const [key, t] of Object.entries(cfg.TERRAIN) as [string, TerrainConfig][]) {
-    result[key] = t.capacity;
-  }
-  return result;
-}
-
-export function getBuildingPlacementRules(cfg: ICFG): Record<string, string[]> {
-  return {};
-}
-
-export function getExtractorTypes(cfg: ICFG): string[] {
-  return [];
 }
 
 // ─── Resource helpers ────────────────────────

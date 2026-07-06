@@ -60,15 +60,6 @@ export enum CityTier {
   MEGACITY = 6,
 }
 
-export enum TerrainType {
-  OCEAN = 'OCEAN',
-  PLAINS = 'PLAINS',
-  FOREST = 'FOREST',
-  MOUNTAIN = 'MOUNTAIN',
-  DESERT = 'DESERT',
-  TUNDRA = 'TUNDRA',
-}
-
 export enum RuinType {
   RUINED_CITY = 'RUINED_CITY',
   RUINED_FACTORY = 'RUINED_FACTORY',
@@ -130,28 +121,8 @@ export interface PlayerResourceData {
   foodCreditRate: number;
 }
 
-export interface PlateData {
-  plateId: string;
-  type: 'oceanic' | 'continental';
-  driftX: number;
-  driftY: number;
-  driftZ: number;
-  seedCellId: string;
-}
-
-export enum BoundaryType {
-  CONVERGENT_CC = 'CONVERGENT_CC',
-  CONVERGENT_CO = 'CONVERGENT_CO',
-  CONVERGENT_OO = 'CONVERGENT_OO',
-  DIVERGENT_C = 'DIVERGENT_C',
-  DIVERGENT_O = 'DIVERGENT_O',
-  TRANSFORM = 'TRANSFORM',
-  NONE = 'NONE',
-}
-
 export interface CellSnapshot {
   ownerId: string | null;
-  biome: TerrainType;
   ruin: RuinType | null;
 }
 
@@ -163,7 +134,6 @@ export interface HexCell {
   id: number;
   center: [number, number, number];
   vertexIds: number[];
-  biome: TerrainType;
   fog: FogVisibility;
   isPentagon: boolean;
 }
@@ -176,7 +146,6 @@ export interface HexGrid {
 
 export interface CellRenderData {
   id: number;
-  biome: string;
   fog: FogVisibility;
   isPentagon: boolean;
 }
@@ -236,11 +205,7 @@ export interface PlayerStateSlice {
 
 export interface VisibleCellData {
   cellId: string;
-  biome: string;
   ownerId: string;
-  elevation: number;
-  moisture: number;
-  temperature: number;
   resourceYield: ResourceYield | null;
   ruin: RuinType | null;
   ruinRevealed: boolean;
@@ -248,12 +213,8 @@ export interface VisibleCellData {
 
 export interface RevealedCellData {
   cellId: string;
-  lastKnownBiome: string;
   lastKnownOwnerId: string;
   lastKnownRuin: RuinType | null;
-  elevation: number;
-  moisture: number;
-  temperature: number;
 }
 
 export interface RuinMarkerData {
@@ -350,6 +311,7 @@ export enum SubBiomeType {
   CRAGS = 'CRAGS',
   ICE = 'ICE',
   SNOW = 'SNOW',
+  TUNDRA = 'TUNDRA',
 }
 
 export type ConstructionType = 'HAB' | 'MINE' | 'FARM' | 'FACTORY' | 'ROAD' | 'PORT' | 'SPACEPORT';
