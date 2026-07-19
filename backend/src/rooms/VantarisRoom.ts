@@ -11,6 +11,7 @@ import {
 } from '@vantaris/shared';
 import { generateGlobe } from '../globe';
 import { computeVisibilityForPlayer, buildPlayerSlice } from '../mutations/fog';
+import { generateMacroHexSubHexes, computeSubHexPositions } from '../mutations/subhexTerrain';
 import { CellState } from '../state/CellState';
 import { PlayerState } from '../state/PlayerState';
 import { ConstructionState } from '../state/ConstructionState';
@@ -18,7 +19,6 @@ import { TickSystem } from '../systems/TickSystem';
 import { tickCityResourceDrain, tickCityXP, tickInflowResets } from '../mutations/resources';
 import { generateStartingSystem, spawnPlayerSpacecraft } from '../worldgen/system';
 import { updateOrbitalPositions, advanceOrbitalAnomalies } from '../systems/OrbitalMechanics';
-import { generateMacroHexSubHexes } from '../mutations/subhexTerrain';
 import { recalcMacroOwnership } from '../mutations/ownership';
 
 interface CreateOptions {
@@ -46,7 +46,7 @@ export class VantarisRoom extends Room<GameState> {
 
   async onCreate(options: CreateOptions): Promise<void> {
     const playerCount = options.spawnPoints?.length || 1;
-    const subdivideLevel = playerCount > 4 ? 4 : 3;
+    const subdivideLevel = CFG.GLOBE.subdivideLevel;
     this.maxClients = MATCHMAKING_CFG.MAX_PLAYERS;
     const worldSeed = options.worldSeed ?? hashStringToSeed(this.roomId);
     this.worldSeed = worldSeed;
@@ -123,6 +123,10 @@ export class VantarisRoom extends Room<GameState> {
 
     this.onMessage('land', (client, data: { bodyId: string; cellId: string }) => {
       this.handleLand(client, data);
+    });
+
+    this.onMessage('landNow', (client, data: { bodyId: string }) => {
+      this.handleLandNow(client, data);
     });
 
     this.onMessage('build', (client, data: { macroCellId: string; subHexIndex: number; type: ConstructionType }) => {
@@ -235,6 +239,103 @@ export class VantarisRoom extends Room<GameState> {
     }
 
     body.landedCellId = data.cellId;
+    body.landedSubHex = -1; // manual land — no specific sub-hex
+  }
+
+  private handleLandNow(client: Client, data: { bodyId: string }): void {
+    const body = this.state.orbitalBodies.get(data.bodyId);
+    if (!body || body.type !== OrbitalBodyType.SPACECRAFT) return;
+    if (body.ownerId !== client.sessionId) return;
+    if (body.landedCellId) return;
+
+    // Find the cell directly below the spacecraft.
+    const parent = this.state.orbitalBodies.get(body.elements.parent);
+    if (!parent) return;
+    const dx = body.posX - parent.posX;
+    const dy = body.posY - parent.posY;
+    const dz = body.posZ - parent.posZ;
+    const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (len === 0) return;
+    const ux = dx / len, uy = dy / len, uz = dz / len;
+
+    // Find closest macro cell by dot product.
+    let closestCellId: string | null = null;
+    let bestDot = -Infinity;
+    for (const [cellId, pos] of Object.entries(this.cellPositions)) {
+      const clen = Math.sqrt(pos[0] * pos[0] + pos[1] * pos[1] + pos[2] * pos[2]);
+      if (clen === 0) continue;
+      const dot = (pos[0] * ux + pos[1] * uy + pos[2] * uz) / clen;
+      if (dot > bestDot) {
+        bestDot = dot;
+        closestCellId = cellId;
+      }
+    }
+    if (!closestCellId) return;
+
+    // Try to find a buildable sub-hex in the closest cell, then BFS outward.
+    const tryCell = (cellId: string): { cellId: string; subHex: number } | null => {
+      const cell = this.state.cells.get(cellId);
+      if (!cell) return null;
+      const subHexes = generateMacroHexSubHexes(cell, this.cellPositions, this.state.worldSeed);
+      if (!subHexes) return null;
+
+      // Find the sub-hex closest to the center direction that is buildable.
+      const center = this.cellPositions[cellId];
+      if (!center) return null;
+      const cellLen = Math.sqrt(center[0] ** 2 + center[1] ** 2 + center[2] ** 2) || 1;
+      const cx = center[0] / cellLen, cy = center[1] / cellLen, cz = center[2] / cellLen;
+
+      // Compute sub-hex positions to find which is closest to the spacecraft direction.
+      const positions = computeSubHexPositions(center);
+      let bestIdx = -1;
+      let bestSubDot = -Infinity;
+      for (let i = 0; i < subHexes.length; i++) {
+        if (!subHexes[i].buildable) continue;
+        const p = positions[i];
+        const pLen = Math.sqrt(p[0] ** 2 + p[1] ** 2 + p[2] ** 2) || 1;
+        const dot = (p[0] * cx + p[1] * cy + p[2] * cz) / pLen;
+        // Score by how close this sub-hex is to the spacecraft direction
+        // (which is the same as the cell center direction since ux/uy/uz ≈ cx/cy/cz).
+        if (dot > bestSubDot) {
+          bestSubDot = dot;
+          bestIdx = i;
+        }
+      }
+      if (bestIdx >= 0) return { cellId, subHex: bestIdx };
+      return null;
+    };
+
+    // Try the closest cell first.
+    const result = tryCell(closestCellId);
+    if (result) {
+      body.landedCellId = result.cellId;
+      body.landedSubHex = result.subHex;
+      return;
+    }
+
+    // BFS outward to find the closest cell with a buildable sub-hex.
+    const visited = new Set<string>([closestCellId]);
+    const queue: { cellId: string; dist: number }[] = [{ cellId: closestCellId, dist: 0 }];
+
+    while (queue.length > 0) {
+      const { cellId, dist } = queue.shift()!;
+      if (dist > 0) {
+        const r = tryCell(cellId);
+        if (r) {
+          body.landedCellId = r.cellId;
+          body.landedSubHex = r.subHex;
+          return;
+        }
+      }
+      if (dist >= 5) continue;
+      const neighbors = this.adjacencyMap[cellId];
+      if (!neighbors) continue;
+      for (const nId of neighbors) {
+        if (visited.has(nId)) continue;
+        visited.add(nId);
+        queue.push({ cellId: nId, dist: dist + 1 });
+      }
+    }
   }
 
   private handleBuild(

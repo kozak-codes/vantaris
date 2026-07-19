@@ -1,4 +1,4 @@
-import { CFG, type SubHexData, SubBiomeType } from './index';
+import { CFG, type SubHexData, SubBiomeType, ElevationTier } from './index';
 
 // ─── Axial hex helpers ───────────────────────────
 
@@ -242,17 +242,20 @@ export interface MacroHexContext {
 const SEA_LEVEL = 0.0;
 
 /**
- * Sample terrain (height + sub-biome) at an arbitrary 3D world-space position
- * on the globe surface. Purely world-space noise — no macro hex input at all.
+ * Sample terrain (snapped height + tier + sub-biome) at an arbitrary 3D
+ * world-space position on the globe surface. Purely world-space noise — no
+ * macro hex input at all.
  *
- * Height is from multi-octave fBm noise. Ocean (height < sea level) is clamped
- * flat to sea level — no height displacement. Temperature is latitude-based.
- * Sub-biome is classified purely from height, temperature, moisture, and noise.
+ * Height is from multi-octave fBm noise, then snapped to one of 5 discrete
+ * elevation tiers (DEEP_WATER, SHALLOW_WATER, FLAT, HILL, MOUNTAIN) via the
+ * thresholds in CFG.SUBHEX.elevation. Each tier has a fixed height value, so
+ * the world has only 5 distinct heights. Sub-biome still varies within a tier
+ * via latitude-based temperature and world-space moisture noise.
  */
 export function sampleWorldTerrain(
   pos: [number, number, number],
   worldSeed: number,
-): { height: number; subBiome: SubBiomeType } {
+): { height: number; subBiome: SubBiomeType; tier: ElevationTier } {
   const { heightMin, heightMax, heightNoiseScale, subBiomeNoiseScale } = CFG.SUBHEX;
   const [px, py, pz] = pos;
 
@@ -261,17 +264,14 @@ export function sampleWorldTerrain(
   // Lower-frequency continent shaping — determines where land vs ocean goes.
   const continent = fbm3D(px * 0.35, py * 0.35, pz * 0.35, worldSeed + 113, 3);
   // Bias the combined noise downward so ~40% of the surface is ocean.
-  // continent ∈ [-1,1], n ∈ [-1,1]. Blend and shift.
-  const combined = (continent * 0.6 + n * 0.4) - 0.3; // shift down → more ocean
+  const combined = (continent * 0.6 + n * 0.4) - 0.3;
 
   // Map [-1, 1] → [heightMin, heightMax]. Below sea level = ocean.
-  let height = (combined * 0.5 + 0.5) * (heightMax - heightMin) + heightMin;
+  const rawHeight = (combined * 0.5 + 0.5) * (heightMax - heightMin) + heightMin;
 
-  // Ocean: clamp to sea level (flat water surface, no height displacement).
-  const isOcean = height < SEA_LEVEL;
-  if (isOcean) {
-    height = SEA_LEVEL;
-  }
+  // Snap to one of 5 discrete elevation tiers + a fixed height per tier.
+  const tier = classifyElevation(rawHeight);
+  const height = snapHeight(tier);
 
   // Latitude-based temperature: equator (y ≈ ±R) is hot, poles (y ≈ 0) are cold.
   // Gentle curve so only the very poles are cold — no harsh arctic circle.
@@ -298,9 +298,39 @@ export function sampleWorldTerrain(
     3,
   );
 
-  const subBiome = classifySubBiome(sb, height, temperature, moisture, isOcean);
+  const isOcean = tier === ElevationTier.DEEP_WATER || tier === ElevationTier.SHALLOW_WATER;
+  // Pass the RAW (continuous) height to the biome classifier — beaches are a
+  // thin shoreline band detected by raw height, and within-tier biome variety
+  // (forest vs flat vs rolling) relies on continuous height + moisture, not
+  // the snapped value.
+  const subBiome = classifySubBiome(sb, rawHeight, temperature, moisture, isOcean);
 
-  return { height, subBiome };
+  return { height, subBiome, tier };
+}
+
+/**
+ * Classify a continuous height value into one of 5 discrete elevation tiers
+ * using the thresholds in CFG.SUBHEX.elevation.
+ */
+export function classifyElevation(height: number): ElevationTier {
+  const { seaLevel, deepWater, hill, mountain } = CFG.SUBHEX.elevation;
+  if (height < deepWater) return ElevationTier.DEEP_WATER;
+  if (height < seaLevel) return ElevationTier.SHALLOW_WATER;
+  if (height < hill) return ElevationTier.FLAT;
+  if (height < mountain) return ElevationTier.HILL;
+  return ElevationTier.MOUNTAIN;
+}
+
+/** Fixed snapped height value for a given elevation tier. */
+export function snapHeight(tier: ElevationTier): number {
+  const e = CFG.SUBHEX.elevation;
+  switch (tier) {
+    case ElevationTier.DEEP_WATER: return e.deepWaterHeight;
+    case ElevationTier.SHALLOW_WATER: return e.shallowWaterHeight;
+    case ElevationTier.FLAT: return e.flatHeight;
+    case ElevationTier.HILL: return e.hillHeight;
+    case ElevationTier.MOUNTAIN: return e.mountainHeight;
+  }
 }
 
 /**
@@ -314,21 +344,24 @@ export function generateSubHexesWorld(
   const coords = generateSubHexCoords(radius);
 
   const heights: number[] = [];
+  const tiers: ElevationTier[] = [];
   const subBiomes: SubBiomeType[] = [];
 
   for (let i = 0; i < coords.length; i++) {
-    const { height, subBiome } = sampleWorldTerrain(subHexPositions[i], worldSeed);
+    const { height, tier, subBiome } = sampleWorldTerrain(subHexPositions[i], worldSeed);
     heights.push(height);
+    tiers.push(tier);
     subBiomes.push(subBiome);
   }
 
   const cells: SubHexData[] = coords.map((c, i) => {
-    const buildable = computeBuildable(i, heights, subBiomes, radius);
+    const buildable = computeBuildable(i, tiers, subBiomes, radius);
     return {
       index: i,
       q: c.q,
       r: c.r,
       height: heights[i],
+      tier: tiers[i],
       subBiome: subBiomes[i],
       buildable,
     };
@@ -339,25 +372,31 @@ export function generateSubHexesWorld(
 
 function computeBuildable(
   index: number,
-  heights: number[],
+  tiers: ElevationTier[],
   subBiomes: SubBiomeType[],
   radius: number,
 ): boolean {
-  if (subBiomes[index] === SubBiomeType.WATER || subBiomes[index] === SubBiomeType.ICE || subBiomes[index] === SubBiomeType.ROCKY) {
+  const tier = tiers[index];
+  // Water and mountains are never buildable.
+  if (tier === ElevationTier.DEEP_WATER || tier === ElevationTier.SHALLOW_WATER || tier === ElevationTier.MOUNTAIN) {
     return false;
   }
+  // Biome-based exclusions: rocky crags and ice are unbuildable surfaces.
+  if (subBiomes[index] === SubBiomeType.ROCKY || subBiomes[index] === SubBiomeType.ICE) {
+    return false;
+  }
+  // Disallow building across a tier boundary — keeps building plots on a
+  // single flat tier, which is the whole point of discretizing heights.
   const neighbors = subHexNeighbors(index, radius);
   for (const ni of neighbors) {
-    if (Math.abs(heights[index] - heights[ni]) > CFG.SUBHEX.maxBuildSlope) {
-      return false;
-    }
+    if (tiers[ni] !== tier) return false;
   }
   return true;
 }
 
 function classifySubBiome(
   noiseVal: number, // [-1, 1]
-  height: number,
+  height: number,   // raw continuous height — used for shoreline + elevation bands
   temperature: number,
   moisture: number,
   isOcean: boolean,
@@ -367,7 +406,7 @@ function classifySubBiome(
     return SubBiomeType.WATER;
   }
 
-  // Beach at the shoreline.
+  // Beach at the shoreline — thin band just above sea level on the raw height.
   if (height < 0.015) {
     return SubBiomeType.BEACH;
   }

@@ -139,3 +139,9 @@ export function sendScrap(constructionId: string): void {
     currentRoom.send('scrap', { constructionId });
   }
 }
+
+export function sendLand(bodyId: string): void {
+  if (currentRoom) {
+    currentRoom.send('landNow', { bodyId });
+  }
+}

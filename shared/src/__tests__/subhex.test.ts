@@ -14,9 +14,11 @@ import {
   subHexSize,
   generateSubHexesWorld,
   sampleWorldTerrain,
+  classifyElevation,
+  snapHeight,
   type AxialCoord,
 } from '../subhex';
-import { SubBiomeType } from '../types';
+import { SubBiomeType, ElevationTier } from '../types';
 
 // ─── Helpers ────────────────────────────────────────
 
@@ -562,6 +564,7 @@ describe('generateSubHexesWorld', () => {
       expect(typeof c.q).toBe('number');
       expect(typeof c.r).toBe('number');
       expect(typeof c.height).toBe('number');
+      expect(Object.values(ElevationTier)).toContain(c.tier);
       expect(typeof c.subBiome).toBe('string');
       expect(typeof c.buildable).toBe('boolean');
     }
@@ -600,16 +603,39 @@ describe('sampleWorldTerrain', () => {
     expect(a.subBiome).toBe(b.subBiome);
   });
 
-  it('different positions produce different heights', () => {
-    const a = sampleWorldTerrain([1, 2, 3], 42);
-    const b = sampleWorldTerrain([3, 2, 1], 42);
-    expect(a.height).not.toBe(b.height);
+  it('different positions produce different terrain', () => {
+    // Heights are snapped to 5 discrete tiers, so single-point comparison is
+    // brittle (two arbitrary points may share a tier). Sample several and
+    // assert at least two distinct terrain signatures.
+    const sigs = new Set<string>();
+    for (let i = 0; i < 30; i++) {
+      const t = sampleWorldTerrain([i * 0.7, 1 + i * 0.3, 3 - i * 0.2], 42);
+      sigs.add(`${t.height}|${t.tier}|${t.subBiome}`);
+    }
+    expect(sigs.size).toBeGreaterThan(1);
   });
 
-  it('different seeds produce different heights', () => {
-    const a = sampleWorldTerrain([1, 2, 3], 42);
-    const b = sampleWorldTerrain([1, 2, 3], 999);
-    expect(a.height).not.toBe(b.height);
+  it('different seeds produce different terrain', () => {
+    const sigs42 = new Set<string>();
+    const sigs999 = new Set<string>();
+    for (let i = 0; i < 30; i++) {
+      const a = sampleWorldTerrain([i * 0.7, 1 + i * 0.3, 3 - i * 0.2], 42);
+      const b = sampleWorldTerrain([i * 0.7, 1 + i * 0.3, 3 - i * 0.2], 999);
+      sigs42.add(`${a.height}|${a.tier}|${a.subBiome}`);
+      sigs999.add(`${b.height}|${b.tier}|${b.subBiome}`);
+    }
+    // The two seeds should produce at least one different terrain signature
+    // somewhere across the sampled positions.
+    let differ = false;
+    for (let i = 0; i < 30; i++) {
+      const a = sampleWorldTerrain([i * 0.7, 1 + i * 0.3, 3 - i * 0.2], 42);
+      const b = sampleWorldTerrain([i * 0.7, 1 + i * 0.3, 3 - i * 0.2], 999);
+      if (a.height !== b.height || a.tier !== b.tier || a.subBiome !== b.subBiome) {
+        differ = true;
+        break;
+      }
+    }
+    expect(differ).toBe(true);
   });
 
   it('height is within configured range', () => {
@@ -634,5 +660,99 @@ describe('sampleWorldTerrain', () => {
   it('returns valid SubBiomeType', () => {
     const { subBiome } = sampleWorldTerrain([1, 1, 1], 42);
     expect(Object.values(SubBiomeType)).toContain(subBiome);
+  });
+
+  it('returns a tier field', () => {
+    const { tier } = sampleWorldTerrain([1, 1, 1], 42);
+    expect(Object.values(ElevationTier)).toContain(tier);
+  });
+});
+
+// ─── classifyElevation / snapHeight ──────────────────
+
+describe('classifyElevation', () => {
+  const { seaLevel, deepWater, hill, mountain } = CFG.SUBHEX.elevation;
+
+  it('classifies heights below deepWater as DEEP_WATER', () => {
+    expect(classifyElevation(deepWater - 0.01)).toBe(ElevationTier.DEEP_WATER);
+  });
+
+  it('classifies heights in [deepWater, seaLevel) as SHALLOW_WATER', () => {
+    expect(classifyElevation(deepWater)).toBe(ElevationTier.SHALLOW_WATER);
+    expect(classifyElevation(seaLevel - 0.001)).toBe(ElevationTier.SHALLOW_WATER);
+  });
+
+  it('classifies heights in [seaLevel, hill) as FLAT', () => {
+    expect(classifyElevation(seaLevel)).toBe(ElevationTier.FLAT);
+    expect(classifyElevation(hill - 0.001)).toBe(ElevationTier.FLAT);
+  });
+
+  it('classifies heights in [hill, mountain) as HILL', () => {
+    expect(classifyElevation(hill)).toBe(ElevationTier.HILL);
+    expect(classifyElevation(mountain - 0.001)).toBe(ElevationTier.HILL);
+  });
+
+  it('classifies heights >= mountain as MOUNTAIN', () => {
+    expect(classifyElevation(mountain)).toBe(ElevationTier.MOUNTAIN);
+    expect(classifyElevation(mountain + 10)).toBe(ElevationTier.MOUNTAIN);
+  });
+});
+
+describe('snapHeight', () => {
+  it('returns a distinct value per tier', () => {
+    const vals = new Set<number>();
+    for (const tier of Object.values(ElevationTier)) {
+      vals.add(snapHeight(tier));
+    }
+    expect(vals.size).toBe(5);
+  });
+
+  it('returns the configured height for each tier', () => {
+    const e = CFG.SUBHEX.elevation;
+    expect(snapHeight(ElevationTier.DEEP_WATER)).toBe(e.deepWaterHeight);
+    expect(snapHeight(ElevationTier.SHALLOW_WATER)).toBe(e.shallowWaterHeight);
+    expect(snapHeight(ElevationTier.FLAT)).toBe(e.flatHeight);
+    expect(snapHeight(ElevationTier.HILL)).toBe(e.hillHeight);
+    expect(snapHeight(ElevationTier.MOUNTAIN)).toBe(e.mountainHeight);
+  });
+
+  it('orders tiers deep → mountain ascending', () => {
+    expect(snapHeight(ElevationTier.DEEP_WATER)).toBeLessThan(snapHeight(ElevationTier.SHALLOW_WATER));
+    expect(snapHeight(ElevationTier.SHALLOW_WATER)).toBeLessThan(snapHeight(ElevationTier.FLAT));
+    expect(snapHeight(ElevationTier.FLAT)).toBeLessThan(snapHeight(ElevationTier.HILL));
+    expect(snapHeight(ElevationTier.HILL)).toBeLessThan(snapHeight(ElevationTier.MOUNTAIN));
+  });
+});
+
+describe('sampleWorldTerrain discretization', () => {
+  it('height is always one of the 5 snapped values', () => {
+    const allowed = new Set<number>([
+      snapHeight(ElevationTier.DEEP_WATER),
+      snapHeight(ElevationTier.SHALLOW_WATER),
+      snapHeight(ElevationTier.FLAT),
+      snapHeight(ElevationTier.HILL),
+      snapHeight(ElevationTier.MOUNTAIN),
+    ]);
+    for (let i = 0; i < 100; i++) {
+      const pos: [number, number, number] = [
+        Math.random() * 20 - 10,
+        Math.random() * 20 - 10,
+        Math.random() * 20 - 10,
+      ];
+      const { height } = sampleWorldTerrain(pos, 42);
+      expect(allowed.has(height)).toBe(true);
+    }
+  });
+
+  it('tier matches the snapped height', () => {
+    for (let i = 0; i < 50; i++) {
+      const pos: [number, number, number] = [
+        Math.random() * 20 - 10,
+        Math.random() * 20 - 10,
+        Math.random() * 20 - 10,
+      ];
+      const { height, tier } = sampleWorldTerrain(pos, 42 + i);
+      expect(height).toBe(snapHeight(tier));
+    }
   });
 });

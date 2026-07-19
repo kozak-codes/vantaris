@@ -38,6 +38,7 @@ export {
   ResourceTier,
   OrbitalBodyType,
   SubBiomeType,
+  ElevationTier,
 } from './types';
 
 export type { ConstructionType } from './types';
@@ -59,6 +60,8 @@ export {
   subHexSize,
   generateSubHexesWorld,
   sampleWorldTerrain,
+  classifyElevation,
+  snapHeight,
   type MacroHexContext,
 } from './subhex';
 

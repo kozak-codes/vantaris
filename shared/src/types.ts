@@ -43,8 +43,9 @@ export interface OrbitalBodyData {
   // Current world-space position relative to the star, in km. Server-authoritative,
   // recomputed each tick from the orbital elements. Clients render from this.
   position: [number, number, number];
-  // For spacecraft that have landed on a planet, the cellId they occupy.
+  // For spacecraft that have landed on a planet, the cellId + sub-hex index they occupy.
   landedCellId: string | null;
+  landedSubHex: number; // -1 if not landed or not set
 }
 
 export enum QueueType {
@@ -163,6 +164,20 @@ export interface SubHexConfig {
   heightNoiseScale: number;
   subBiomeNoiseScale: number;
   planetSubdiv: number;
+  /** Discrete elevation tiers — height snaps to one of 5 buckets. */
+  elevation: {
+    /** Tier boundaries (continuous height → tier). */
+    seaLevel: number;
+    deepWater: number;
+    hill: number;
+    mountain: number;
+    /** Snapped height value assigned to each tier. */
+    deepWaterHeight: number;
+    shallowWaterHeight: number;
+    flatHeight: number;
+    hillHeight: number;
+    mountainHeight: number;
+  };
 }
 
 export interface CameraConfig {
@@ -271,9 +286,12 @@ export interface SubHexData {
   q: number;
   /** Axial r coordinate within the macro hex. */
   r: number;
-  /** Height displacement along the macro-hex normal (units). */
+  /** Snapped height displacement along the macro-hex normal (units).
+   *  One of 5 discrete values derived from CFG.SUBHEX.elevation. */
   height: number;
-  /** Sub-biome, derived from world-space noise + macro biome. */
+  /** Elevation tier — which of the 5 height buckets this sub-hex is in. */
+  tier: ElevationTier;
+  /** Sub-biome, derived from snapped height + temperature + moisture + noise. */
   subBiome: SubBiomeType;
   /** True if this sub-hex is buildable (not water, slope within limits). */
   buildable: boolean;
@@ -293,6 +311,19 @@ export enum SubBiomeType {
   ICE = 'ICE',
   SNOW = 'SNOW',
   TUNDRA = 'TUNDRA',
+}
+
+/**
+ * Discrete elevation tier — the height field is snapped to one of these 5
+ * buckets before biome classification, so the world has only 5 distinct
+ * heights. Biomes still vary within a tier via temperature/moisture noise.
+ */
+export enum ElevationTier {
+  DEEP_WATER = 'DEEP_WATER',
+  SHALLOW_WATER = 'SHALLOW_WATER',
+  FLAT = 'FLAT',
+  HILL = 'HILL',
+  MOUNTAIN = 'MOUNTAIN',
 }
 
 export type ConstructionType = 'HAB' | 'MINE' | 'FARM' | 'FACTORY' | 'ROAD' | 'PORT' | 'SPACEPORT';

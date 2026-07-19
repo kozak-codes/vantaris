@@ -1,6 +1,6 @@
 import { Room, Client, matchMaker } from '@colyseus/core';
 import { MatchmakingState } from '../state/MatchmakingState';
-import { GamePhase, QueueType } from '@vantaris/shared';
+import { GamePhase, QueueType, CFG } from '@vantaris/shared';
 import { MATCHMAKING_CFG } from '@vantaris/shared';
 import {
   addPlayerToQueue,
@@ -95,8 +95,11 @@ export class MatchmakingRoom extends Room<MatchmakingState> {
   }
 
   private generateSpawnPoints(playerCount: number): { cellId: string }[] {
-    const subdivideLevel = playerCount > 4 ? 4 : 3;
-    const totalCells = subdivideLevel === 3 ? 642 : 2562;
+    const subdivideLevel = CFG.GLOBE.subdivideLevel;
+    const totalCells = subdivideLevel === 3 ? 642
+      : subdivideLevel === 4 ? 2562
+      : subdivideLevel === 5 ? 10242
+      : Math.pow(4, subdivideLevel) * 10 + 2;
     const step = Math.floor(totalCells / playerCount);
     const spawnPoints: { cellId: string }[] = [];
 

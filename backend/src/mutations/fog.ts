@@ -306,6 +306,7 @@ export function buildPlayerSlice(
       fuelCapacity: b.fuelCapacity,
       position: [b.posX, b.posY, b.posZ],
       landedCellId: b.landedCellId || null,
+      landedSubHex: b.landedSubHex ?? -1,
     });
   }
 

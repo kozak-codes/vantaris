@@ -1,6 +1,7 @@
 import { FunctionalComponent } from 'preact';
 import { useComputed } from '@preact/signals';
 import { orbitalBodies, myPlayerId, selectedTileId, selectedCellData } from '../state/signals';
+import { sendLand } from '../network/ColyseusClient';
 import type { OrbitalBodyData } from '@vantaris/shared';
 import type { WindowContentDescriptor } from '../state/windows';
 
@@ -80,6 +81,7 @@ export const SpacecraftWindowContent: FunctionalComponent<{ bodyId: string }> = 
   const body = orbitalBodies.value.get(bodyId);
   if (!body) return null;
   const isOwn = body.ownerId === myPlayerId.value;
+  const canLand = isOwn && !body.landedCellId;
   return (
     <div class="win-content">
       <WinRow label="Type" value="Spacecraft" />
@@ -90,6 +92,25 @@ export const SpacecraftWindowContent: FunctionalComponent<{ bodyId: string }> = 
       <WinRow label="Orbit" value={fmtKm(body.elements.semiMajorAxis)} />
       <WinRow label="Period" value={fmtPeriod(body.elements.period)} />
       <WinRow label="Fuel" value={`${Math.round(body.fuel)} / ${Math.round(body.fuelCapacity)}`} />
+      {canLand && (
+        <button
+          onClick={() => sendLand(bodyId)}
+          style={{
+            marginTop: '8px',
+            width: '100%',
+            padding: '8px 12px',
+            cursor: 'pointer',
+            background: '#3a6a3a',
+            color: '#fff',
+            border: '1px solid #5a8a5a',
+            borderRadius: '4px',
+            fontWeight: 'bold',
+            fontSize: '13px',
+          }}
+        >
+          LAND NOW
+        </button>
+      )}
     </div>
   );
 };

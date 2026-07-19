@@ -115,7 +115,7 @@ export interface ICFG {
 export const CFG: ICFG = {
   GLOBE: {
     radius: 10,
-    subdivideLevel: 3,
+    subdivideLevel: 4,
     borderWidth: 0.3,
   },
 
@@ -133,6 +133,23 @@ export const CFG: ICFG = {
     subBiomeNoiseScale: 1.2,
     // Mesh subdivision per triangle.
     planetSubdiv: 32,
+    // Discrete elevation tiers — height snaps to one of 5 buckets.
+    // Biomes still vary within a tier via temperature/moisture noise (the
+    // raw continuous height is what the biome classifier sees).
+    elevation: {
+      // Tier boundaries on the continuous noise output.
+      seaLevel: 0.0,
+      deepWater: -0.15,
+      hill: 0.15,
+      mountain: 0.35,
+      // Snapped height value assigned per tier. Kept close together so tier
+      // transitions are gentle steps, not massive cliffs.
+      deepWaterHeight: -0.12,
+      shallowWaterHeight: -0.04,
+      flatHeight: 0.02,
+      hillHeight: 0.1,
+      mountainHeight: 0.18,
+    },
   },
 
   FOG: {

@@ -26,4 +26,5 @@ export class OrbitalBodyState extends Schema {
   @type('number') posY: number = 0;
   @type('number') posZ: number = 0;
   @type('string') landedCellId: string = '';
+  @type('number') landedSubHex: number = -1;
 }
