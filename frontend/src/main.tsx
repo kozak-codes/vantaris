@@ -8,7 +8,7 @@ import { SelectionRenderer } from './systems/SelectionRenderer';
 import { DayNightRenderer } from './systems/DayNightRenderer';
 import { SpacecraftRenderer } from './systems/SpacecraftRenderer';
 import { SubHexWorldRenderer } from './systems/SubHexWorldRenderer';
-import { CameraControls } from './systems/CameraControls';
+import { CameraControls, setActiveCameraControls } from './systems/CameraControls';
 import { LobbyUI } from './ui/LobbyUI';
 import { GlobeInput } from './systems/GlobeInput';
 import { createDebugAPI } from './systems/DebugAPI';
@@ -73,6 +73,7 @@ for (const cell of grid.cells) {
 
 render(<App />, document.getElementById('hud-root')!);
 const cameraControls = new CameraControls(camera, canvas, pivot);
+setActiveCameraControls(cameraControls);
 const globeInput = new GlobeInput(canvas, camera, globeRenderer.getGlobeGroup());
 globeInput.setGrid(grid);
 globeInput.setCameraControls(cameraControls);

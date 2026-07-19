@@ -3,6 +3,18 @@ import { CAMERA_CONFIG } from '../constants';
 
 const TOUCH_MOVE_THRESHOLD = 5;
 
+// Module-level singleton so other modules (e.g. landing-target selection)
+// can drive the camera without a direct reference handed through props.
+let activeCameraControls: CameraControls | null = null;
+
+export function setActiveCameraControls(cc: CameraControls | null): void {
+  activeCameraControls = cc;
+}
+
+export function getActiveCameraControls(): CameraControls | null {
+  return activeCameraControls;
+}
+
 export class CameraControls {
   private camera: THREE.PerspectiveCamera;
   private canvas: HTMLCanvasElement;

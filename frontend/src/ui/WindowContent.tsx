@@ -1,6 +1,8 @@
 import { FunctionalComponent } from 'preact';
 import { useComputed } from '@preact/signals';
 import { orbitalBodies, myPlayerId, selectedTileId, selectedCellData, landingTargetBodyId, beginLandingTarget, cancelLandingTarget, landingError, enterPlanetView } from '../state/signals';
+import { getActiveCameraControls } from '../systems/CameraControls';
+import { CFG } from '@vantaris/shared';
 import type { OrbitalBodyData } from '@vantaris/shared';
 import type { WindowContentDescriptor } from '../state/windows';
 
@@ -101,8 +103,29 @@ export const SpacecraftWindowContent: FunctionalComponent<{ bodyId: string }> = 
         <button
           onClick={() => {
             // Switch to planet view of the lander's parent so the globe is
-            // visible and clickable, then enter target-pick mode.
+            // visible and clickable, then rotate the globe so the lander's
+            // sub-point is centered on screen, then enter target-pick mode.
             enterPlanetView(body.elements.parent);
+            const parent = orbitalBodies.value.get(body.elements.parent);
+            if (parent) {
+              const dx = body.position[0] - parent.position[0];
+              const dy = body.position[1] - parent.position[1];
+              const dz = body.position[2] - parent.position[2];
+              const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+              if (len > 0) {
+                // Sub-point direction in globe-local space (unit vector from
+                // globe center toward the lander). Scale to globe radius so
+                // focusCellZoomed gets a point on the surface.
+                const r = CFG.GLOBE.radius;
+                const center: [number, number, number] = [
+                  (dx / len) * r,
+                  (dy / len) * r,
+                  (dz / len) * r,
+                ];
+                const cc = getActiveCameraControls();
+                if (cc) cc.focusCellZoomed(center, 15, 800);
+              }
+            }
             beginLandingTarget(bodyId);
           }}
           style={{

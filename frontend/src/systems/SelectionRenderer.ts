@@ -1,17 +1,23 @@
 import * as THREE from 'three';
 import { clientState, onStateUpdate } from '../state/ClientState';
 import { GLOBE_RADIUS } from './IconFactory';
-import { sampleWorldTerrain } from '@vantaris/shared';
+import { sampleWorldTerrain, CFG } from '@vantaris/shared';
+import { landingTargetBodyId, orbitalBodies } from '../state/signals';
 
 const COLOR_HOVER = 0xffffff;
+const COLOR_LANDING_VALID = 0x44ff44;
+const COLOR_LANDING_SUBPOINT = 0xffaa00;
 
 export class SelectionRenderer {
   private globe: THREE.Group;
   private grid: any;
   private hexRing: THREE.LineSegments | null = null;
   private hoverRing: THREE.LineSegments | null = null;
+  private landingRings: THREE.LineSegments[] = [];
   private currentTileId: string | null = null;
   private currentHoveredCellId: string | null = null;
+  private currentLandingTargetBodyId: string | null = null;
+  private currentLandingSubCellId: string | null = null;
 
   constructor(globe: THREE.Group, grid: any) {
     this.globe = globe;
@@ -29,12 +35,15 @@ export class SelectionRenderer {
   private onStateChange(): void {
     const tileId = clientState.selectedTileId;
     const hoveredId = clientState.hoveredCellId;
+    const landingBodyId = landingTargetBodyId.value;
 
     const tileChanged = tileId !== this.currentTileId;
     const hoverChanged = hoveredId !== this.currentHoveredCellId;
+    const landingChanged = landingBodyId !== this.currentLandingTargetBodyId;
 
     this.currentTileId = tileId;
     this.currentHoveredCellId = hoveredId;
+    this.currentLandingTargetBodyId = landingBodyId;
 
     if (tileChanged) {
       this.rebuildSelection();
@@ -42,6 +51,10 @@ export class SelectionRenderer {
 
     if (hoverChanged) {
       this.rebuildHover();
+    }
+
+    if (landingChanged) {
+      this.rebuildLandingHighlight();
     }
   }
 
@@ -129,10 +142,111 @@ export class SelectionRenderer {
     }
   }
 
+  /**
+   * Highlight every cell within `CFG.LANDING.wiggleCells` adjacency hops of
+   * the lander's current sub-point, so the player can see which tiles are
+   * valid landing targets. The sub-point itself is drawn in a different color.
+   */
+  private rebuildLandingHighlight(): void {
+    this.removeLandingRings();
+    if (!this.currentLandingTargetBodyId) {
+      this.currentLandingSubCellId = null;
+      return;
+    }
+
+    const body = orbitalBodies.value.get(this.currentLandingTargetBodyId);
+    if (!body || body.type !== 'SPACECRAFT') return;
+    if (body.landedCellId || body.descending) return;
+
+    const subCellId = this.findCellBelowLander(body);
+    this.currentLandingSubCellId = subCellId;
+    if (!subCellId) return;
+
+    // BFS from sub-point up to wiggleCells; collect all cell IDs in range.
+    const subNumericId = parseInt(subCellId.replace('cell_', ''), 10);
+    if (isNaN(subNumericId)) return;
+    const wiggle = CFG.LANDING.wiggleCells;
+    const inRange = new Set<number>([subNumericId]);
+    let frontier = new Set<number>([subNumericId]);
+    for (let i = 0; i < wiggle; i++) {
+      const next = new Set<number>();
+      for (const cid of frontier) {
+        const neighbors = this.grid.adjacency.get(cid) ?? [];
+        for (const nId of neighbors) {
+          if (!inRange.has(nId)) {
+            inRange.add(nId);
+            next.add(nId);
+          }
+        }
+      }
+      frontier = next;
+    }
+
+    // Draw a ring around each cell in range.
+    for (const cid of inRange) {
+      const color = cid === subNumericId ? COLOR_LANDING_SUBPOINT : COLOR_LANDING_VALID;
+      const ring = this.buildCellRing(`cell_${cid}`, color);
+      if (ring) {
+        if (ring.material instanceof THREE.LineBasicMaterial) {
+          ring.material.opacity = cid === subNumericId ? 0.9 : 0.5;
+        }
+        this.landingRings.push(ring);
+      }
+    }
+  }
+
+  private removeLandingRings(): void {
+    for (const ring of this.landingRings) {
+      this.globe.remove(ring);
+      ring.geometry.dispose();
+      (ring.material as THREE.Material).dispose();
+    }
+    this.landingRings = [];
+  }
+
+  /** Find the globe cell directly below the lander (highest dot product). */
+  private findCellBelowLander(body: { position: [number, number, number]; elements: { parent: string } }): string | null {
+    const parent = orbitalBodies.value.get(body.elements.parent);
+    if (!parent) return null;
+    const dx = body.position[0] - parent.position[0];
+    const dy = body.position[1] - parent.position[1];
+    const dz = body.position[2] - parent.position[2];
+    const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (len === 0) return null;
+    const ux = dx / len, uy = dy / len, uz = dz / len;
+
+    let bestId: string | null = null;
+    let bestDot = -Infinity;
+    for (const cell of this.grid.cells) {
+      const cx = cell.center[0], cy = cell.center[1], cz = cell.center[2];
+      const clen = Math.sqrt(cx * cx + cy * cy + cz * cz);
+      if (clen === 0) continue;
+      const dot = (cx * ux + cy * uy + cz * uz) / clen;
+      if (dot > bestDot) {
+        bestDot = dot;
+        bestId = `cell_${cell.id}`;
+      }
+    }
+    return bestId;
+  }
+
   update(): void {
     if (this.hexRing) {
       const time = performance.now() * 0.003;
       (this.hexRing.material as THREE.LineBasicMaterial).opacity = 0.6 + 0.25 * Math.sin(time);
+    }
+    // Landing highlight: rebuild only when the lander's sub-point cell has
+    // moved to a different cell, so the rings track the ground track without
+    // disposing/recreating geometries every frame.
+    if (this.currentLandingTargetBodyId) {
+      const body = orbitalBodies.value.get(this.currentLandingTargetBodyId);
+      if (body && !body.landedCellId && !body.descending) {
+        const subId = this.findCellBelowLander(body);
+        if (subId !== this.currentLandingSubCellId) {
+          this.currentLandingSubCellId = subId;
+          this.rebuildLandingHighlight();
+        }
+      }
     }
   }
 }
