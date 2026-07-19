@@ -63,6 +63,14 @@ export function updateOrbitalPositions(state: GameState): void {
       return parentPos;
     }
 
+    if (body.descending) {
+      // Descending bodies have their position lerped each tick by the room
+      // (see VantarisRoom.tickDescent). Skip the Kepler update so we don't
+      // clobber the in-progress animation.
+      resolved.add(bodyId);
+      return { x: body.posX, y: body.posY, z: body.posZ };
+    }
+
     const rel = orbitalPositionRelParent(body);
     const parentPos = body.elements.parent ? resolve(body.elements.parent) : { x: 0, y: 0, z: 0 };
     const x = rel.x + parentPos.x;
@@ -84,6 +92,7 @@ export function updateOrbitalPositions(state: GameState): void {
 export function advanceOrbitalAnomalies(state: GameState, deltaSeconds: number): void {
   for (const [, body] of state.orbitalBodies) {
     if (body.landedCellId) continue;
+    if (body.descending) continue; // descent is a lerp, not a Kepler orbit
     const el = body.elements;
     if (!el.parent || el.period <= 0) continue;
     const n = (Math.PI * 2) / el.period; // mean motion

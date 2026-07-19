@@ -19,7 +19,7 @@ import {
 import { GameState } from '../state/GameState';
 import { getCityStockpile } from './resources';
 
-const VISION_RANGE = 1;
+const VISION_RANGE = CFG.LANDING.orbitVisionRange;
 
 export function revealCellForPlayer(state: GameState, playerId: string, cellId: string): void {
   const player = state.players.get(playerId);
@@ -50,12 +50,25 @@ export function computeVisibilityForPlayer(
 
   const visibleCellIds = new Set<string>();
 
-  // Reveal tiles under the player's orbiting or landed spacecraft.
+  // Reveal tiles under the player's orbiting, descending, or landed spacecraft.
   for (const [, body] of state.orbitalBodies) {
     if (body.ownerId !== playerId || body.type !== OrbitalBodyType.SPACECRAFT) continue;
     if (body.landedCellId) {
       visibleCellIds.add(body.landedCellId);
       collectNeighborsInRange(body.landedCellId, visionRange, visibleCellIds, adjacencyMap);
+      continue;
+    }
+    if (body.descending && body.descentTargetCellId) {
+      // While descending, reveal around the target cell with a wider vision
+      // range so the player gets a preview of where they're going to land.
+      visibleCellIds.add(body.descentTargetCellId);
+      collectNeighborsInRange(body.descentTargetCellId, CFG.LANDING.descentVisionRange, visibleCellIds, adjacencyMap);
+      // Also keep the current sub-point visible — the lander is overhead.
+      const subId = findCellBelowSpacecraft(state, body, cellPositions);
+      if (subId && subId !== body.descentTargetCellId) {
+        visibleCellIds.add(subId);
+        collectNeighborsInRange(subId, CFG.LANDING.descentVisionRange, visibleCellIds, adjacencyMap);
+      }
       continue;
     }
     // Orbiting: find the cell directly below the spacecraft's sub-point.
@@ -307,6 +320,9 @@ export function buildPlayerSlice(
       position: [b.posX, b.posY, b.posZ],
       landedCellId: b.landedCellId || null,
       landedSubHex: b.landedSubHex ?? -1,
+      descending: b.descending,
+      descentTargetCellId: b.descentTargetCellId || null,
+      descentTicksRemaining: b.descentTicksRemaining,
     });
   }
 

@@ -38,6 +38,29 @@ export const lastTickTime = signal<number>(0);
 // planet view; used by the PlanetView bar to show the body name.
 export const viewedBodyId = signal<string | null>(null);
 
+// ─── Landing target selection ───────────────────
+// When non-null, the player has clicked "LAND" on a lander and is choosing
+// a surface tile to land on. Holds the lander's bodyId. Esc cancels.
+export const landingTargetBodyId = signal<string | null>(null);
+// Transient error message shown when an invalid tile is picked during
+// landing-target selection (e.g., off-trajectory or water). Clears on next
+// tile hover/click.
+export const landingError = signal<string | null>(null);
+
+export function beginLandingTarget(bodyId: string): void {
+  landingTargetBodyId.value = bodyId;
+  landingError.value = null;
+}
+
+export function cancelLandingTarget(): void {
+  landingTargetBodyId.value = null;
+  landingError.value = null;
+}
+
+export function setLandingError(msg: string | null): void {
+  landingError.value = msg;
+}
+
 export const selectedCellData = computed(() => {
   const tileId = selectedTileId.value;
   if (!tileId) return null;

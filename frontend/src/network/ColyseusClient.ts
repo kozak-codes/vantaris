@@ -145,3 +145,9 @@ export function sendLand(bodyId: string): void {
     currentRoom.send('landNow', { bodyId });
   }
 }
+
+export function sendLandAt(bodyId: string, cellId: string): void {
+  if (currentRoom) {
+    currentRoom.send('landAt', { bodyId, cellId });
+  }
+}

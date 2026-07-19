@@ -27,4 +27,17 @@ export class OrbitalBodyState extends Schema {
   @type('number') posZ: number = 0;
   @type('string') landedCellId: string = '';
   @type('number') landedSubHex: number = -1;
+  // Descent animation state — set by the server when a lander is animating
+  // from orbit to a chosen surface cell.
+  @type('boolean') descending: boolean = false;
+  @type('string') descentTargetCellId: string = '';
+  @type('number') descentTicksRemaining: number = 0;
+  // Non-replicated: world-space position (km, star-relative) at the start of
+  // the descent animation. Used for lerp; not sent to clients.
+  descentStartPosX: number = 0;
+  descentStartPosY: number = 0;
+  descentStartPosZ: number = 0;
+  descentTotalTicks: number = 0;
+  // Saved orbit to restore after landing (so the orbit line stays sensible).
+  savedSemiMajorAxis: number = 0;
 }

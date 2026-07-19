@@ -103,6 +103,23 @@ export interface ICFG {
     LANDER_PERIOD_S: number;
     LANDER_INCLINATION: number;
   };
+  LANDING: {
+    // How many ticks the descent animation lasts. At 100ms/tick, 40 = 4 seconds.
+    descentTicks: number;
+    // How many adjacency-hops from the lander's current sub-point cell the
+    // player may pick as a landing target. "On our trajectory" with wiggle room.
+    wiggleCells: number;
+    // Semi-major axis (km) used for the descent orbit — higher than the
+    // lander's normal orbit so it visually rises before descending, and
+    // gets a wider vision footprint while overhead.
+    descentOrbitKm: number;
+    // Vision range (adjacency hops) granted while a lander is descending.
+    // Bigger than the normal orbiting vision so the player discovers more
+    // tiles overhead during the descent.
+    descentVisionRange: number;
+    // Normal orbiting vision range (adjacency hops).
+    orbitVisionRange: number;
+  };
   STOCKPILE_RAID_FRACTION: number;
   ENERGY_CREDITS_INITIAL: number;
   PLAYER_COLORS: string[];
@@ -326,6 +343,15 @@ export const CFG: ICFG = {
     LANDER_SEMI_MAJOR_AXIS_KM: 7800,
     LANDER_PERIOD_S: 5400 / 10,
     LANDER_INCLINATION: 0.26,
+  },
+
+  // ─── Lander descent ───────────────────────────
+  LANDING: {
+    descentTicks: 40,        // 4s at 100ms/tick
+    wiggleCells: 4,          // player may pick a target within 4 hops of the sub-point
+    descentOrbitKm: 8200,    // bumped above LANDER_SEMI_MAJOR_AXIS_KM (7800)
+    descentVisionRange: 3,   // wider vision while descending
+    orbitVisionRange: 1,     // normal orbiting vision
   },
 
   // ─── Misc ─────────────────────────────────

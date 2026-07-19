@@ -73,6 +73,7 @@ for (const cell of grid.cells) {
 render(<App />, document.getElementById('hud-root')!);
 const cameraControls = new CameraControls(camera, canvas, pivot);
 const globeInput = new GlobeInput(canvas, camera, globeRenderer.getGlobeGroup());
+globeInput.setGrid(grid);
 globeInput.setCameraControls(cameraControls);
 
 // Zoom thresholds for auto-selecting tiles.

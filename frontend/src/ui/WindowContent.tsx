@@ -1,7 +1,6 @@
 import { FunctionalComponent } from 'preact';
 import { useComputed } from '@preact/signals';
-import { orbitalBodies, myPlayerId, selectedTileId, selectedCellData } from '../state/signals';
-import { sendLand } from '../network/ColyseusClient';
+import { orbitalBodies, myPlayerId, selectedTileId, selectedCellData, landingTargetBodyId, beginLandingTarget, cancelLandingTarget, landingError } from '../state/signals';
 import type { OrbitalBodyData } from '@vantaris/shared';
 import type { WindowContentDescriptor } from '../state/windows';
 
@@ -81,20 +80,26 @@ export const SpacecraftWindowContent: FunctionalComponent<{ bodyId: string }> = 
   const body = orbitalBodies.value.get(bodyId);
   if (!body) return null;
   const isOwn = body.ownerId === myPlayerId.value;
-  const canLand = isOwn && !body.landedCellId;
+  const canLand = isOwn && !body.landedCellId && !body.descending;
+  const isPickingTarget = landingTargetBodyId.value === bodyId;
+  const isDescending = body.descending;
+  const status = body.landedCellId ? 'Landed'
+    : isDescending ? `Descending (${body.descentTicksRemaining})`
+    : 'Orbiting';
   return (
     <div class="win-content">
       <WinRow label="Type" value="Spacecraft" />
       <WinRow label="Owner" value={isOwn ? 'You' : body.ownerId} />
-      <WinRow label="Status" value={body.landedCellId ? 'Landed' : 'Orbiting'} />
+      <WinRow label="Status" value={status} />
       {body.landedCellId && <WinRow label="Cell" value={body.landedCellId} />}
+      {isDescending && body.descentTargetCellId && <WinRow label="Target" value={body.descentTargetCellId} />}
       <WinRow label="Mass" value={`${(body.mass / 1000).toFixed(0)} t`} />
       <WinRow label="Orbit" value={fmtKm(body.elements.semiMajorAxis)} />
       <WinRow label="Period" value={fmtPeriod(body.elements.period)} />
       <WinRow label="Fuel" value={`${Math.round(body.fuel)} / ${Math.round(body.fuelCapacity)}`} />
-      {canLand && (
+      {canLand && !isPickingTarget && (
         <button
-          onClick={() => sendLand(bodyId)}
+          onClick={() => beginLandingTarget(bodyId)}
           style={{
             marginTop: '8px',
             width: '100%',
@@ -108,8 +113,37 @@ export const SpacecraftWindowContent: FunctionalComponent<{ bodyId: string }> = 
             fontSize: '13px',
           }}
         >
-          LAND NOW
+          LAND
         </button>
+      )}
+      {isPickingTarget && (
+        <>
+          <div style={{ marginTop: '8px', padding: '8px', background: '#2a3a5a', border: '1px solid #4a6a8a', borderRadius: '4px', fontSize: '12px', color: '#cfe' }}>
+            Click a tile on your lander's ground track to land there. Press Esc to cancel.
+          </div>
+          <button
+            onClick={() => cancelLandingTarget()}
+            style={{
+              marginTop: '8px',
+              width: '100%',
+              padding: '8px 12px',
+              cursor: 'pointer',
+              background: '#5a3a3a',
+              color: '#fff',
+              border: '1px solid #8a5a5a',
+              borderRadius: '4px',
+              fontWeight: 'bold',
+              fontSize: '13px',
+            }}
+          >
+            CANCEL
+          </button>
+        </>
+      )}
+      {landingError.value && (
+        <div style={{ marginTop: '8px', padding: '6px 8px', background: '#5a2a2a', border: '1px solid #8a4a4a', borderRadius: '4px', fontSize: '12px', color: '#fcc' }}>
+          {landingError.value}
+        </div>
       )}
     </div>
   );

@@ -46,6 +46,13 @@ export interface OrbitalBodyData {
   // For spacecraft that have landed on a planet, the cellId + sub-hex index they occupy.
   landedCellId: string | null;
   landedSubHex: number; // -1 if not landed or not set
+  // Descent state — when a lander is animating from orbit to a chosen surface
+  // cell, the server sets these. `descending` is true during the animation;
+  // `descentTargetCellId` is the chosen landing cell; `descentTicksRemaining`
+  // counts down to 0 at which point the body lands.
+  descending: boolean;
+  descentTargetCellId: string | null;
+  descentTicksRemaining: number;
 }
 
 export enum QueueType {
