@@ -129,7 +129,7 @@ export class VantarisRoom extends Room<GameState> {
       this.handleLandNow(client, data);
     });
 
-    this.onMessage('landAt', (client, data: { bodyId: string; cellId: string }) => {
+    this.onMessage('landAt', (client, data: { bodyId: string; cellId: string; subHexIndex: number }) => {
       this.handleLandAt(client, data);
     });
 
@@ -267,10 +267,11 @@ export class VantarisRoom extends Room<GameState> {
 
   /**
    * Begin a descent animation from the lander's current orbit to the chosen
-   * surface cell. Validates the target is within `CFG.LANDING.wiggleCells`
-   * adjacency hops of the lander's current sub-point cell.
+   * surface sub-hex. Validates the target cell is within
+   * `CFG.LANDING.wiggleCells` adjacency hops of the lander's current sub-point
+   * and that the target sub-hex is buildable (FLAT terrain).
    */
-  private handleLandAt(client: Client, data: { bodyId: string; cellId: string }): void {
+  private handleLandAt(client: Client, data: { bodyId: string; cellId: string; subHexIndex: number }): void {
     const body = this.state.orbitalBodies.get(data.bodyId);
     if (!body || body.type !== OrbitalBodyType.SPACECRAFT) return;
     if (body.ownerId !== client.sessionId) return;
@@ -279,12 +280,11 @@ export class VantarisRoom extends Room<GameState> {
     const targetCell = this.state.cells.get(data.cellId);
     if (!targetCell) return;
 
-    // Refuse ocean targets — sample the cell center terrain.
-    const center = this.cellPositions[data.cellId];
-    if (center) {
-      const { subBiome } = sampleWorldTerrain(center, this.state.worldSeed);
-      if (subBiome === 'WATER' || subBiome === 'ICE') return;
-    }
+    // Validate the target sub-hex exists + is buildable (FLAT tier).
+    const subHexes = generateMacroHexSubHexes(targetCell, this.cellPositions, this.state.worldSeed);
+    if (!subHexes) return;
+    if (data.subHexIndex < 0 || data.subHexIndex >= subHexes.length) return;
+    if (!subHexes[data.subHexIndex].buildable) return;
 
     // Validate the target is on our ground track (within wiggle cells of the
     // current sub-point).
@@ -298,6 +298,7 @@ export class VantarisRoom extends Room<GameState> {
     const ticks = CFG.LANDING.descentTicks;
     body.descending = true;
     body.descentTargetCellId = data.cellId;
+    body.landedSubHex = data.subHexIndex;
     body.descentTicksRemaining = ticks;
     body.descentTotalTicks = ticks;
     body.descentStartPosX = body.posX;
@@ -316,16 +317,12 @@ export class VantarisRoom extends Room<GameState> {
     for (const [, body] of this.state.orbitalBodies) {
       if (!body.descending) continue;
       if (body.descentTicksRemaining <= 0) {
-        // Finalize: land at the target cell.
+        // Finalize: land at the pre-validated target cell + sub-hex chosen by
+        // the client. The sub-hex was validated as buildable in handleLandAt.
         const targetCellId = body.descentTargetCellId;
-        const result = targetCellId ? this.findBuildableSubHex(targetCellId, 5) : null;
-        if (result) {
-          body.landedCellId = result.cellId;
-          body.landedSubHex = result.subHex;
-        } else if (targetCellId) {
-          // No buildable sub-hex anywhere nearby — land anyway at cell center.
+        if (targetCellId) {
           body.landedCellId = targetCellId;
-          body.landedSubHex = -1;
+          // landedSubHex was already set in handleLandAt.
         }
         body.descending = false;
         body.descentTargetCellId = '';

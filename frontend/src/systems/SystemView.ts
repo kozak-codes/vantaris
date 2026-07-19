@@ -2,30 +2,10 @@ import * as THREE from 'three';
 import { orbitalBodies, exitPlanetView, enterPlanetView, myPlayerId } from '../state/signals';
 import { CFG } from '@vantaris/shared';
 import type { OrbitalBodyData } from '@vantaris/shared';
+import { LabelRenderer } from './LabelRenderer';
 
 // Render scale: 1 Three.js unit = CFG.SYSTEM.VIEW_SCALE_KM km.
 const SCALE = CFG.SYSTEM.VIEW_SCALE_KM;
-
-function makeLabelSprite(text: string): THREE.Sprite {
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d')!;
-  const fontSize = 48;
-  ctx.font = `${fontSize}px ui-monospace, monospace`;
-  const textWidth = ctx.measureText(text).width;
-  canvas.width = Math.ceil(textWidth) + 20;
-  canvas.height = fontSize + 12;
-  ctx.font = `${fontSize}px ui-monospace, monospace`;
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#aabbcc';
-  ctx.fillText(text, 10, canvas.height / 2);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.minFilter = THREE.LinearFilter;
-  const material = new THREE.SpriteMaterial({ map: texture, depthTest: false });
-  const sprite = new THREE.Sprite(material);
-  return sprite;
-}
 
 export class SystemView {
   private scene: THREE.Scene;
@@ -37,6 +17,7 @@ export class SystemView {
   private bodyMeshes: Map<string, THREE.Mesh> = new Map();
   private orbitRings: Map<string, THREE.Line> = new Map();
   private labels: Map<string, THREE.Sprite> = new Map();
+  private labelRenderer = new LabelRenderer();
   private raycaster = new THREE.Raycaster();
   private pointer = new THREE.Vector2();
   private raf: number | null = null;
@@ -149,11 +130,7 @@ export class SystemView {
       (l.material as THREE.Material).dispose();
     }
     this.orbitRings.clear();
-    for (const [, label] of this.labels) {
-      this.scene.remove(label);
-      (label.material as THREE.SpriteMaterial).map?.dispose();
-      (label.material as THREE.Material).dispose();
-    }
+    this.labelRenderer.dispose();
     this.labels.clear();
 
     for (const [, body] of bodies) {
@@ -200,10 +177,15 @@ export class SystemView {
 
       // Label — a Three.js sprite rendered into the scene itself, so it moves
       // in lockstep with the body and never jitters against the WebGL render.
-      const sprite = makeLabelSprite(body.name);
-      sprite.scale.set(28, 7, 1);
+      const sprite = LabelRenderer.createLabel(body.name, {
+        color: '#aabbcc',
+        background: 'rgba(0,0,0,0.6)',
+        fontSize: 48,
+        padding: 10,
+      });
       sprite.userData.bodyId = body.bodyId;
       sprite.userData.isLabel = true;
+      this.labelRenderer.registerLabel(sprite, { targetWorldHeight: 7 });
       this.scene.add(sprite);
       this.labels.set(body.bodyId, sprite);
     }
@@ -362,6 +344,7 @@ export class SystemView {
     this.updateCamera();
     this.updatePositions();
     this.placeLabels();
+    this.labelRenderer.update(this.camera);
     this.renderer.render(this.scene, this.camera);
   };
 
@@ -374,11 +357,7 @@ export class SystemView {
     this.canvas.removeEventListener('wheel', this.onWheel as any);
     this.canvas.removeEventListener('click', this.onClick);
     this.canvas.removeEventListener('contextmenu', this.onContextMenu);
-    for (const [, label] of this.labels) {
-      this.scene.remove(label);
-      (label.material as THREE.SpriteMaterial).map?.dispose();
-      (label.material as THREE.Material).dispose();
-    }
+    this.labelRenderer.dispose();
     this.labels.clear();
     this.renderer.dispose();
     if (this.canvas.parentElement) this.canvas.parentElement.removeChild(this.canvas);

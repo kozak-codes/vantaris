@@ -8,6 +8,7 @@ import { SelectionRenderer } from './systems/SelectionRenderer';
 import { DayNightRenderer } from './systems/DayNightRenderer';
 import { SpacecraftRenderer } from './systems/SpacecraftRenderer';
 import { SubHexWorldRenderer } from './systems/SubHexWorldRenderer';
+import { LandingGhostRenderer } from './systems/LandingGhostRenderer';
 import { CameraControls, setActiveCameraControls } from './systems/CameraControls';
 import { LobbyUI } from './ui/LobbyUI';
 import { GlobeInput } from './systems/GlobeInput';
@@ -55,6 +56,7 @@ const dayNightRenderer = new DayNightRenderer(ambientLight, globeRenderer.getGlo
 const spacecraftRenderer = new SpacecraftRenderer(globeRenderer.getGlobeGroup());
 spacecraftRenderer.setGrid(grid);
 const subHexRenderer = new SubHexWorldRenderer(globeRenderer.getGlobeGroup(), globeRenderer.getCellMeshes());
+const landingGhostRenderer = new LandingGhostRenderer(globeRenderer.getGlobeGroup(), grid, subHexRenderer, camera);
 
 // Build a map of cellId → geometry data (center + boundary vertex positions)
 // for the SubHexWorldRenderer to use when building sub-hex terrain.
@@ -76,6 +78,7 @@ const cameraControls = new CameraControls(camera, canvas, pivot);
 setActiveCameraControls(cameraControls);
 const globeInput = new GlobeInput(canvas, camera, globeRenderer.getGlobeGroup());
 globeInput.setGrid(grid);
+globeInput.setLandingGhostRenderer(landingGhostRenderer);
 globeInput.setCameraControls(cameraControls);
 
 // Zoom thresholds for auto-selecting tiles.
@@ -299,6 +302,7 @@ function animate(): void {
   spacecraftRenderer.update(camera);
   subHexRenderer.update();
   subHexRenderer.updateConstructions(clientState.constructions);
+  landingGhostRenderer.update(clientState.mouseClientX, clientState.mouseClientY);
 
   subHexRenderer.setVisible(clientState.viewMode !== 'system');
 

@@ -146,8 +146,8 @@ export function sendLand(bodyId: string): void {
   }
 }
 
-export function sendLandAt(bodyId: string, cellId: string): void {
+export function sendLandAt(bodyId: string, cellId: string, subHexIndex: number): void {
   if (currentRoom) {
-    currentRoom.send('landAt', { bodyId, cellId });
+    currentRoom.send('landAt', { bodyId, cellId, subHexIndex });
   }
 }

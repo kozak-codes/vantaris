@@ -4,6 +4,7 @@ import { GLOBE_RADIUS } from './IconFactory';
 import { orbitalBodies, myPlayerId } from '../state/signals';
 import { CFG, sampleWorldTerrain, generateSubHexCoords, subHexSize, type HexGrid } from '@vantaris/shared';
 import type { OrbitalBodyData, OrbitalElements } from '@vantaris/shared';
+import { LabelRenderer } from './LabelRenderer';
 
 // Scale orbital positions (km) to globe units (globe radius 5 = PLANET_RADIUS_KM km).
 const KM_PER_UNIT = CFG.SYSTEM.PLANET_RADIUS_KM / GLOBE_RADIUS;
@@ -27,6 +28,7 @@ export class SpacecraftRenderer {
   private spacecraft: Map<string, SpacecraftMesh> = new Map();
   private materialOwn: THREE.MeshStandardMaterial;
   private materialOther: THREE.MeshStandardMaterial;
+  private labelRenderer = new LabelRenderer();
 
   constructor(globeGroup: THREE.Group) {
     this.globeGroup = globeGroup;
@@ -98,8 +100,9 @@ export class SpacecraftRenderer {
           sc.orbitLine.geometry.dispose();
           (sc.orbitLine.material as THREE.Material).dispose();
         }
-        (sc.label.material as THREE.SpriteMaterial).map?.dispose();
-        (sc.label.material as THREE.Material).dispose();
+        this.labelRenderer.unregisterLabel(sc.label);
+        sc.label.material.map?.dispose();
+        sc.label.material.dispose();
         this.spacecraft.delete(bodyId);
       }
     }
@@ -139,9 +142,15 @@ export class SpacecraftRenderer {
 
     group.raycast = () => {};
 
-    const label = makeSpacecraftLabel(body.name);
+    const isOwnLabel = isOwn;
+    const label = LabelRenderer.createLabel(body.name, {
+      color: isOwnLabel ? '#88cc88' : '#cc9966',
+      background: 'rgba(0,0,0,0.55)',
+      fontSize: 16,
+    });
     label.userData.bodyId = body.bodyId;
     label.raycast = () => {};
+    this.labelRenderer.registerLabel(label, { targetWorldHeight: 0.8 });
 
     const orbitLine = this.buildOrbitLine(body.elements);
 
@@ -271,32 +280,10 @@ export class SpacecraftRenderer {
         sc.orbitLine.visible = !body.landedCellId;
       }
 
-      // Scale label with camera distance so it stays a reasonable on-screen size.
+      // Scale labels with camera distance so they stay a constant on-screen size.
       if (camera) {
-        const dist = sc.label.position.distanceTo(camera.position);
-        const s = THREE.MathUtils.clamp(dist * 0.06, 0.4, 2);
-        sc.label.scale.set(s, s * 0.3, 1);
+        this.labelRenderer.update(camera);
       }
     }
   }
-}
-
-function makeSpacecraftLabel(text: string): THREE.Sprite {
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d')!;
-  const fontSize = 16;
-  ctx.font = `${fontSize}px ui-monospace, monospace`;
-  const textWidth = ctx.measureText(text).width;
-  canvas.width = Math.ceil(textWidth) + 8;
-  canvas.height = fontSize + 4;
-  ctx.font = `${fontSize}px ui-monospace, monospace`;
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#88cc88';
-  ctx.fillText(text, 4, canvas.height / 2);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.minFilter = THREE.LinearFilter;
-  const material = new THREE.SpriteMaterial({ map: texture, depthTest: false });
-  return new THREE.Sprite(material);
 }

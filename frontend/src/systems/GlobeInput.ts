@@ -11,8 +11,9 @@ import {
 import { openWindow } from '../state/windows';
 import { TileWindowContent } from '../ui/WindowContent';
 import { sendLandAt } from '../network/ColyseusClient';
-import { CFG, type HexGrid } from '@vantaris/shared';
+import { type HexGrid } from '@vantaris/shared';
 import type { CameraControls } from './CameraControls';
+import type { LandingGhostRenderer } from './LandingGhostRenderer';
 
 const CLICK_THRESHOLD_PX = 8;
 const DOUBLE_CLICK_MS = 350;
@@ -26,6 +27,7 @@ export class GlobeInput {
   private globe: THREE.Group;
   private grid: HexGrid | null = null;
   private cameraControls: CameraControls | null = null;
+  private landingGhost: LandingGhostRenderer | null = null;
   private onEnterTile: ((cellId: string) => void) | null = null;
   private lastClickCellId: string | null = null;
   private lastClickTime = 0;
@@ -58,6 +60,10 @@ export class GlobeInput {
 
   setTileViewHandlers(onEnter: (cellId: string) => void, _onExit?: () => void): void {
     this.onEnterTile = onEnter;
+  }
+
+  setLandingGhostRenderer(ghost: LandingGhostRenderer): void {
+    this.landingGhost = ghost;
   }
 
   private onPointerDown(e: PointerEvent): void {
@@ -215,11 +221,11 @@ export class GlobeInput {
 
   /**
    * Handle a globe click while the player is choosing a landing target.
-   * Validates the clicked cell is within `CFG.LANDING.wiggleCells` adjacency
-   * hops of the lander's current sub-point and that it isn't ocean, then
-   * sends `landAt`. Invalid picks set a transient error message.
+   * Reads the hovered sub-hex from the LandingGhostRenderer (which is updated
+   * each frame from mousemove). If the target is valid (green ghost), sends
+   * `landAt` with cellId + subHexIndex. Invalid picks show an error.
    */
-  private handleLandingClick(cellId: string): void {
+  private handleLandingClick(_cellId: string): void {
     const bodyId = landingTargetBodyId.value;
     if (!bodyId) return;
     const body = orbitalBodies.value.get(bodyId);
@@ -231,91 +237,21 @@ export class GlobeInput {
       cancelLandingTarget();
       return;
     }
-    if (!this.grid) {
-      setLandingError('Grid not available');
+    if (!this.landingGhost) {
+      setLandingError('Landing preview not ready');
       return;
     }
-
-    const numericId = parseInt(cellId.replace('cell_', ''), 10);
-    if (isNaN(numericId) || numericId < 0 || numericId >= this.grid.cells.length) {
-      setLandingError('Invalid tile');
+    const target = this.landingGhost.getHoveredTarget();
+    if (!target) {
+      setLandingError('Hover over a tile first');
       return;
     }
-
-    // Find the lander's current sub-point cell on the globe.
-    const subCellId = this.findCellBelowLander(body);
-    if (!subCellId) {
-      setLandingError('Cannot determine lander position');
+    if (!target.valid) {
+      // The ghost already set the error reason; just don't send.
       return;
     }
-
-    if (!this.isWithinWiggle(subCellId, cellId, CFG.LANDING.wiggleCells)) {
-      setLandingError(`Too far from lander's ground track (max ${CFG.LANDING.wiggleCells} tiles)`);
-      return;
-    }
-
-    // Refuse ocean targets client-side as a UX hint — server re-checks.
-    const center = this.grid.cells[numericId].center;
-    // We can't sample terrain client-side without the world seed easily; the
-    // server is authoritative. Just send and let the server reject if water.
-    void center;
-
-    sendLandAt(bodyId, cellId);
+    sendLandAt(bodyId, target.cellId, target.subHexIndex);
     cancelLandingTarget();
-  }
-
-  /** Find the globe cell directly below the lander (highest dot product). */
-  private findCellBelowLander(body: { position: [number, number, number]; elements: { parent: string } }): string | null {
-    if (!this.grid) return null;
-    const parent = orbitalBodies.value.get(body.elements.parent);
-    if (!parent) return null;
-    const dx = body.position[0] - parent.position[0];
-    const dy = body.position[1] - parent.position[1];
-    const dz = body.position[2] - parent.position[2];
-    const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    if (len === 0) return null;
-    const ux = dx / len, uy = dy / len, uz = dz / len;
-
-    let bestId: string | null = null;
-    let bestDot = -Infinity;
-    for (const cell of this.grid.cells) {
-      const cx = cell.center[0], cy = cell.center[1], cz = cell.center[2];
-      const clen = Math.sqrt(cx * cx + cy * cy + cz * cz);
-      if (clen === 0) continue;
-      const dot = (cx * ux + cy * uy + cz * uz) / clen;
-      if (dot > bestDot) {
-        bestDot = dot;
-        bestId = `cell_${cell.id}`;
-      }
-    }
-    return bestId;
-  }
-
-  /** BFS from `start` to `target` up to `maxHops` inclusive. */
-  private isWithinWiggle(start: string, target: string, maxHops: number): boolean {
-    if (!this.grid) return false;
-    if (start === target) return true;
-    const parseId = (s: string) => parseInt(s.replace('cell_', ''), 10);
-    const startId = parseId(start);
-    const targetId = parseId(target);
-    if (isNaN(startId) || isNaN(targetId)) return false;
-
-    const visited = new Set<number>([startId]);
-    let frontier = new Set<number>([startId]);
-    for (let i = 0; i < maxHops; i++) {
-      const next = new Set<number>();
-      for (const cid of frontier) {
-        const neighbors = this.grid.adjacency.get(cid) ?? [];
-        for (const nId of neighbors) {
-          if (nId === targetId) return true;
-          if (visited.has(nId)) continue;
-          visited.add(nId);
-          next.add(nId);
-        }
-      }
-      frontier = next;
-    }
-    return false;
   }
 
   private deselectAll(): void {
