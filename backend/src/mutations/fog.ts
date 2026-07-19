@@ -74,8 +74,17 @@ export function computeVisibilityForPlayer(
     // Orbiting: find the cell directly below the spacecraft's sub-point.
     const cellId = findCellBelowSpacecraft(state, body, cellPositions);
     if (cellId) {
+      // Vision range scales with orbit height — a lander in a higher orbit
+      // sees more tiles (wider footprint on the surface). Map the lander's
+      // altitude ratio (semiMajorAxis / planetRadius) to an adjacency-hop
+      // count: 1× altitude → base range, +1 hop per extra ~0.5× altitude.
+      const altRatio = body.elements.semiMajorAxis / CFG.SYSTEM.PLANET_RADIUS_KM;
+      const orbitRange = Math.max(
+        CFG.LANDING.orbitVisionRange,
+        Math.round(CFG.LANDING.orbitVisionRange + (altRatio - 1) * CFG.LANDING.visionPerAltitude),
+      );
       visibleCellIds.add(cellId);
-      collectNeighborsInRange(cellId, visionRange, visibleCellIds, adjacencyMap);
+      collectNeighborsInRange(cellId, orbitRange, visibleCellIds, adjacencyMap);
     }
   }
 

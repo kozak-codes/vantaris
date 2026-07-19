@@ -117,8 +117,11 @@ export interface ICFG {
     // Bigger than the normal orbiting vision so the player discovers more
     // tiles overhead during the descent.
     descentVisionRange: number;
-    // Normal orbiting vision range (adjacency hops).
+    // Normal orbiting vision range (adjacency hops) at 1× planet-radius altitude.
     orbitVisionRange: number;
+    // Extra vision hops per unit of altitude ratio (semiMajorAxis / planetRadius).
+    // A lander at 1.5× planet radius gets orbitVisionRange + 0.5 * this many hops.
+    visionPerAltitude: number;
   };
   STOCKPILE_RAID_FRACTION: number;
   ENERGY_CREDITS_INITIAL: number;
@@ -349,9 +352,10 @@ export const CFG: ICFG = {
   LANDING: {
     descentTicks: 40,        // 4s at 100ms/tick
     wiggleCells: 4,          // player may pick a target within 4 hops of the sub-point
-    descentOrbitKm: 8200,    // bumped above LANDER_SEMI_MAJOR_AXIS_KM (7800)
-    descentVisionRange: 3,   // wider vision while descending
-    orbitVisionRange: 1,     // normal orbiting vision
+    descentOrbitKm: 9000,    // bumped above LANDER_SEMI_MAJOR_AXIS_KM (7800) for a higher descent
+    descentVisionRange: 4,   // wider vision while descending
+    orbitVisionRange: 1,     // base orbiting vision at 1× planet-radius altitude
+    visionPerAltitude: 8,    // +8 hops per unit altitude ratio → ~2.8 hops at 7800km/6371km
   },
 
   // ─── Misc ─────────────────────────────────
