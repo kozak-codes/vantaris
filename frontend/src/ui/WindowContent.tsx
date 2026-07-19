@@ -1,6 +1,6 @@
 import { FunctionalComponent } from 'preact';
 import { useComputed } from '@preact/signals';
-import { orbitalBodies, myPlayerId, selectedTileId, selectedCellData, landingTargetBodyId, beginLandingTarget, cancelLandingTarget, landingError } from '../state/signals';
+import { orbitalBodies, myPlayerId, selectedTileId, selectedCellData, landingTargetBodyId, beginLandingTarget, cancelLandingTarget, landingError, enterPlanetView } from '../state/signals';
 import type { OrbitalBodyData } from '@vantaris/shared';
 import type { WindowContentDescriptor } from '../state/windows';
 
@@ -99,7 +99,12 @@ export const SpacecraftWindowContent: FunctionalComponent<{ bodyId: string }> = 
       <WinRow label="Fuel" value={`${Math.round(body.fuel)} / ${Math.round(body.fuelCapacity)}`} />
       {canLand && !isPickingTarget && (
         <button
-          onClick={() => beginLandingTarget(bodyId)}
+          onClick={() => {
+            // Switch to planet view of the lander's parent so the globe is
+            // visible and clickable, then enter target-pick mode.
+            enterPlanetView(body.elements.parent);
+            beginLandingTarget(bodyId);
+          }}
           style={{
             marginTop: '8px',
             width: '100%',

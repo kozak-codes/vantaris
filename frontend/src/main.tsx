@@ -53,6 +53,7 @@ const cityRenderer = new CityRenderer(globeRenderer.getGlobeGroup(), grid);
 const selectionRenderer = new SelectionRenderer(globeRenderer.getGlobeGroup(), grid);
 const dayNightRenderer = new DayNightRenderer(ambientLight, globeRenderer.getGlobeGroup(), fogRenderer.getCellMeshMap());
 const spacecraftRenderer = new SpacecraftRenderer(globeRenderer.getGlobeGroup());
+spacecraftRenderer.setGrid(grid);
 const subHexRenderer = new SubHexWorldRenderer(globeRenderer.getGlobeGroup(), globeRenderer.getCellMeshes());
 
 // Build a map of cellId → geometry data (center + boundary vertex positions)

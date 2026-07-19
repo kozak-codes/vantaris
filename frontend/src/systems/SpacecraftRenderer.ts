@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { clientState, onStateUpdate } from '../state/ClientState';
 import { GLOBE_RADIUS } from './IconFactory';
 import { orbitalBodies, myPlayerId } from '../state/signals';
-import { CFG, sampleWorldTerrain, generateSubHexCoords, subHexSize } from '@vantaris/shared';
+import { CFG, sampleWorldTerrain, generateSubHexCoords, subHexSize, type HexGrid } from '@vantaris/shared';
 import type { OrbitalBodyData, OrbitalElements } from '@vantaris/shared';
 
 // Scale orbital positions (km) to globe units (globe radius 5 = PLANET_RADIUS_KM km).
@@ -23,6 +23,7 @@ interface SpacecraftMesh {
  */
 export class SpacecraftRenderer {
   private globeGroup: THREE.Group;
+  private grid: HexGrid | null = null;
   private spacecraft: Map<string, SpacecraftMesh> = new Map();
   private materialOwn: THREE.MeshStandardMaterial;
   private materialOther: THREE.MeshStandardMaterial;
@@ -34,6 +35,10 @@ export class SpacecraftRenderer {
     this.materialOther = new THREE.MeshStandardMaterial({ color: 0xff8844, emissive: 0x663311, roughness: 0.6 });
 
     onStateUpdate(() => this.onStateChange());
+  }
+
+  setGrid(grid: HexGrid): void {
+    this.grid = grid;
   }
 
   private onStateChange(): void {
@@ -204,63 +209,54 @@ export class SpacecraftRenderer {
       if (body.landedCellId) {
         // Place lander on the exact sub-hex terrain position.
         const numericId = parseInt(body.landedCellId.replace('cell_', ''));
-        if (!isNaN(numericId)) {
-          let cellMesh: THREE.Mesh | null = null;
-          this.globeGroup.traverse((child) => {
-            if (child instanceof THREE.Mesh && child.userData.cellId === numericId) {
-              cellMesh = child as THREE.Mesh;
-            }
-          });
-          const cell = cellMesh as THREE.Mesh | null;
-          if (cell) {
-            const cellCenter = cell.position.clone();
-            const cellLen = cellCenter.length() || 1;
-            const normal = cellCenter.clone().normalize();
+        if (!isNaN(numericId) && this.grid && numericId >= 0 && numericId < this.grid.cells.length) {
+          const cellCenterArr = this.grid.cells[numericId].center;
+          const cellCenter = new THREE.Vector3(cellCenterArr[0], cellCenterArr[1], cellCenterArr[2]);
+          const normal = cellCenter.clone().normalize();
 
-            // Compute sub-hex world position.
-            const subHexIdx = body.landedSubHex >= 0 ? body.landedSubHex : 0;
-            const radius = CFG.SUBHEX.radius;
-            const coords = generateSubHexCoords(radius);
-            const macroCircumradius = 0.3;
-            const subSize = subHexSize(macroCircumradius, radius);
-            const coord = coords[subHexIdx] || { q: 0, r: 0 };
-            const SQRT3 = Math.sqrt(3);
-            const px = subSize * (SQRT3 * coord.q + (SQRT3 / 2) * coord.r);
-            const py = subSize * (3 / 2) * coord.r;
+          // Compute sub-hex world position.
+          const subHexIdx = body.landedSubHex >= 0 ? body.landedSubHex : 0;
+          const radius = CFG.SUBHEX.radius;
+          const coords = generateSubHexCoords(radius);
+          const macroCircumradius = 0.3;
+          const subSize = subHexSize(macroCircumradius, radius);
+          const coord = coords[subHexIdx] || { q: 0, r: 0 };
+          const SQRT3 = Math.sqrt(3);
+          const px = subSize * (SQRT3 * coord.q + (SQRT3 / 2) * coord.r);
+          const py = subSize * (3 / 2) * coord.r;
 
-            // Build tangent plane basis at cell center.
-            const nx = normal.x, ny = normal.y, nz = normal.z;
-            let upX = 0, upY = 0, upZ = 1;
-            if (Math.abs(nz) > 0.9) { upX = 1; upY = 0; upZ = 0; }
-            let uX = ny * upZ - nz * upY;
-            let uY = nz * upX - nx * upZ;
-            let uZ = nx * upY - ny * upX;
-            const uLen = Math.sqrt(uX * uX + uY * uY + uZ * uZ) || 1;
-            uX /= uLen; uY /= uLen; uZ /= uLen;
-            const vX = ny * uZ - nz * uY;
-            const vY = nz * uX - nx * uZ;
-            const vZ = nx * uY - ny * uX;
+          // Build tangent plane basis at cell center.
+          const nx = normal.x, ny = normal.y, nz = normal.z;
+          let upX = 0, upY = 0, upZ = 1;
+          if (Math.abs(nz) > 0.9) { upX = 1; upY = 0; upZ = 0; }
+          let uX = ny * upZ - nz * upY;
+          let uY = nz * upX - nx * upZ;
+          let uZ = nx * upY - ny * upX;
+          const uLen = Math.sqrt(uX * uX + uY * uY + uZ * uZ) || 1;
+          uX /= uLen; uY /= uLen; uZ /= uLen;
+          const vX = ny * uZ - nz * uY;
+          const vY = nz * uX - nx * uZ;
+          const vZ = nx * uY - ny * uX;
 
-            const tx = cellCenter.x + uX * px + vX * py;
-            const ty = cellCenter.y + uY * px + vY * py;
-            const tz = cellCenter.z + uZ * px + vZ * py;
-            const tLen = Math.sqrt(tx * tx + ty * ty + tz * tz) || 1;
-            const worldPos: [number, number, number] = [
-              (tx / tLen) * GLOBE_RADIUS,
-              (ty / tLen) * GLOBE_RADIUS,
-              (tz / tLen) * GLOBE_RADIUS,
-            ];
+          const tx = cellCenter.x + uX * px + vX * py;
+          const ty = cellCenter.y + uY * px + vY * py;
+          const tz = cellCenter.z + uZ * px + vZ * py;
+          const tLen = Math.sqrt(tx * tx + ty * ty + tz * tz) || 1;
+          const worldPos: [number, number, number] = [
+            (tx / tLen) * GLOBE_RADIUS,
+            (ty / tLen) * GLOBE_RADIUS,
+            (tz / tLen) * GLOBE_RADIUS,
+          ];
 
-            // Sample terrain height at this position.
-            const { height } = sampleWorldTerrain(worldPos, clientState.worldSeed);
-            const surfaceRadius = GLOBE_RADIUS + height + 0.05;
-            const surfaceNormal = new THREE.Vector3(worldPos[0], worldPos[1], worldPos[2]).normalize();
+          // Sample terrain height at this position.
+          const { height } = sampleWorldTerrain(worldPos, clientState.worldSeed);
+          const surfaceRadius = GLOBE_RADIUS + height + 0.05;
+          const surfaceNormal = new THREE.Vector3(worldPos[0], worldPos[1], worldPos[2]).normalize();
 
-            sc.mesh.position.copy(surfaceNormal.clone().multiplyScalar(surfaceRadius));
-            sc.mesh.lookAt(surfaceNormal.clone().multiplyScalar(GLOBE_RADIUS * 2));
-            sc.mesh.rotateX(Math.PI / 2);
-            sc.label.position.copy(surfaceNormal.clone().multiplyScalar(surfaceRadius + 0.15));
-          }
+          sc.mesh.position.copy(surfaceNormal.clone().multiplyScalar(surfaceRadius));
+          sc.mesh.lookAt(surfaceNormal.clone().multiplyScalar(GLOBE_RADIUS * 2));
+          sc.mesh.rotateX(Math.PI / 2);
+          sc.label.position.copy(surfaceNormal.clone().multiplyScalar(surfaceRadius + 0.15));
         }
       } else {
         const relX = (body.position[0] - parentPos.x) / KM_PER_UNIT;
