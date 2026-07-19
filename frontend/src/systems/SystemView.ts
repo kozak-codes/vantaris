@@ -185,7 +185,10 @@ export class SystemView {
       });
       sprite.userData.bodyId = body.bodyId;
       sprite.userData.isLabel = true;
-      this.labelRenderer.registerLabel(sprite, { targetWorldHeight: 7 });
+      // targetWorldHeight is the label height at reference distance (20).
+      // System view camera is at ~220 units; scale.y = (220/20)*0.5 = 5.5,
+      // which is ~2.5× a planet's display size — readable but not huge.
+      this.labelRenderer.registerLabel(sprite, { targetWorldHeight: 0.5, minScale: 0.5, maxScale: 20 });
       this.scene.add(sprite);
       this.labels.set(body.bodyId, sprite);
     }

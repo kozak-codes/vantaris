@@ -150,7 +150,11 @@ export class SpacecraftRenderer {
     });
     label.userData.bodyId = body.bodyId;
     label.raycast = () => {};
-    this.labelRenderer.registerLabel(label, { targetWorldHeight: 0.8 });
+    // targetWorldHeight is the label height in world units at the reference
+    // distance (20). The lander mesh is ~0.12 units tall, so 0.15 keeps the
+    // label just above the lander without dwarfing it. The LabelRenderer
+    // scales this with camera distance for constant on-screen size.
+    this.labelRenderer.registerLabel(label, { targetWorldHeight: 0.15, minScale: 0.05 });
 
     const orbitLine = this.buildOrbitLine(body.elements);
 
@@ -265,14 +269,14 @@ export class SpacecraftRenderer {
           sc.mesh.position.copy(surfaceNormal.clone().multiplyScalar(surfaceRadius));
           sc.mesh.lookAt(surfaceNormal.clone().multiplyScalar(GLOBE_RADIUS * 2));
           sc.mesh.rotateX(Math.PI / 2);
-          sc.label.position.copy(surfaceNormal.clone().multiplyScalar(surfaceRadius + 0.15));
+          sc.label.position.copy(surfaceNormal.clone().multiplyScalar(surfaceRadius + 0.25));
         }
       } else {
         const relX = (body.position[0] - parentPos.x) / KM_PER_UNIT;
         const relY = (body.position[1] - parentPos.y) / KM_PER_UNIT;
         const relZ = (body.position[2] - parentPos.z) / KM_PER_UNIT;
         sc.mesh.position.set(relX, relY, relZ);
-        sc.label.position.set(relX, relY + 0.15, relZ);
+        sc.label.position.set(relX, relY + 0.25, relZ);
       }
 
       // Hide orbit line when landed.

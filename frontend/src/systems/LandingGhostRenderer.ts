@@ -321,7 +321,7 @@ export class LandingGhostRenderer {
     this.tooltip = LabelRenderer.createLabel(text, { color, background: bg, fontSize: 14, bold: true });
     this.tooltip.raycast = () => {};
     this.tooltip.position.copy(pos).add(normal.clone().multiplyScalar(0.25));
-    this.labelRenderer.registerLabel(this.tooltip, { targetWorldHeight: 0.6 });
+    this.labelRenderer.registerLabel(this.tooltip, { targetWorldHeight: 0.12, minScale: 0.04 });
     this.root.add(this.tooltip);
   }
 
