@@ -115,25 +115,27 @@ export class SpacecraftRenderer {
     const isOwn = body.ownerId === pid;
     const mat = isOwn ? this.materialOwn : this.materialOther;
 
-    // Body: a small capsule (cylinder + cone nose).
-    const bodyGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.12, 12);
+    // Body: a small capsule (cylinder + cone nose). Scaled small so it
+    // reads as a lander at both orbit and surface zoom levels.
+    const s = 0.5;
+    const bodyGeo = new THREE.CylinderGeometry(0.04 * s, 0.04 * s, 0.12 * s, 12);
     const bodyMesh = new THREE.Mesh(bodyGeo, mat);
     bodyMesh.raycast = () => {};
     group.add(bodyMesh);
 
     // Nose cone.
-    const noseGeo = new THREE.ConeGeometry(0.04, 0.06, 12);
+    const noseGeo = new THREE.ConeGeometry(0.04 * s, 0.06 * s, 12);
     const nose = new THREE.Mesh(noseGeo, mat);
-    nose.position.y = 0.09;
+    nose.position.y = 0.09 * s;
     nose.raycast = () => {};
     group.add(nose);
 
     // Four landing legs.
-    const legGeo = new THREE.CylinderGeometry(0.005, 0.005, 0.1, 6);
+    const legGeo = new THREE.CylinderGeometry(0.005 * s, 0.005 * s, 0.1 * s, 6);
     for (let i = 0; i < 4; i++) {
       const angle = (i / 4) * Math.PI * 2;
       const leg = new THREE.Mesh(legGeo, mat);
-      leg.position.set(Math.cos(angle) * 0.05, -0.05, Math.sin(angle) * 0.05);
+      leg.position.set(Math.cos(angle) * 0.05 * s, -0.05 * s, Math.sin(angle) * 0.05 * s);
       leg.rotation.z = Math.cos(angle) * 0.3;
       leg.rotation.x = -Math.sin(angle) * 0.3;
       leg.raycast = () => {};
@@ -267,9 +269,12 @@ export class SpacecraftRenderer {
           const surfaceNormal = new THREE.Vector3(worldPos[0], worldPos[1], worldPos[2]).normalize();
 
           sc.mesh.position.copy(surfaceNormal.clone().multiplyScalar(surfaceRadius));
+          // Stand the lander upright on the surface: lookAt makes -Z face
+          // outward along the normal, then rotateX(-90°) turns +Y (the
+          // capsule's long axis) to align with -Z (outward = up).
           sc.mesh.lookAt(surfaceNormal.clone().multiplyScalar(GLOBE_RADIUS * 2));
-          sc.mesh.rotateX(Math.PI / 2);
-          sc.label.position.copy(surfaceNormal.clone().multiplyScalar(surfaceRadius + 0.25));
+          sc.mesh.rotateX(-Math.PI / 2);
+          sc.label.position.copy(surfaceNormal.clone().multiplyScalar(surfaceRadius + 0.15));
         }
       } else {
         const relX = (body.position[0] - parentPos.x) / KM_PER_UNIT;

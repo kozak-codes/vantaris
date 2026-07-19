@@ -61,22 +61,23 @@ export class LandingGhostRenderer {
     group.userData.isLandingGhost = true;
 
     const mat = this.ghostMaterial;
-    const bodyGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.12, 12);
+    const s = 0.5;
+    const bodyGeo = new THREE.CylinderGeometry(0.04 * s, 0.04 * s, 0.12 * s, 12);
     const bodyMesh = new THREE.Mesh(bodyGeo, mat);
     bodyMesh.raycast = () => {};
     group.add(bodyMesh);
 
-    const noseGeo = new THREE.ConeGeometry(0.04, 0.06, 12);
+    const noseGeo = new THREE.ConeGeometry(0.04 * s, 0.06 * s, 12);
     const nose = new THREE.Mesh(noseGeo, mat);
-    nose.position.y = 0.09;
+    nose.position.y = 0.09 * s;
     nose.raycast = () => {};
     group.add(nose);
 
-    const legGeo = new THREE.CylinderGeometry(0.005, 0.005, 0.1, 6);
+    const legGeo = new THREE.CylinderGeometry(0.005 * s, 0.005 * s, 0.1 * s, 6);
     for (let i = 0; i < 4; i++) {
       const angle = (i / 4) * Math.PI * 2;
       const leg = new THREE.Mesh(legGeo, mat);
-      leg.position.set(Math.cos(angle) * 0.05, -0.05, Math.sin(angle) * 0.05);
+      leg.position.set(Math.cos(angle) * 0.05 * s, -0.05 * s, Math.sin(angle) * 0.05 * s);
       leg.rotation.z = Math.cos(angle) * 0.3;
       leg.rotation.x = -Math.sin(angle) * 0.3;
       leg.raycast = () => {};
@@ -132,9 +133,9 @@ export class LandingGhostRenderer {
 
     this.ghost.visible = true;
     this.ghost.position.copy(pos.position);
-    // Orient: stand upright on the surface (cylinder axis along normal).
+    // Orient: stand upright on the surface (capsule +Y axis along normal).
     this.ghost.lookAt(pos.position.clone().add(pos.normal));
-    this.ghost.rotateX(Math.PI / 2);
+    this.ghost.rotateX(-Math.PI / 2);
 
     // Color: green if valid, red if not.
     if (valid) {
