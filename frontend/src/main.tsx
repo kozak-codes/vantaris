@@ -79,6 +79,7 @@ setActiveCameraControls(cameraControls);
 const globeInput = new GlobeInput(canvas, camera, globeRenderer.getGlobeGroup());
 globeInput.setGrid(grid);
 globeInput.setLandingGhostRenderer(landingGhostRenderer);
+globeInput.setSubHexRenderer(subHexRenderer);
 globeInput.setCameraControls(cameraControls);
 
 // Zoom thresholds for auto-selecting tiles.

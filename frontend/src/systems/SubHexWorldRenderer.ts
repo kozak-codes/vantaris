@@ -542,6 +542,35 @@ export class SubHexWorldRenderer {
     if (this.fogMesh) meshes.push(this.fogMesh);
     if (meshes.length === 0) return null;
     this.raycaster.setFromCamera(pointer, camera);
+
+    // Raycast against the black sphere (sea level) first — it's a solid
+    // sphere so it always gives us the front-facing surface hit. We then
+    // find the nearest sub-hex to that surface point. This avoids the
+    // DoubleSide terrain mesh giving us back-face hits on the far side.
+    if (this.blackSphere) {
+      const sphereHits = this.raycaster.intersectObject(this.blackSphere, false);
+      if (sphereHits.length > 0) {
+        const hitPoint = sphereHits[0].point;
+        let bestCellId = '';
+        let bestIdx = -1;
+        let bestDist = Infinity;
+        for (const [cellId, data] of this.subHexDataMap) {
+          for (let i = 0; i < data.spherePositions.length; i++) {
+            const d = data.spherePositions[i].distanceTo(hitPoint);
+            if (d < bestDist) {
+              bestDist = d;
+              bestIdx = i;
+              bestCellId = cellId;
+            }
+          }
+        }
+        if (bestIdx >= 0 && bestDist < 0.5) {
+          return { cellId: bestCellId, subHexIndex: bestIdx };
+        }
+      }
+    }
+
+    // Fallback: raycast against terrain + fog meshes.
     const intersects = this.raycaster.intersectObjects(meshes, false);
     if (intersects.length === 0) return null;
 
@@ -560,6 +589,7 @@ export class SubHexWorldRenderer {
       }
     }
     if (bestIdx < 0) return null;
+    if (bestDist > 0.5) return null;
     return { cellId: bestCellId, subHexIndex: bestIdx };
   }
 

@@ -14,6 +14,7 @@ import { sendLandAt } from '../network/ColyseusClient';
 import { type HexGrid } from '@vantaris/shared';
 import type { CameraControls } from './CameraControls';
 import type { LandingGhostRenderer } from './LandingGhostRenderer';
+import type { SubHexWorldRenderer } from './SubHexWorldRenderer';
 
 const CLICK_THRESHOLD_PX = 8;
 const DOUBLE_CLICK_MS = 350;
@@ -28,6 +29,7 @@ export class GlobeInput {
   private grid: HexGrid | null = null;
   private cameraControls: CameraControls | null = null;
   private landingGhost: LandingGhostRenderer | null = null;
+  private subHexRenderer: SubHexWorldRenderer | null = null;
   private onEnterTile: ((cellId: string) => void) | null = null;
   private lastClickCellId: string | null = null;
   private lastClickTime = 0;
@@ -66,6 +68,10 @@ export class GlobeInput {
     this.landingGhost = ghost;
   }
 
+  setSubHexRenderer(renderer: SubHexWorldRenderer): void {
+    this.subHexRenderer = renderer;
+  }
+
   private onPointerDown(e: PointerEvent): void {
     if (e.button !== 0) return;
     this.pointerDownPos = { x: e.clientX, y: e.clientY };
@@ -98,6 +104,31 @@ export class GlobeInput {
     this.handleClick(e.clientX, e.clientY);
   }
 
+  /**
+   * Pick the macro cell at the given screen position. Uses sub-hex terrain
+   * picking when the sub-hex renderer is available (the macro hex meshes are
+   * hidden when sub-hex terrain is rendered, so standard raycasting against
+   * them fails). Falls back to raycasting the macro hex meshes otherwise.
+   */
+  private pickCellAtPointer(pointer: THREE.Vector2): string | null {
+    // Try sub-hex picking first (accurate, works when macro meshes are hidden).
+    if (this.subHexRenderer) {
+      const pick = this.subHexRenderer.pickSubHex(this.camera, pointer);
+      if (pick) return pick.cellId;
+    }
+    // Fallback: raycast against visible macro hex meshes.
+    const hexMeshes: THREE.Object3D[] = [];
+    this.globe.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.userData.cellId !== undefined && child.visible) {
+        hexMeshes.push(child);
+      }
+    });
+    this.raycaster.setFromCamera(pointer, this.camera);
+    const hexIntersects = this.raycaster.intersectObjects(hexMeshes, false);
+    if (hexIntersects.length === 0) return null;
+    return this.getCellIdFromIntersection(hexIntersects[0]);
+  }
+
   private onPointerMove(e: PointerEvent): void {
     clientState.mouseClientX = e.clientX;
     clientState.mouseClientY = e.clientY;
@@ -108,25 +139,7 @@ export class GlobeInput {
       -(2 * (e.clientY - rect.top) / rect.height) + 1,
     );
 
-    this.raycaster.setFromCamera(pointer, this.camera);
-
-    const hexMeshes: THREE.Object3D[] = [];
-    this.globe.traverse((child) => {
-      if (child instanceof THREE.Mesh && child.userData.cellId !== undefined) {
-        hexMeshes.push(child);
-      }
-    });
-
-    const hexIntersects = this.raycaster.intersectObjects(hexMeshes, false);
-    if (hexIntersects.length === 0) {
-      if (clientState.hoveredCellId !== null) {
-        clientState.hoveredCellId = null;
-        notifySelectionChanged();
-      }
-      return;
-    }
-
-    const cellId = this.getCellIdFromIntersection(hexIntersects[0]);
+    const cellId = this.pickCellAtPointer(pointer);
     if (!cellId) {
       if (clientState.hoveredCellId !== null) {
         clientState.hoveredCellId = null;
@@ -165,22 +178,7 @@ export class GlobeInput {
       -(2 * (clientY - rect.top) / rect.height) + 1,
     );
 
-    this.raycaster.setFromCamera(pointer, this.camera);
-
-    const hexMeshes: THREE.Object3D[] = [];
-    this.globe.traverse((child) => {
-      if (child instanceof THREE.Mesh && child.userData.cellId !== undefined) {
-        hexMeshes.push(child);
-      }
-    });
-
-    const hexIntersects = this.raycaster.intersectObjects(hexMeshes, false);
-    if (hexIntersects.length === 0) {
-      this.deselectAll();
-      return;
-    }
-
-    const cellId = this.getCellIdFromIntersection(hexIntersects[0]);
+    const cellId = this.pickCellAtPointer(pointer);
     if (!cellId) {
       this.deselectAll();
       return;
