@@ -537,50 +537,50 @@ export class SubHexWorldRenderer {
 
   pickSubHex(camera: THREE.Camera, pointer: THREE.Vector2): { cellId: string; subHexIndex: number } | null {
     if (!this.root.visible) return null;
-    const meshes: THREE.Mesh[] = [];
-    if (this.terrainMesh) meshes.push(this.terrainMesh);
-    if (this.fogMesh) meshes.push(this.fogMesh);
-    if (meshes.length === 0) return null;
     this.raycaster.setFromCamera(pointer, camera);
 
-    // Raycast against the black sphere (sea level) first — it's a solid
-    // sphere so it always gives us the front-facing surface hit. We then
-    // find the nearest sub-hex to that surface point. This avoids the
-    // DoubleSide terrain mesh giving us back-face hits on the far side.
-    if (this.blackSphere) {
-      const sphereHits = this.raycaster.intersectObject(this.blackSphere, false);
-      if (sphereHits.length > 0) {
-        const hitPoint = sphereHits[0].point;
-        let bestCellId = '';
-        let bestIdx = -1;
-        let bestDist = Infinity;
-        for (const [cellId, data] of this.subHexDataMap) {
-          for (let i = 0; i < data.spherePositions.length; i++) {
-            const d = data.spherePositions[i].distanceTo(hitPoint);
-            if (d < bestDist) {
-              bestDist = d;
-              bestIdx = i;
-              bestCellId = cellId;
-            }
-          }
-        }
-        if (bestIdx >= 0 && bestDist < 0.5) {
-          return { cellId: bestCellId, subHexIndex: bestIdx };
+    // Prefer raycasting against the terrain mesh — it only covers visible/
+    // revealed cells, so hits are always on actual terrain. The terrain
+    // mesh is DoubleSide, so we may get back-face hits on the far side;
+    // the nearest-sub-hex distance threshold filters those out.
+    if (this.terrainMesh) {
+      const hits = this.raycaster.intersectObject(this.terrainMesh, false);
+      if (hits.length > 0) {
+        // Try the closest hit first; if it's too far from any known sub-hex
+        // (back face on far side), try subsequent hits.
+        for (const hit of hits) {
+          const localPoint = hit.point.clone();
+          this.root.worldToLocal(localPoint);
+          const r = this.findNearestSubHex(localPoint);
+          if (r) return r;
         }
       }
     }
 
-    // Fallback: raycast against terrain + fog meshes.
-    const intersects = this.raycaster.intersectObjects(meshes, false);
-    if (intersects.length === 0) return null;
+    // Fallback: raycast against the fog mesh (covers unexplored cells).
+    if (this.fogMesh) {
+      const hits = this.raycaster.intersectObject(this.fogMesh, false);
+      if (hits.length > 0) {
+        for (const hit of hits) {
+          const localPoint = hit.point.clone();
+          this.root.worldToLocal(localPoint);
+          const r = this.findNearestSubHex(localPoint);
+          if (r) return r;
+        }
+      }
+    }
 
-    const hitPoint = intersects[0].point;
+    return null;
+  }
+
+  /** Find the nearest sub-hex in the data map to a LOCAL-space point. */
+  private findNearestSubHex(localPoint: THREE.Vector3): { cellId: string; subHexIndex: number } | null {
     let bestCellId = '';
     let bestIdx = -1;
     let bestDist = Infinity;
     for (const [cellId, data] of this.subHexDataMap) {
       for (let i = 0; i < data.spherePositions.length; i++) {
-        const d = data.spherePositions[i].distanceTo(hitPoint);
+        const d = data.spherePositions[i].distanceTo(localPoint);
         if (d < bestDist) {
           bestDist = d;
           bestIdx = i;
@@ -589,6 +589,8 @@ export class SubHexWorldRenderer {
       }
     }
     if (bestIdx < 0) return null;
+    // Reject picks where the nearest sub-hex is far from the hit point
+    // (back-face hits on the far side of the globe).
     if (bestDist > 0.5) return null;
     return { cellId: bestCellId, subHexIndex: bestIdx };
   }

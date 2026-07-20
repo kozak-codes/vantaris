@@ -29,6 +29,10 @@ export class LandingGhostRenderer {
   private ghost: THREE.Group;
   private ghostMaterial: THREE.MeshStandardMaterial;
   private tooltip: THREE.Sprite | null = null;
+  private tooltipCanvas: HTMLCanvasElement | null = null;
+  private tooltipCtx: CanvasRenderingContext2D | null = null;
+  private tooltipTexture: THREE.CanvasTexture | null = null;
+  private tooltipText: string = '';
   private labelRenderer = new LabelRenderer();
   private raycaster = new THREE.Raycaster();
   private pointer = new THREE.Vector2();
@@ -307,35 +311,64 @@ export class LandingGhostRenderer {
   }
 
   private updateTooltip(reason: string, valid: boolean, pos: THREE.Vector3, normal: THREE.Vector3): void {
-    // Remove old tooltip.
-    if (this.tooltip) {
-      this.root.remove(this.tooltip);
-      this.labelRenderer.unregisterLabel(this.tooltip);
-      this.tooltip.material.map?.dispose();
-      this.tooltip.material.dispose();
-      this.tooltip = null;
-    }
-
     const text = valid ? 'LAND HERE' : reason;
     const bg = valid ? 'rgba(34,68,34,0.85)' : 'rgba(68,34,34,0.85)';
     const color = valid ? '#88ff88' : '#ffaaaa';
-    this.tooltip = LabelRenderer.createLabel(text, { color, background: bg, fontSize: 14, bold: true });
-    this.tooltip.raycast = () => {};
+
+    // Create the tooltip sprite once; reuse it across frames. Only redraw
+    // the canvas when the text changes (avoids per-frame texture churn).
+    if (!this.tooltip) {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d')!;
+      canvas.width = 256;
+      canvas.height = 32;
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.minFilter = THREE.LinearFilter;
+      const material = new THREE.SpriteMaterial({
+        map: texture,
+        depthTest: false,
+        depthWrite: false,
+        transparent: true,
+      });
+      this.tooltip = new THREE.Sprite(material);
+      this.tooltip.raycast = () => {};
+      this.tooltipCanvas = canvas;
+      this.tooltipCtx = ctx;
+      this.tooltipTexture = texture;
+      this.labelRenderer.registerLabel(this.tooltip, { targetWorldHeight: 0.12, minScale: 0.04 });
+      this.root.add(this.tooltip);
+    }
+
+    // Position the tooltip above the ghost.
     this.tooltip.position.copy(pos).add(normal.clone().multiplyScalar(0.25));
-    this.labelRenderer.registerLabel(this.tooltip, { targetWorldHeight: 0.12, minScale: 0.04 });
-    this.root.add(this.tooltip);
+
+    // Only redraw if the text changed.
+    if (text !== this.tooltipText) {
+      this.tooltipText = text;
+      const ctx = this.tooltipCtx!;
+      const canvas = this.tooltipCanvas!;
+      const fontSize = 14;
+      ctx.font = `bold ${fontSize}px ui-monospace, monospace`;
+      const textWidth = ctx.measureText(text).width;
+      canvas.width = Math.ceil(textWidth) + 8;
+      canvas.height = fontSize + 8;
+      ctx.font = `bold ${fontSize}px ui-monospace, monospace`;
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = color;
+      ctx.fillText(text, 4, canvas.height / 2);
+      this.tooltipTexture!.needsUpdate = true;
+    }
   }
 
   private hideGhost(): void {
     this.ghost.visible = false;
     if (this.tooltip) {
-      this.root.remove(this.tooltip);
-      this.labelRenderer.unregisterLabel(this.tooltip);
-      this.tooltip.material.map?.dispose();
-      this.tooltip.material.dispose();
-      this.tooltip = null;
+      this.tooltip.visible = false;
     }
     this.hovered = null;
+    this.tooltipText = '';
     setLandingError(null);
   }
 
@@ -348,6 +381,13 @@ export class LandingGhostRenderer {
       }
     });
     this.ghostMaterial.dispose();
+    if (this.tooltip) {
+      this.root.remove(this.tooltip);
+      this.labelRenderer.unregisterLabel(this.tooltip);
+      this.tooltipTexture?.dispose();
+      this.tooltip.material.dispose();
+      this.tooltip = null;
+    }
     this.labelRenderer.dispose();
   }
 }
